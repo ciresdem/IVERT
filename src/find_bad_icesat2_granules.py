@@ -13,14 +13,14 @@ import argparse
 
 ####################################3
 # Include the base /src/ directory of thie project, to add all the other modules.
-import import_parent_dir; import_parent_dir.import_src_dir_via_pythonpath()
+# import import_parent_dir; import_parent_dir.import_src_dir_via_pythonpath()
 ####################################3
-import icesat2.validate_dem as validate_dem
-import icesat2.atl_granules as atl_granules
+import validate_dem
+import atl_granules
 import utils.configfile
 import utils.traverse_directory
 import utils.parallel_funcs
-import datasets.etopo_source_dataset
+# import datasets.etopo_source_dataset
 
 my_config = utils.configfile.config()
 

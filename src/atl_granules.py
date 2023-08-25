@@ -6,13 +6,9 @@ import os
 import numpy
 import dateparser
 import warnings
-# import sys
 
-####################################3
-# Include the base /src/ directory of thie project, to add all the other modules.
-import import_parent_dir; import_parent_dir.import_src_dir_via_pythonpath()
-####################################3
 import utils.configfile as configfile
+
 
 class ATL_granule:
     """Base class for other ATLXX granules, such as ATL03, ATL06, ATL08."""

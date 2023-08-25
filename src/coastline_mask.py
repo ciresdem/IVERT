@@ -23,14 +23,9 @@ import argparse
 import pyproj
 import time
 
-####################################3
-# Include the base /src/ directory of thie project, to add all the other modules.
-import import_parent_dir; import_parent_dir.import_src_dir_via_pythonpath()
-####################################3
-# import utils.progress_bar as progress_bar
 # Use config file to get the encrypted credentials.
 import utils.configfile as configfile
-etopo_config = configfile.config()
+ivert_config = configfile.config()
 
 
 def is_this_run_in_ipython():
@@ -239,9 +234,9 @@ def create_coastline_mask(input_dem,
                    "-O", os.path.abspath(output_filepath_base),
                    "-P", "epsg:{0:d}".format(epsg),
                    "-E", str("{0:.16f}/{1:.16f}".format(step_xy[0], step_xy[1])),
-                   "-D", etopo_config.etopo_cudem_cache_directory,
+                   "-D", ivert_config.cudem_cache_directory,
                    "--keep-cache",
-                   "--nodata", str(etopo_config.etopo_ndv)]
+                   "--nodata", str(ivert_config.dem_default_ndv)]
                    # input_dem]
 
     if verbose:
@@ -258,7 +253,7 @@ def create_coastline_mask(input_dem,
     # This will be the home working directory of the process.
     tempdir = None
     if run_in_tempdir:
-        tempdir = os.path.join(etopo_config._abspath(etopo_config.etopo_cudem_cache_directory), "temp" + str(os.getpid()))
+        tempdir = os.path.join(ivert_config._abspath(ivert_config.cudem_cache_directory), "temp" + str(os.getpid()))
         if not os.path.exists(tempdir):
             os.mkdir(tempdir)
         kwargs["cwd"] = tempdir

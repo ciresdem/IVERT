@@ -15,21 +15,16 @@ Created on Tue Jun 22 16:06:21 2021
 #     raise ModuleNotFoundError("Module 'cudem/waffles.py' required. Update paths, or refer to https://github.com/ciresdem/cudem for installation instructions.")
 # EMPTY_VAL = -9999
 
-####################################3
-# Include the base /src/ directory of thie project, to add all the other modules.
-import import_parent_dir; import_parent_dir.import_src_dir_via_pythonpath()
-####################################3
 import utils.progress_bar as progress_bar
 import utils.parallel_funcs as parallel_funcs
 import utils.configfile
-import etopo.convert_vdatum as convert_vdatum
-import etopo.coastline_mask as coastline_mask
-# import icesat2.icepyx_download as icepyx_download
-import icesat2.nsidc_download as nsidc_download
-import icesat2.plot_validation_results as plot_validation_results
-import icesat2.classify_icesat2_photons as classify_icesat2_photons
-import icesat2.icesat2_photon_database as icesat2_photon_database
-import icesat2.find_bad_icesat2_granules as find_bad_icesat2_granules
+import convert_vdatum
+import coastline_mask
+import nsidc_download
+import plot_validation_results
+import classify_icesat2_photons
+import icesat2_photon_database
+import find_bad_icesat2_granules
 
 # import subprocess
 from osgeo import gdal, osr
@@ -43,7 +38,7 @@ import numexpr
 import pyproj
 
 etopo_config = utils.configfile.config()
-EMPTY_VAL = etopo_config.etopo_ndv
+EMPTY_VAL = etopo_config.dem_default_ndv
 
 # 1: DEM Preprocessing:
     # a) For Worldview, apply the bitmask and matchtag filters to get rid of noise
@@ -52,12 +47,12 @@ EMPTY_VAL = etopo_config.etopo_ndv
     # c) Generate a bounding-box for the ICESat-2 data
 
 def read_dataframe_file(df_filename):
-    """Read a dataframe file, either from a picklefile, HDF, or a CSV.
+    """Read a dataframe file, either from a picklefile, HDF, CSV, or feather.
 
     (Can handle other formats by adding more "elif ..." statements in the function.)
     """
     assert os.path.exists(df_filename)
-    base, ext = os.path.splitext(df_filename)
+    ext = os.path.splitext(df_filename)[1]
     ext = ext.lower()
     if ext == ".pickle":
         dataframe = pandas.read_pickle(df_filename)
@@ -65,8 +60,10 @@ def read_dataframe_file(df_filename):
         dataframe = pandas.read_hdf(df_filename, mode="r")
     elif ext in (".csv", ".txt"):
         dataframe = pandas.read_csv(df_filename)
+    elif ext == ".feather":
+        dataframe = pandas.read_feather(df_filename)
     else:
-        print(f"ERROR: Unknown dataframe file extension '{ext}'. (Currently supporting .pickle, .h5, .hdf, .csv, or .txt)")
+        raise NotImplementedError(f"ERROR: Unknown dataframe file extension '{ext}'. (Currently supporting .pickle, .h5, .hdf, .csv, .txt, or .feather)")
 
     return dataframe
 
@@ -466,14 +463,14 @@ def kick_off_new_child_process(height_array,
 
 
 def validate_dem_parallel(dem_name,
-                          photon_dataframe_name=None,
-                          use_icesat2_photon_database=True,
+                          # photon_dataframe_name=None,
+                          # use_icesat2_photon_database=True,
                           icesat2_photon_database_obj=None,
                           dem_vertical_datum="egm2008",
                           output_vertical_datum="egm2008",
-                          granule_ids=None,
+                          # granule_ids=None,
                           results_dataframe_file=None,
-                          icesat2_date_range=["2021-01-01", "2021-12-31"],
+                          # icesat2_date_range=["2021-01-01", "2021-12-31"],
                           interim_data_dir=None,
                           overwrite=False,
                           delete_datafiles=False,
@@ -484,7 +481,7 @@ def validate_dem_parallel(dem_name,
                           include_gmrt_mask=False,
                           write_result_tifs=True,
                           write_summary_stats=True,
-                          skip_icesat2_download=True,
+                          # skip_icesat2_download=True,
                           include_photon_level_validation=False,
                           plot_results=True,
                           location_name=None,
@@ -527,6 +524,7 @@ def validate_dem_parallel(dem_name,
     if not overwrite:
 
         if os.path.exists(results_dataframe_file):
+            print(results_dataframe_file)
 
             results_dataframe = None
 
@@ -649,92 +647,92 @@ def validate_dem_parallel(dem_name,
         converted_dem_name = None
 
     # If we've been provided an open dataframe rather than just the name of the file, simply use it.
-    if photon_dataframe_name is None and use_icesat2_photon_database == False:
-        raise ValueError("Input error: must specify either use_icesat2_photon_database or provide a photon dataframe name.")
+    # if photon_dataframe_name is None and use_icesat2_photon_database == False:
+    #     raise ValueError("Input error: must specify either use_icesat2_photon_database or provide a photon dataframe name.")
 
-    elif isinstance(photon_dataframe_name, pandas.DataFrame):
-        photon_df = photon_dataframe_name
+    # elif isinstance(photon_dataframe_name, pandas.DataFrame):
+    #     photon_df = photon_dataframe_name
 
-    elif use_icesat2_photon_database:
-        if icesat2_photon_database_obj is None:
-            icesat2_photon_database_obj = icesat2_photon_database.ICESat2_Database()
+    # elif use_icesat2_photon_database:
+    if icesat2_photon_database_obj is None:
+        icesat2_photon_database_obj = icesat2_photon_database.ICESat2_Database()
 
-        photon_df = icesat2_photon_database_obj.get_photon_database(dem_bbox,
-                                                                    build_tiles_if_nonexistent = True,
-                                                                    verbose = not quiet)
-        if photon_df is None:
-            if mark_empty_results:
-                with open(empty_results_filename, 'w') as f:
-                    f.close()
-                if not quiet:
-                    print("Created", empty_results_filename, "to indicate no valid ICESat-2 data was returned here.")
+    photon_df = icesat2_photon_database_obj.get_photon_database(dem_bbox,
+                                                                build_tiles_if_nonexistent = True,
+                                                                verbose = not quiet)
+    if photon_df is None:
+        if mark_empty_results:
+            with open(empty_results_filename, 'w') as f:
+                f.close()
+            if not quiet:
+                print("Created", empty_results_filename, "to indicate no valid ICESat-2 data was returned here.")
 
-            return None
+        return None
 
 
     # If the photon dataframe file containing all the photons in this tile already exists, just use it.
-    elif skip_icesat2_download and os.path.exists(photon_dataframe_name) and overwrite==False:
-        if not quiet:
-            print("Reading", photon_dataframe_name + "...", end="")
-        photon_df = pandas.read_hdf(photon_dataframe_name)
-        if not quiet:
-            print("Done.")
+    # elif skip_icesat2_download and os.path.exists(photon_dataframe_name) and overwrite==False:
+    #     if not quiet:
+    #         print("Reading", photon_dataframe_name + "...", end="")
+    #     photon_df = pandas.read_hdf(photon_dataframe_name)
+    #     if not quiet:
+    #         print("Done.")
 
-    elif granule_ids is None:
-        # If the granules already exist in the directory and we've planned to skip
-        # re-downloading them, then skip them!
-        granules_existing_in_directory = [os.path.join(interim_data_dir, fname) for fname in os.listdir(interim_data_dir) if (os.path.splitext(fname)[1].lower() == ".h5" and fname.upper().find("ATL") >= 0)]
-        if skip_icesat2_download and (len(granules_existing_in_directory) > 0):
-            atl03_granules_list = [fname for fname in granules_existing_in_directory if fname.upper().find("ATL03") >= 0]
-            atl08_granules_list = [fname for fname in granules_existing_in_directory if fname.upper().find("ATL08") >= 0]
-
-        else:
-            # If the DEM is in a projection other than WGS84, get the bbox coordinates and convert to WGS84
-            # NOTE: This will break in polar stereo projections, and perhaps others.
-            # TODO: Find a more elegant way of doing this that doesn't fuck up polar projections.
-            if dem_epsg != 4326:
-                icesat2_srs = osr.SpatialReference()
-                icesat2_srs.SetWellKnownGeogCS("EPSG:4326")
-                dem_srs = osr.SpatialReference(wkt=dem_ds.GetProjection())
-                # Convert bbox points from DEM projection into
-                proj_to_wgs84 = osr.CoordinateTransformation(dem_srs, icesat2_srs)
-
-                # Create a list of bbox points in counter-clockwise order.
-                xmin, ymin, xmax, ymax = dem_bbox
-                points = [(xmin, ymin), (xmin, ymax), (xmax, ymax), (xmax, ymin), (xmin, ymin)]
-                output_points = proj_to_wgs84.TransformPoints(points)
-                bbox_wgs84 = [(p[0], p[1]) for p in output_points]
-            else:
-                bbox_wgs84 = dem_bbox
-
-            granules_list = nsidc_download.main(short_name=["ATL03","ATL08"],
-                                                region=bbox_wgs84,
-                                                local_dir=interim_data_dir,
-                                                version=etopo_config.nsidc_atl_version,
-                                                dates = icesat2_date_range,
-                                                fname_python_regex="\.h5\Z",
-                                                force=overwrite,
-                                                quiet=quiet)
-            # Just get the .h5 files from the query (skip the .xml's)
-            atl03_granules_list = [fn for fn in granules_list if os.path.split(fn)[1].find("ATL03") > -1]
-            atl08_granules_list = [fn for fn in granules_list if os.path.split(fn)[1].find("ATL08") > -1]
-
-        common_granule_ids = []
-        for atl03_gid in atl03_granules_list:
-            fpath, fname = os.path.split(atl03_gid)
-            if os.path.exists(os.path.join(fpath, fname.replace("ATL03","ATL08"))):
-                common_granule_ids.append(atl03_gid)
-
-        if len(common_granule_ids) < 0.5*len(atl03_granules_list):
-            raise UserWarning("ICESat-2 ATL03 granules IDs are less than 50% in common with ATL08 granule ids over " + \
-                              "bounding box {0}, {1} of {2} matching.".format(dem_bbox,
-                                                                              len(common_granule_ids),
-                                                                              len(atl03_granules_list)))
-
-        photon_df = None
-    else:
-        common_granule_ids = granule_ids
-        photon_df = None
+    # elif granule_ids is None:
+    #     # If the granules already exist in the directory and we've planned to skip
+    #     # re-downloading them, then skip them!
+    #     granules_existing_in_directory = [os.path.join(interim_data_dir, fname) for fname in os.listdir(interim_data_dir) if (os.path.splitext(fname)[1].lower() == ".h5" and fname.upper().find("ATL") >= 0)]
+    #     if skip_icesat2_download and (len(granules_existing_in_directory) > 0):
+    #         atl03_granules_list = [fname for fname in granules_existing_in_directory if fname.upper().find("ATL03") >= 0]
+    #         atl08_granules_list = [fname for fname in granules_existing_in_directory if fname.upper().find("ATL08") >= 0]
+    #
+    #     else:
+    #         # If the DEM is in a projection other than WGS84, get the bbox coordinates and convert to WGS84
+    #         # NOTE: This will break in polar stereo projections, and perhaps others.
+    #         # TODO: Find a more elegant way of doing this that doesn't fuck up polar projections.
+    #         if dem_epsg != 4326:
+    #             icesat2_srs = osr.SpatialReference()
+    #             icesat2_srs.SetWellKnownGeogCS("EPSG:4326")
+    #             dem_srs = osr.SpatialReference(wkt=dem_ds.GetProjection())
+    #             # Convert bbox points from DEM projection into
+    #             proj_to_wgs84 = osr.CoordinateTransformation(dem_srs, icesat2_srs)
+    #
+    #             # Create a list of bbox points in counter-clockwise order.
+    #             xmin, ymin, xmax, ymax = dem_bbox
+    #             points = [(xmin, ymin), (xmin, ymax), (xmax, ymax), (xmax, ymin), (xmin, ymin)]
+    #             output_points = proj_to_wgs84.TransformPoints(points)
+    #             bbox_wgs84 = [(p[0], p[1]) for p in output_points]
+    #         else:
+    #             bbox_wgs84 = dem_bbox
+    #
+    #         granules_list = nsidc_download.main(short_name=["ATL03","ATL08"],
+    #                                             region=bbox_wgs84,
+    #                                             local_dir=interim_data_dir,
+    #                                             version=etopo_config.nsidc_atl_version,
+    #                                             dates = icesat2_date_range,
+    #                                             fname_python_regex="\.h5\Z",
+    #                                             force=overwrite,
+    #                                             quiet=quiet)
+    #         # Just get the .h5 files from the query (skip the .xml's)
+    #         atl03_granules_list = [fn for fn in granules_list if os.path.split(fn)[1].find("ATL03") > -1]
+    #         atl08_granules_list = [fn for fn in granules_list if os.path.split(fn)[1].find("ATL08") > -1]
+    #
+    #     common_granule_ids = []
+    #     for atl03_gid in atl03_granules_list:
+    #         fpath, fname = os.path.split(atl03_gid)
+    #         if os.path.exists(os.path.join(fpath, fname.replace("ATL03","ATL08"))):
+    #             common_granule_ids.append(atl03_gid)
+    #
+    #     if len(common_granule_ids) < 0.5*len(atl03_granules_list):
+    #         raise UserWarning("ICESat-2 ATL03 granules IDs are less than 50% in common with ATL08 granule ids over " + \
+    #                           "bounding box {0}, {1} of {2} matching.".format(dem_bbox,
+    #                                                                           len(common_granule_ids),
+    #                                                                           len(atl03_granules_list)))
+    #
+    #     photon_df = None
+    # else:
+    #     common_granule_ids = granule_ids
+    #     photon_df = None
 
     # If the DEM is not in WGS84 coordaintes, create a conversion funtion to pass to sub-functions.
     if dem_epsg != 4326:
@@ -747,14 +745,14 @@ def validate_dem_parallel(dem_name,
     else:
         is2_to_dem = None
 
-    if photon_df is None:
-        # Get the photon data from the dataframe.
-        photon_df = collect_raw_photon_data(dem_bbox,
-                                            photon_dataframe_name,
-                                            granule_ids=common_granule_ids,
-                                            overwrite=overwrite,
-                                            dem_bbox_converter=is2_to_dem,
-                                            verbose=not quiet)
+    # if photon_df is None:
+    #     # Get the photon data from the dataframe.
+    #     photon_df = collect_raw_photon_data(dem_bbox,
+    #                                         photon_dataframe_name,
+    #                                         granule_ids=common_granule_ids,
+    #                                         overwrite=overwrite,
+    #                                         dem_bbox_converter=is2_to_dem,
+    #                                         verbose=not quiet)
 
     if not quiet:
         print("{0:,}".format(len(photon_df)), "ICESat-2 photons present in photon dataframe.")
@@ -1229,11 +1227,10 @@ def validate_dem_parallel(dem_name,
     if write_result_tifs:
         if dem_ds is None:
             dem_ds = gdal.Open(dem_name, gdal.GA_ReadOnly)
-        generate_result_geotiffs(results_dataframe,
-                                 dem_ds,
-                                 results_dataframe_file,
-                                 result_tif_filename,
-                                 verbose=not quiet)
+        generate_result_geotiff(results_dataframe,
+                                dem_ds,
+                                result_tif_filename,
+                                verbose=not quiet)
 
     if plot_results:
         if location_name is None:
@@ -1250,19 +1247,20 @@ def validate_dem_parallel(dem_name,
             print("Cleaning up...", end="")
         if os.path.exists(coastline_mask_filename):
             os.remove(coastline_mask_filename)
-        if converted_dem_name != None & os.path.exists(converted_dem_name):
+        if (converted_dem_name is not None) and os.path.exists(converted_dem_name):
             os.remove(converted_dem_name)
-        for granule_fname in atl03_granules_list:
-            if os.path.exists(granule_fname): os.remove(granule_fname)
-        for granule_fname in atl08_granules_list:
-            if os.path.exists(granule_fname): os.remove(granule_fname)
-        if os.path.exists(photon_dataframe_name):
-            os.remove(photon_dataframe_name)
+        # for granule_fname in atl03_granules_list:
+        #     if os.path.exists(granule_fname): os.remove(granule_fname)
+        # for granule_fname in atl08_granules_list:
+        #     if os.path.exists(granule_fname): os.remove(granule_fname)
+        # if os.path.exists(photon_dataframe_name):
+        #     os.remove(photon_dataframe_name)
 
         if not quiet:
             print("done.")
 
     return
+
 
 def write_summary_stats_file(results_df, statsfile_name, verbose=True):
 
@@ -1271,7 +1269,7 @@ def write_summary_stats_file(results_df, statsfile_name, verbose=True):
             print("write_summary_stats_file(): No stats to compute in results dataframe. Returning")
         return
 
-    lines = []
+    lines = list()
     lines.append("Number of DEM cells validated (cells): {0}".format(len(results_df)))
     lines.append("Total number of ground photons used to validate this DEM (photons): {0}".format(results_df["numphotons_intd"].sum()))
     lines.append("Mean number of photons used to validate each cell (photons): {0}".format(results_df["numphotons_intd"].mean()))
@@ -1282,9 +1280,9 @@ def write_summary_stats_file(results_df, statsfile_name, verbose=True):
     lines.append("RMSE error (m): {0}".format(numpy.sqrt(numpy.mean(numpy.power(mean_diff, 2)))))
     lines.append("== Decile ranges of errors (ICESat-2 - DEM) (m) (Look for long-tails, indicating possible artifacts.) ===")
 
-    percentile_levels = [0,1,10,20,30,40,50,60,70,80,90,99,100]
+    percentile_levels = [0, 1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 99, 100]
     percentile_values = numpy.percentile(mean_diff, percentile_levels)
-    for l,v in zip(percentile_levels, percentile_values):
+    for l, v in zip(percentile_levels, percentile_values):
         lines.append("    {0:>3d}-th percentile error level (m): {1}".format(l, v))
 
     lines.append("Mean canopy cover (% cover): {0:0.02f}".format(results_df["canopy_fraction"].mean()*100))
@@ -1304,14 +1302,14 @@ def write_summary_stats_file(results_df, statsfile_name, verbose=True):
 
     return
 
-def generate_result_geotiffs(results_dataframe, dem_ds, results_dataframe_filename, result_tif_filename, verbose=True):
+
+def generate_result_geotiff(results_dataframe, dem_ds, result_tif_filename, verbose=True):
     """Given the results in the dataframe, output geotiffs to visualize these.
 
     Name the geotiffs after the dataframe: [original_filename]_<tag>.tif
 
     Geotiff tags will include:
         - mean_diff
-        # TODO: FINISH THIS LIST
     """
     gt = dem_ds.GetGeoTransform()
     projection = dem_ds.GetProjection()
@@ -1337,7 +1335,7 @@ def generate_result_geotiffs(results_dataframe, dem_ds, results_dataframe_filena
     band = out_ds.GetRasterBand(1)
     band.WriteArray(result_array)
     band.SetNoDataValue(emptyval)
-    band.GetStatistics(0,1)
+    band.GetStatistics(0, 1)
     band = None
     out_ds = None
     if verbose:
@@ -1352,35 +1350,34 @@ def read_and_parse_args():
                         help='The input DEM.')
     parser.add_argument('output_h5', type=str, nargs="?", default="",
                         help='A .h5 file to put the output summary results. Default: Will put in the same directory & filename as the input_dem, just with .h5 instead of .tif.')
-    parser.add_argument('-photon_h5', type=str, default="",
-                        help='The .h5 files where the ICESat-2 photon data resides. If this file exists (and --overwrite is not selected), this file will be read rather than generated. Otherwise, photon data will be put in here.')
+    # parser.add_argument('-photon_h5', type=str, default="",
+    #                     help='The .h5 files where the ICESat-2 photon data resides. If this file exists (and --overwrite is not selected), this file will be read rather than generated. Otherwise, photon data will be put in here.')
     parser.add_argument('-input_vdatum','-ivd', type=str, default="wgs84",
                         help="Input DEM vertical datum. (Default: 'wgs84')" + \
-                        " Currently supported datum arguments, not case-sensitive: ({})".format(",".join([str(vd) for vd in convert_vdatum.SUPPORTED_VDATUMS]))
-                        )
+                        " Currently supported datum arguments, not case-sensitive: ({})".format(",".join([str(vd) for vd in convert_vdatum.SUPPORTED_VDATUMS])))
     parser.add_argument('-output_vdatum','-ovd', type=str, default="wgs84",
                         help="Output vertical datum. (Default: 'wgs84')" + \
                         " Supports same datum list as input_vdatum, except for egm96 and equivalent.")
     parser.add_argument('-datadir', type=str, default="",
                         help="A scratch directory to write interim data files. Useful if user would like to save temp files elsewhere. Defaults to the output_h5 directory.")
-    parser.add_argument('-interp_method', type=str, default="cubic",
-                        help="Interpolation method passed to gdal_warp for vertical datum conversions. Default 'cubic'. Call 'gdal_warp -h' for complete list of options.")
+    # parser.add_argument('-interp_method', type=str, default="cubic",
+    #                     help="Interpolation method passed to gdal_warp for vertical datum conversions. Default 'cubic'. Call 'gdal_warp -h' for complete list of options.")
     parser.add_argument('-band_num', type=int, default=1,
                         help="The band number (1-indexed) of the input_dem. (Default: 1)")
-    parser.add_argument('-date_range', type=str, default="",
-                        help='The date range in which to search for signal photons, comma-separated. Ex: 2021-01-01,2021-12-31 (Default)')
+    # parser.add_argument('-date_range', type=str, default="",
+    #                     help='The date range in which to search for signal photons, comma-separated. Ex: 2021-01-01,2021-12-31 (Default)')
     parser.add_argument('-place_name', '-name', type=str, default=None,
                         help='A text name of the location, to put in the title of the plot (if --plot_results is selected)')
-    parser.add_argument('--use_icesat2_photon_database', action='store_true', default=False,
-                        help="Use the optimized ICESat-2 photon database rather than downloading granules separately. This can save time & memory if the database has already been built on this machine.")
+    # parser.add_argument('--use_icesat2_photon_database', action='store_true', default=False,
+    #                     help="Use the optimized ICESat-2 photon database rather than downloading granules separately. This can save time & memory if the database has already been built on this machine.")
     parser.add_argument('--delete_datafiles', action='store_true', default=False,
                         help='Delete the interim data files generated. Reduces storage requirements. (Default: keep them all.)')
     parser.add_argument('--use_urban_mask', action='store_true', default=False,
                         help="Use the WSL 'Urban Area' mask rather than OSM building footprints to mask out IceSat-2 data. Useful over lower-resolution (10m or coarser) dems, which tend to be bigger than building footprints.")
     parser.add_argument('--write_result_tifs', action='store_true', default=False,
                         help=""""Write output geotiff with the errors in cells that have ICESat-2 photons, NDVs elsewhere.""")
-    parser.add_argument('--skip_icesat2_download', action="store_true", default=False,
-                        help="Skip ICESat-2 granule downloads. Get existing granules files from -datadir. Usefuil if you've already downloaded the needed data from NSIDC.")
+    # parser.add_argument('--skip_icesat2_download', action="store_true", default=False,
+    #                     help="Skip ICESat-2 granule downloads. Get existing granules files from -datadir. Usefuil if you've already downloaded the needed data from NSIDC.")
     parser.add_argument('--plot_results', action="store_true", default=False,
                         help="Make summary plots of the validation statistics.")
     parser.add_argument('--overwrite', action='store_true', default=False,
@@ -1403,15 +1400,15 @@ if __name__ == "__main__":
     if args.datadir == "":
         args.datadir = os.path.split(args.output_h5)[0]
 
-    if args.photon_h5 == "":
-        base = os.path.splitext(os.path.split(args.output_h5)[1])[0]
-        args.photon_h5 = os.path.join(args.datadir, base + "_photons.h5")
+    # if args.photon_h5 == "":
+    #     base = os.path.splitext(os.path.split(args.output_h5)[1])[0]
+    #     args.photon_h5 = os.path.join(args.datadir, base + "_photons.h5")
 
-    if (args.date_range == "") or (args.date_range == None):
-        icesat2_date_range = ["2021-01-01", "2021-12-31"]
-    else:
-        assert type(args.date_range) == str
-        icesat2_date_range = args.date_range.split(",")
+    # if (args.date_range == "") or (args.date_range == None):
+    #     icesat2_date_range = ["2021-01-01", "2021-12-31"]
+    # else:
+    #     assert type(args.date_range) == str
+    #     icesat2_date_range = args.date_range.split(",")
 
     if ((args.output_h5 == "") or (args.output_h5 == None)):
         if ((args.datadir != "") and (args.datadir != None)):
@@ -1422,20 +1419,22 @@ if __name__ == "__main__":
     else:
         output_h5 = args.output_h5
 
-    kwargs = {}
+    # kwargs = {}
 
     validate_dem_parallel(args.input_dem,
-                          args.photon_h5,
-                          use_icesat2_photon_database = args.use_icesat2_photon_database,
+                          # args.photon_h5,
+                          # use_icesat2_photon_database = args.use_icesat2_photon_database,
+                          # use_icesat2_photon_database = True,
                           dem_vertical_datum = args.input_vdatum,
                           output_vertical_datum = args.output_vdatum,
                           results_dataframe_file = output_h5,
-                          icesat2_date_range = icesat2_date_range,
+                          # icesat2_date_range = icesat2_date_range,
                           interim_data_dir = (None if (args.datadir=="") else args.datadir),
                           overwrite=args.overwrite,
                           delete_datafiles=args.delete_datafiles,
                           write_result_tifs = args.write_result_tifs,
-                          skip_icesat2_download = args.skip_icesat2_download,
+                          # skip_icesat2_download = args.skip_icesat2_download,
+                          # skip_icesat2_download=True,
                           plot_results = args.plot_results,
                           location_name = args.place_name,
                           mask_out_buildings=not args.use_urban_mask,

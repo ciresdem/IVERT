@@ -266,8 +266,8 @@ def write_summary_csv_file(total_photon_df: pandas.DataFrame,
     # TODO: Finish
 
 def validate_list_of_dems(dem_list_or_dir,
-                          photon_h5,
-                          use_icesat2_photon_database=True,
+                          # photon_h5,
+                          # use_icesat2_photon_database=True,
                           results_h5=None,
                           fname_filter=r"\.tif\Z",
                           fname_omit=None,
@@ -278,12 +278,12 @@ def validate_list_of_dems(dem_list_or_dir,
                           overwrite=False,
                           place_name = None,
                           create_individual_results = False,
-                          date_range=["2021-01-01", "2021-12-31"],
-                          skip_icesat2_download=False,
+                          # date_range=["2021-01-01", "2021-12-31"],
+                          # skip_icesat2_download=False,
                           delete_datafiles=False,
                           include_photon_validation=True,
                           write_result_tifs=False,
-                          shapefile_name = None,
+                          # shapefile_name = None,
                           omit_bad_granules = True,
                           write_summary_csv = True,
                           # omission_bboxes = None,
@@ -382,23 +382,23 @@ def validate_list_of_dems(dem_list_or_dir,
         # Only include filenames that DO NOT MATCH the omission string.
         dem_list = [fn for fn in dem_list if (re.search(fname_omit, fn) == None)]
 
-    if use_icesat2_photon_database:
-        # Generate a single photon database object and pass it repeatedly to all the objects.
-        # This saves us a lot of re-reading the geodataframe repeatedly.
-        photon_db_obj = icesat2_photon_database.ICESat2_Database()
-    else:
-        # If a common photon dataframe already exists, open and use it.
-        # Otherwise, create it.
-        photon_df = read_or_create_photon_h5(dem_list,
-                                             photon_h5,
-                                             output_dir=output_dir,
-                                             icesat2_dir=icesat2_dir,
-                                             skip_icesat2_download = skip_icesat2_download,
-                                             overwrite=overwrite,
-                                             create_shapefile = False if (shapefile_name is None) else True,
-                                             shapefile_name = shapefile_name,
-                                             verbose=verbose)
-        photon_db_obj = None
+    # if use_icesat2_photon_database:
+    # Generate a single photon database object and pass it repeatedly to all the objects.
+    # This saves us a lot of re-reading the geodataframe repeatedly.
+    photon_db_obj = icesat2_photon_database.ICESat2_Database()
+    # else:
+    #     # If a common photon dataframe already exists, open and use it.
+    #     # Otherwise, create it.
+    #     photon_df = read_or_create_photon_h5(dem_list,
+    #                                          photon_h5,
+    #                                          output_dir=output_dir,
+    #                                          icesat2_dir=icesat2_dir,
+    #                                          skip_icesat2_download = skip_icesat2_download,
+    #                                          overwrite=overwrite,
+    #                                          create_shapefile = False if (shapefile_name is None) else True,
+    #                                          shapefile_name = shapefile_name,
+    #                                          verbose=verbose)
+    #     photon_db_obj = None
 
     # if not os.path.exists(photon_h5):
     #     if verbose:
@@ -425,14 +425,16 @@ def validate_list_of_dems(dem_list_or_dir,
         # Do the validation.
         # Note: We automatically skip the icesat-2 download here because we already downloaded it above for the whole directory.
         validate_dem.validate_dem_parallel(dem_path,
-                                           photon_dataframe_name = None if use_icesat2_photon_database else photon_df,
-                                           use_icesat2_photon_database = use_icesat2_photon_database,
-                                           icesat2_photon_database_obj= photon_db_obj,
+                                           # photon_dataframe_name = None if use_icesat2_photon_database else photon_df,
+                                           # use_icesat2_photon_database = use_icesat2_photon_database,
+                                           photon_dataframe_name=None,
+                                           use_icesat2_photon_database=True,
+                                           icesat2_photon_database_obj=photon_db_obj,
                                            dem_vertical_datum=input_vdatum,
-                                           output_vertical_datum = output_vdatum,
-                                           granule_ids=None,
-                                           results_dataframe_file = results_h5_file,
-                                           icesat2_date_range = date_range,
+                                           output_vertical_datum=output_vdatum,
+                                           # granule_ids=None,
+                                           results_dataframe_file=results_h5_file,
+                                           # icesat2_date_range = date_range,
                                            interim_data_dir = this_output_dir,
                                            overwrite=overwrite,
                                            delete_datafiles = delete_datafiles,
@@ -509,11 +511,11 @@ def define_and_parse_args():
     parser.add_argument("-output_dir", "-od", type=str, default=None,
         help="Directory to output results (and intermittent data, if no data_dir is specified).")
 
-    parser.add_argument("-icesat2_dir", "-is2d", type=str, default=None,
-        help="Directory to put ICESat-2 granules. Default: Use the output_dir.")
-
-    parser.add_argument("-photon_h5", "-h5", type=str, default=None,
-        help="Name of the ICESat-2 photon dataframe file to create or use for this analysis. Will use existing files unless 'overwrite' is specified.")
+    # parser.add_argument("-icesat2_dir", "-is2d", type=str, default=None,
+    #     help="Directory to put ICESat-2 granules. Default: Use the output_dir.")
+    #
+    # parser.add_argument("-photon_h5", "-h5", type=str, default=None,
+    #     help="Name of the ICESat-2 photon dataframe file to create or use for this analysis. Will use existing files unless 'overwrite' is specified.")
 
     parser.add_argument("-results_h5", type=str, default=None,
         help="Name of an output .h5 file to store the compiled grid-cell-level results for the entire dataset. Default: Just stores the summary without the actual results h5 file.")
@@ -524,31 +526,31 @@ def define_and_parse_args():
     parser.add_argument("-output_vdatum", "-ovd", default="wgs84",
         help="The vertical datume of the output analysis. Must be a vdatum compatible with Icesat-2 granules. Default: Use the same vdatum as the input files.")
 
-    parser.add_argument("-date_range", nargs=2, default=["2021-01-01", "2022-01-01"],
-        help="Input a pair of date ranges to searcvh for ICESat-2 data, in yyyy-mm-dd format. Defaults to calendar year 2021, or '2021-01-01 2021-12-31'.")
+    # parser.add_argument("-date_range", nargs=2, default=["2021-01-01", "2022-01-01"],
+    #     help="Input a pair of date ranges to searcvh for ICESat-2 data, in yyyy-mm-dd format. Defaults to calendar year 2021, or '2021-01-01 2021-12-31'.")
 
     parser.add_argument("-place_name", "-name", type=str, default=None,
         help="Readable name of the location being validated. Will be used in output summary plots and validation report.")
 
-    parser.add_argument("-shapefile", "-shp", type=str, default=None,
-        help="Name of a shapefile to save locations of the granule paths. Default: No shapefile created.")
+    # parser.add_argument("-shapefile", "-shp", type=str, default=None,
+    #     help="Name of a shapefile to save locations of the granule paths. Default: No shapefile created.")
 
-    parser.add_argument('--use_icesat2_photon_database', '-is2db', action='store_true', default=False,
-        help="Use the optimized ICESat-2 photon database rather than downloading granules separately. This can save time & memory if the database has already been built on this machine.")
+    # parser.add_argument('--use_icesat2_photon_database', '-is2db', action='store_true', default=False,
+    #     help="Use the optimized ICESat-2 photon database rather than downloading granules separately. This can save time & memory if the database has already been built on this machine.")
 
     parser.add_argument("--overwrite", "-o", action="store_true", default=False,
         help="Overwrite all files, including intermittent data files. Default: False (skips re-computing already-computed reseults.")
 
-    parser.add_argument("--skip_icesat2_download", action="store_true", default=False,
-        help="Skip dowloads of ICESat-2 data. Just use the files already there.")
+    # parser.add_argument("--skip_icesat2_download", action="store_true", default=False,
+    #     help="Skip dowloads of ICESat-2 data. Just use the files already there.")
 
     parser.add_argument("--create_folders", action="store_true", default=False,
         help="Create folders specified in -output_dir and -data_dir, as well as the full path to -photon_h5, if they do not already exist. Default: Raise errors if paths don't already exist.")
 
-    parser.add_argument("--individual_results","--ind", action="store_true", default=False,
+    parser.add_argument("--individual_results", "--ind", action="store_true", default=False,
         help="By default, a summary plot and text file are generated for the dataset. If this is selected, they will be generated for each individual DEM as well. Files will be placed in the -output_dir directory.")
 
-    parser.add_argument("--include_photon_validation","--ph", action="store_true", default=False,
+    parser.add_argument("--include_photon_validation", "--ph", action="store_true", default=False,
         help="Produce a photon database (stored in '*_photon_level_results.h5') with errors on a photon-level (not cell-level) scale. Useful for identifying bad ICESat-2 granules.")
 
     parser.add_argument("--delete_datafiles", "--del", action="store_true", default=False,
@@ -620,8 +622,8 @@ def main():
     # or the user manually deletes directories during execusion, it will cause
     # the program to crash when it tries to write files there. That's a user error.
 
-    validate_list_of_dems(args.directory_or_files, args.photon_h5,
-                          use_icesat2_photon_database=args.use_icesat2_photon_database,
+    validate_list_of_dems(args.directory_or_files, # args.photon_h5,
+                          # use_icesat2_photon_database=args.use_icesat2_photon_database,
                           results_h5=args.results_h5,
                           fname_filter=args.fname_filter,
                           fname_omit=args.fname_omit,
@@ -632,12 +634,12 @@ def main():
                           overwrite=args.overwrite,
                           place_name=args.place_name,
                           create_individual_results=args.individual_results,
-                          date_range=args.date_range,
-                          skip_icesat2_download=args.skip_icesat2_download,
+                          # date_range=args.date_range,
+                          # skip_icesat2_download=args.skip_icesat2_download,
                           delete_datafiles=args.delete_datafiles,
                           include_photon_validation=args.include_photon_validation,
                           write_result_tifs=args.write_result_tifs,
-                          shapefile_name=args.shapefile,
+                          # shapefile_name=args.shapefile,
                           write_summary_csv=args.write_summary_csv,
                           omit_bad_granules=True,
                           verbose=not args.quiet)

@@ -12,7 +12,7 @@ import math
 
 ####################################3
 # Include the base /src/ directory of thie project, to add all the other modules.
-import import_parent_dir; import_parent_dir.import_src_dir_via_pythonpath()
+# import import_parent_dir; import_parent_dir.import_src_dir_via_pythonpath()
 ####################################3
 import utils.configfile
 my_config = utils.configfile.config()
@@ -25,7 +25,7 @@ def is_iterable(obj):
             and not isinstance(obj, six.string_types))
 
 def get_data_from_h5_or_list(h5_name_or_list,
-                             empty_val = my_config.etopo_ndv,
+                             empty_val = my_config.dem_default_ndv,
                              include_filenames = False,
                              verbose=True):
     """Return the data either from a single hdf5 results file, or a list of them. Filter out empty (bad data) values."""
@@ -47,7 +47,8 @@ def get_data_from_h5_or_list(h5_name_or_list,
                 data_list.append(temp_data)
 
             if verbose:
-                utils.progress_bar.ProgressBar(i+1,len(h5_name_or_list), suffix='{0}/{1}'.format(i+1, len(h5_name_or_list)))
+                utils.progress_bar.ProgressBar(i + 1, len(h5_name_or_list),
+                                               suffix='{0}/{1}'.format(i + 1, len(h5_name_or_list)))
 
         data = pandas.concat(data_list)
     else:
@@ -74,7 +75,7 @@ def get_data_from_h5_or_list(h5_name_or_list,
 
 def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
                                             output_figure_name,
-                                            empty_val = my_config.etopo_ndv,
+                                            empty_val = my_config.dem_default_ndv,
                                             place_name=None,
                                             figsize=None,
                                             labels_uppercase = True,
@@ -339,7 +340,7 @@ def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
     return
 
 
-# def plot_histograms(results_h5_name_or_list, empty_val = my_config.etopo_ndv):
+# def plot_histograms(results_h5_name_or_list, empty_val = my_config.dem_default_ndv):
 #     data = get_data_from_h5_or_list(results_h5_name_or_list, empty_val = empty_val)
 #
 #     meddiff         = data['diff_median']
@@ -476,7 +477,7 @@ def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
 #     # plt.close()
 #     # fig.show()
 
-def plot_error_stats(results_h5_name_or_list, empty_val = my_config.etopo_ndv):
+def plot_error_stats(results_h5_name_or_list, empty_val = my_config.dem_default_ndv):
     # print(fname)
     data = get_data_from_h5_or_list(results_h5_name_or_list, empty_val = empty_val)
 

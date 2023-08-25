@@ -81,7 +81,7 @@ class config:
                 # If it's an absolute path or it already exists where it is, just use it as-is
                 if value.strip().find("/") == 0:
                     setattr(self, key, os.path.abspath(value))
-                # If it's a relative path, make it relative to the _configfile directory.
+                # If it's a relative path, make it relative to the _configfile's local directory.
                 else:
                     setattr(self, key, self._abspath(os.path.join(os.path.dirname(self._configfile), value)))
                 return

@@ -7,11 +7,6 @@ import numpy
 import time
 import subprocess
 
-##############################################################################
-# Code for importing the /src directory so that other modules can be accessed.
-import import_parent_dir
-import_parent_dir.import_src_dir_via_pythonpath()
-##############################################################################
 import utils.progress_bar
 
 def physical_cpu_count():
@@ -72,18 +67,19 @@ dtypes_dict = {numpy.int8:    'b',
                numpy.dtype('float32'): 'f',
                numpy.dtype('float64'): 'd'}
 
+
 def process_parallel(target_func,
                      args_lists,
-                     kwargs_list = None,
-                     outfiles = None,
-                     proc_names = None,
-                     temp_working_dirs = None,
-                     overwrite_outfiles = False,
-                     max_nprocs = physical_cpu_count(),
-                     use_progress_bar_only = False,
-                     abbreviate_outfile_names_in_stdout = True,
-                     delete_partially_done_files = True,
-                     verbose = True) -> None:
+                     kwargs_list=None,
+                     outfiles=None,
+                     proc_names=None,
+                     temp_working_dirs=None,
+                     overwrite_outfiles: bool = False,
+                     max_nprocs: int = physical_cpu_count(),
+                     use_progress_bar_only: bool = False,
+                     abbreviate_outfile_names_in_stdout: bool = True,
+                     delete_partially_done_files: bool = True,
+                     verbose=True) -> None:
     """Most of my parallel processing involves working on a list of files.
 
     parameters:
@@ -104,28 +100,33 @@ def process_parallel(target_func,
         verbose (bool): Print output message for each file created or process executed.
     """
 
-    # For each optional list, just supply a range of integers if we're not using it. Check for integers later down and ignore them.
+    # For each optional list, just supply a range of integers if we're not using it. Check for integers later down and
+    # ignore them.
     if kwargs_list is None:
         kwargs_list = [None] * len(args_lists)
     elif type(kwargs_list) == dict:
         kwargs_list = [kwargs_list] * len(args_lists)
     elif len(kwargs_list) != len(args_lists):
-        raise ValueError("Length of kwargs_list ({0}) != length of args_lists ({1}). Exiting".format(len(kwargs_list), len(args_lists)))
+        raise ValueError("Length of kwargs_list ({0}) != length of args_lists ({1}). Exiting".format(len(kwargs_list),
+                                                                                                     len(args_lists)))
 
     if outfiles is None:
         outfiles = range(len(args_lists))
     elif len(outfiles) != len(args_lists):
-        raise ValueError("Length of outfiles ({0}) != length of args_lists ({1}). Exiting".format(len(outfiles), len(args_lists)))
+        raise ValueError("Length of outfiles ({0}) != length of args_lists ({1}). Exiting".format(len(outfiles),
+                                                                                                  len(args_lists)))
 
     if temp_working_dirs is None:
         temp_working_dirs = range(len(args_lists))
     elif len(temp_working_dirs) != len(args_lists):
-        raise ValueError("Length of temp_working_dirs ({0}) != length of args_lists ({1}). Exiting".format(len(temp_working_dirs), len(args_lists)))
+        raise ValueError("Length of temp_working_dirs ({0}) != length of args_lists ({1}). Exiting".format(len(temp_working_dirs),
+                                                                                                    len(args_lists)))
 
     if proc_names is None:
         proc_names = range(len(args_lists))
     elif len(proc_names) != len(args_lists):
-        raise ValueError("Length of proc_names ({0}) != length of args_lists ({1}). Exiting".format(len(proc_names), len(args_lists)))
+        raise ValueError("Length of proc_names ({0}) != length of args_lists ({1}). Exiting".format(len(proc_names),
+                                                                                                    len(args_lists)))
 
     running_outfiles = []
     running_procs = []
@@ -152,7 +153,10 @@ def process_parallel(target_func,
                 procnames_to_remove = []
 
                 # First, check to see if any processes are finished. If so, add them to the list of ones to handle and remove.
-                for r_proc, r_outf, r_tdir, r_pname in zip(running_procs, running_outfiles, running_tempdirs, running_procnames):
+                for r_proc, r_outf, r_tdir, r_pname in zip(running_procs,
+                                                           running_outfiles,
+                                                           running_tempdirs,
+                                                           running_procnames):
                     if not r_proc.is_alive():
                         r_proc.join()
                         r_proc.close()
@@ -162,7 +166,10 @@ def process_parallel(target_func,
                         procnames_to_remove.append(r_pname)
 
                 # Remove any processes and other process metadata that has finished.
-                for d_proc, d_outf, d_tdir, d_pname in zip(procs_to_remove, outfiles_to_check, tempdirs_to_remove, procnames_to_remove):
+                for d_proc, d_outf, d_tdir, d_pname in zip(procs_to_remove,
+                                                           outfiles_to_check,
+                                                           tempdirs_to_remove,
+                                                           procnames_to_remove):
                     num_finished += 1
                     # Print a confirmation line if we've asked it to. Either confirm:
                     # (a) the file has been written,
@@ -170,7 +177,9 @@ def process_parallel(target_func,
                     # (c) or just a count using the progress bar.
                     if verbose:
                         if use_progress_bar_only:
-                            utils.progress_bar.ProgressBar(i+1, len(args_lists), suffix="{0:,}/{1:,}".format(num_finished, len(args_lists)))
+                            progress_bar.ProgressBar(i + 1, len(args_lists),
+                                                     suffix="{0:,}/{1:,}".format(num_finished,
+                                                     len(args_lists)))
                         elif type(d_outf) == str:
                             print("{0:,}/{1:,} ".format(num_finished, len(args_lists)), end="")
                             written_qualifier = "" if os.path.exists(d_outf) else "NOT "
@@ -182,7 +191,9 @@ def process_parallel(target_func,
                         else:
                             # If we've given no identifying information for the processes, either a file to check
                             # or a process name, just output a progress bar.
-                            utils.progress_bar.ProgressBar(i+1, len(args_lists), suffix="{0:,}/{1:,}".format(num_finished, len(args_lists)))
+                            progress_bar.ProgressBar(i + 1, len(args_lists),
+                                                     suffix="{0:,}/{1:,}".format(num_finished,
+                                                     len(args_lists)))
 
                     # Delete the temporary directory if it was created.
                     if type(d_tdir) == str and os.path.exists(d_tdir):
@@ -216,7 +227,6 @@ def process_parallel(target_func,
                                           name=proc_name if (type(proc_name) == str) else None,
                                           args=args,
                                           )
-
 
                     if type(temp_dir) == str and not os.path.exists(temp_dir):
                         os.mkdir(temp_dir)

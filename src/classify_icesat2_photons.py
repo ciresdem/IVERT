@@ -14,12 +14,7 @@ import os
 import shapely
 import sys
 
-####################################3
-# Include the base /src/ directory of thie project, to add all the other modules.
-import import_parent_dir; import_parent_dir.import_src_dir_via_pythonpath()
-####################################3
-
-import icesat2.atl_granules as atl_granules
+import atl_granules
 import utils.configfile
 my_config = utils.configfile.config()
 
@@ -55,8 +50,8 @@ my_config = utils.configfile.config()
 def classify_photon_data_multiple_granules(gid_list,
                                            beam=None,
                                            return_type=numpy.ndarray,
-                                           bounding_box = None,
-                                           bbox_converter = None,
+                                           bounding_box=None,
+                                           bbox_converter=None,
                                            parallelize=True,
                                            verbose=True):
     if parallelize:
@@ -73,7 +68,7 @@ def classify_photon_data_multiple_granules(gid_list,
 
     # if verbose:
     #     progress_bar.ProgressBar(0, len(gid_list), suffix = "{}/{}".format(0,len(gid_list)))
-    for i,gid in enumerate(gid_list):
+    for i, gid in enumerate(gid_list):
         if verbose:
             print("{0}/{1}".format(i+1,len(gid_list)), gid, end=" ")
 
@@ -83,7 +78,7 @@ def classify_photon_data_multiple_granules(gid_list,
         array_list[i] = classify_photon_data(gid,
                                              beam=beam,
                                              return_type=return_type,
-                                              output_h5 = granule_h5_name,
+                                             output_db=granule_h5_name,
                                              bounding_box=bounding_box,
                                              bbox_converter=bbox_converter) # , surface=surface)
 
@@ -105,17 +100,17 @@ def classify_photon_data_multiple_granules(gid_list,
             print("{:,}".format(len(master_array)), "total photons.")
             print("{:,}".format(master_array.class_code[master_array["class_code"] == 1].count()), "ground photons.")
 
-
     return master_array
+
 
 def classify_photon_data(granule_id,
                          beam=None,
                          return_type=numpy.ndarray,
-                         output_db = None,
-                         overwrite = False,
-                         bounding_box = None,
-                         bbox_converter = None,
-                         verbose = True):
+                         output_db=None,
+                         overwrite=False,
+                         bounding_box=None,
+                         bbox_converter=None,
+                         verbose=True):
     """Get the data on individual photons for a given granule ID.
 
     granule_id can be an ATL08 or 03 id. This function will convert automatically.
@@ -485,16 +480,16 @@ def classify_photon_data(granule_id,
     try:
         atl03.close()
         atl08.close()
-    except NameError: # Some of the branches above didn't define atl03 and atl08 yet. In that case, ignore closing them.
-        pass
-    except UnboundLocalError:
+    # Some of the branches above didn't define atl03 and atl08 yet. In that case, ignore closing them.
+    except NameError:
         pass
 
     return df
 
+
 def save_photon_data_from_directory_or_list_of_granules(dirname_or_list_of_granules,
                                                         photon_db="photons.h5",
-                                                        bounding_box= None,
+                                                        bounding_box=None,
                                                         bbox_converter=None,
                                                         beam=None,
                                                         verbose=True):
@@ -651,15 +646,15 @@ def save_granule_ground_photons(granule_path,
     #  2 = canopy
     #  3 = canopy top
     # Save only 1,2,3 photons.
-    dataframe = dataframe.loc[dataframe.class_code.between(1,3,inclusive="both")].reset_index()
+    dataframe = dataframe.loc[dataframe.class_code.between(1, 3, inclusive="both")].reset_index()
 
     if ext == ".h5":
         dataframe.to_hdf(output_db, "icesat2", complib="zlib", complevel=3, mode='w')
     else:
         assert ext == ".feather"
         dataframe.to_feather(output_db,
-                             compression = my_config.feather_database_compress_algorithm,
-                             compression_level = my_config.feather_database_compress_level)
+                             compression=my_config.feather_database_compress_algorithm,
+                             compression_level=my_config.feather_database_compress_level)
 
     if verbose:
         print("Done.")

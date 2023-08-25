@@ -9,6 +9,7 @@ import fcntl, termios, struct, sys
 import os
 import psutil
 
+
 def is_run_from_command_line():
     """Tell whether the parent process is the command-line, or not."""
     # Get the parent process ID (should either be a command shell, another process, an editor, or "python")
@@ -47,6 +48,7 @@ def is_run_from_command_line():
         # input("Pause")
         return False
 
+
 def get_terminal_width(default=120):
     if is_run_from_command_line():
         h, w, hp, wp = struct.unpack("HHHH", fcntl.ioctl(sys.stdin.fileno(),
@@ -57,15 +59,16 @@ def get_terminal_width(default=120):
     else:
         return default
 
+
 # Print iterations progress
-def ProgressBar (iteration,
-                 total,
-                 prefix = '',
-                 suffix = '',
-                 decimals = 1,
-                 width = get_terminal_width(default=120),
-                 fill = '█',
-                 printEnd = "\r"):
+def ProgressBar(iteration,
+                total,
+                prefix='',
+                suffix='',
+                decimals=1,
+                width=get_terminal_width(default=120),
+                fill='█',
+                print_end="\r"):
     """
     Call in a loop to create terminal progress bar
     @params:
@@ -80,10 +83,10 @@ def ProgressBar (iteration,
     """
     percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
     bar_length = width - (len(prefix) + 2 + 2 + len(percent) + 1 + len(suffix) + 2)
-    filledLength = int(bar_length * iteration // total)
-    bar = fill * filledLength + '-' * (bar_length - filledLength)
+    filled_length = int(bar_length * iteration // total)
+    bar = fill * filled_length + '-' * (bar_length - filled_length)
     outstr = f'{prefix} |{bar}| {percent}% {suffix}'
-    print(outstr, end = printEnd)
+    print(outstr, end=print_end)
     # Print New Line on Complete
     if iteration == total:
         print()

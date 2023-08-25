@@ -4,12 +4,9 @@
 import os
 import numpy
 
-####################################3
-# Include the base /src/ directory of thie project, to add all the other modules.
-import import_parent_dir; import_parent_dir.import_src_dir_via_pythonpath()
-####################################3
 import utils.progress_bar as progress_bar
 import atl_granules
+
 
 class ATL_dataset:
     def __init__(self, dirname):
@@ -95,14 +92,11 @@ class ATL_dataset:
             except ValueError:
                 print(h5_name)
 
-
         return
 
-    def list_of_granules_ids(self, dirname = None,
-                                   sort=True,
-                                   bounding_box = None,
-                                   start_date = None,
-                                   end_date = None):
+    def list_of_granules_ids(self,
+                             dirname=None,
+                             sort=True):
         """Get a list of all the .h5 filename granules in the data directory.
 
         If bounding_box is a 4-tuple of (xmin, ymin, xmax, ymax):
@@ -127,8 +121,7 @@ class ATL_dataset:
                         max_granules=None,
                         use_progress_bar=False,
                         cache_granules = True,
-                        warn_if_not_present=True,
-                        max_warnings=10):
+                        warn_if_not_present=True):
         """Go through all the granules, and accumluate the dataset requested.
 
         Parameters
@@ -149,11 +142,14 @@ class ATL_dataset:
         max_granules: The maximum number of dataset granules to read. Useful for
             debugging or exploratory purposes. Default None: collect them all.
 
-        progress_bar: If True, use a progress bar to show progress reading all the samples.
+        use_progress_bar: If True, use a progress bar to show progress reading all the samples.
 
         cache_granules: If we plan to reuse these granules again, save the data and leave them open.
             If not, the granule files will all be closed. Caching saves time but uses memory.
             Default: cache the granules and use them again if we call this function later.
+
+        warn_if_not_present: If the files aren't present, raise a Warning. Else, just skip and read the ones that
+            are present.
 
         Return value
         ------------
@@ -165,15 +161,15 @@ class ATL_dataset:
         N = len(granule_ids) if (max_granules is None) else min(max_granules, len(granule_ids))
         datasets = [None] * N
 
-        warnings_so_far=[0]
+        warnings_so_far = [0]
 
         for i,gid in enumerate(granule_ids[:N]):
             granule = self.get_granule(gid, cache=cache_granules)
             datasets[i] = granule.get_data(dataset_str, beam=beam, warn_if_not_present=warn_if_not_present,
-                                           max_warnings=1, warnings_so_far = warnings_so_far)
+                                           max_warnings=1, warnings_so_far=warnings_so_far)
 
             if use_progress_bar:
-                progress_bar.ProgressBar(i+1, N, suffix = "{0}/{1}".format(i+1,N))
+                progress_bar.ProgressBar(i + 1, N, suffix="{0}/{1}".format(i+1,N))
 
         # Concatenate all the data in the list.
         return numpy.concatenate(datasets)
@@ -182,7 +178,6 @@ class ATL_dataset:
         """For diagnostic and data-exploration purposes, summaries some of the stats."""
         print("\n************\nqa_granule_pass_fail\n************")
         qa_granule_pass_fails = self.accumulate_data("/quality_assessment/qa_granule_pass_fail",
-                                                     max_warnings=0,
                                                      max_granules=max_granules,
                                                      use_progress_bar=True)
         pass_N = numpy.count_nonzero(qa_granule_pass_fails == 0)
@@ -193,7 +188,6 @@ class ATL_dataset:
         print("\n************\nsurf_type\n************")
         surf_types = self.accumulate_data("/[gtx]/land_segments/surf_type",
                                           max_granules=max_granules,
-                                          max_warnings=0,
                                           warn_if_not_present=True,
                                           use_progress_bar=True)
 
@@ -204,18 +198,18 @@ class ATL_dataset:
         landice_N = numpy.sum(surf_types[:,3])
         iwater_N = numpy.sum(surf_types[:,4])
 
-        land_only_N = numpy.sum((surf_types[:,0] == 1) & (surf_types[:,1]==0) & (surf_types[:,2]==0)& (surf_types[:,3]==0)& (surf_types[:,4]==0))
-        print("Land        : {0} ({1}%)".format(land_N, land_N*100./N))
-        print("Land ONLY   : {0} ({1}%)".format(land_only_N, land_only_N*100./N))
-        print("Ocean       : {0} ({1}%)".format(ocean_N, ocean_N*100./N))
-        print("Sea Ice     : {0} ({1}%)".format(seaice_N, seaice_N*100./N))
-        print("Land Ice    : {0} ({1}%)".format(landice_N, landice_N*100./N))
-        print("Inland Water: {0} ({1}%)".format(iwater_N, iwater_N*100./N))
+        land_only_N = numpy.sum((surf_types[:, 0] == 1) & (surf_types[:, 1] == 0) &
+                                (surf_types[:, 2] == 0) & (surf_types[:, 3] == 0) & (surf_types[:, 4] == 0))
+        print("Land        : {0} ({1}%)".format(land_N, land_N * 100. / N))
+        print("Land ONLY   : {0} ({1}%)".format(land_only_N, land_only_N * 100. / N))
+        print("Ocean       : {0} ({1}%)".format(ocean_N, ocean_N * 100. / N))
+        print("Sea Ice     : {0} ({1}%)".format(seaice_N, seaice_N * 100. / N))
+        print("Land Ice    : {0} ({1}%)".format(landice_N, landice_N * 100. / N))
+        print("Inland Water: {0} ({1}%)".format(iwater_N, iwater_N * 100. / N))
 
         print("\n************\nbrightness_flag\n************")
         bflags = self.accumulate_data("/[gtx]/land_segments/brightness_flag",
                                       max_granules=max_granules,
-                                      max_warnings=0,
                                       use_progress_bar=True)
         print(bflags.shape)
         N = len(bflags)
@@ -225,7 +219,7 @@ class ATL_dataset:
         print("\n************\nph_removal_flag\n************")
         phrflags = self.accumulate_data("/[gtx]/land_segments/ph_removal_flag",
                                         max_granules=max_granules,
-                                        max_warnings=0, use_progress_bar=True)
+                                        use_progress_bar=True)
         print(phrflags.shape)
         N = len(phrflags)
         print("Not exceeded # photons removed: {0}/{1} ({2} %)".format(numpy.count_nonzero(phrflags==0), N, numpy.count_nonzero(phrflags==0)*100./N))
@@ -234,7 +228,7 @@ class ATL_dataset:
         print("\n************\nterrain_flg\n************")
         flags = self.accumulate_data("/[gtx]/land_segments/terrain_flg",
                                      max_granules=max_granules,
-                                     max_warnings=0, use_progress_bar=True)
+                                     use_progress_bar=True)
         print(flags.shape)
         N = len(flags)
         print("Not exceeded terrain threshold: {0}/{1} ({2} %)".format(numpy.count_nonzero(flags==0), N, numpy.count_nonzero(flags==0)*100./N))
@@ -243,7 +237,7 @@ class ATL_dataset:
         print("\n************\nurban_flag\n************")
         flags = self.accumulate_data("/[gtx]/land_segments/urban_flag",
                                      max_granules=max_granules,
-                                     max_warnings=0, use_progress_bar=True)
+                                     use_progress_bar=True)
         print(flags.shape)
         N = len(flags)
         print("Not urban: {0}/{1} ({2} %)".format(numpy.count_nonzero(flags==0), N, numpy.count_nonzero(flags==0)*100./N))
@@ -252,7 +246,7 @@ class ATL_dataset:
         print("\n************\nsubset_te_flag\n************")
         flags = self.accumulate_data("/[gtx]/land_segments/terrain/subset_te_flag",
                                      max_granules=max_granules,
-                                     max_warnings=0, use_progress_bar=True)
+                                     use_progress_bar=True)
         print(flags.shape)
 
         for i in range(5):
@@ -264,7 +258,7 @@ class ATL_dataset:
         print("\n************\nsc_orient\n************")
         flags = self.accumulate_data("/orbit_info/sc_orient",
                                      max_granules=max_granules,
-                                     max_warnings=0, use_progress_bar=True)
+                                     use_progress_bar=True)
 
         print(flags.shape)
         print("0 (backward): {0}  ({1} %)".format(numpy.count_nonzero(flags==0), numpy.count_nonzero(flags==0)*100./len(flags)))

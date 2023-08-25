@@ -25,11 +25,12 @@ warnings.filterwarnings("ignore", message=".*pandas.Int64Index is deprecated*")
 
 import classify_icesat2_photons
 import nsidc_download
-import datasets.CopernicusDEM.source_dataset_CopernicusDEM as Copernicus # WTF am I using Copernicus for here?
+# import datasets.CopernicusDEM.source_dataset_CopernicusDEM as Copernicus # WTF am I using Copernicus for here?
 # import datasets.dataset_geopackage                         as dataset_geopackage
-import etopo.generate_empty_grids # ??? TODO: Get rid of this dependency.
+# import etopo.generate_empty_grids # ??? TODO: Get rid of this dependency.
 import utils.configfile
 import utils.progress_bar
+import utils.sizeof_format
 
 class ICESat2_Database:
     """A database to manage ICESat-2 photon clouds for land-surface validations.
@@ -41,12 +42,12 @@ class ICESat2_Database:
         """tile_resolutin_deg should be some even fraction of 1. I.e. 1, or 0.5, or 0.25, or 0.1, etc.
 
         The current geodatabase consists of 0.25 degree tiles, 417,760 of them covering the planet's land surface."""
-        self.etopo_config = utils.configfile.config()
-        self.gpkg_fname = self.etopo_config.icesat2_photon_geopackage
-        self.tiles_directory = self.etopo_config.icesat2_photon_tiles_directory
-        self.granules_directory = self.etopo_config.icesat2_granules_directory
-        self.alt_granules_directories = [self.etopo_config.icesat2_granules_directory_alternate,
-                                         self.etopo_config.icesat2_granules_directory_alternate_2]
+        self.ivert_config = utils.configfile.config()
+        self.gpkg_fname = self.ivert_config.icesat2_photon_geopackage
+        self.tiles_directory = self.ivert_config.icesat2_photon_tiles_directory
+        self.granules_directory = self.ivert_config.icesat2_granules_directory
+        self.alt_granules_directories = [self.ivert_config.icesat2_granules_directory_alternate,
+                                         self.ivert_config.icesat2_granules_directory_alternate_2]
 
         self.gdf = None # The actual geodataframe object.
         self.tile_resolution_deg = tile_resolution_deg
@@ -56,8 +57,15 @@ class ICESat2_Database:
         """Return self.gpkg if exists, otherwise read self.gpkg_name, save it to self.gdf and return."""
         if self.gdf is None:
             if os.path.exists(self.gpkg_fname):
-                print("Reading", os.path.split(self.gpkg_fname)[1])
-                self.gdf = geopandas.read_file(self.gpkg_fname, mode='r')
+                print("Reading", os.path.basename(self.gpkg_fname))
+                if os.path.splitext(self.gpkg_fname)[1] == ".gpkg":
+                    self.gdf = geopandas.read_file(self.gpkg_fname, mode='r')
+                elif os.path.splitext(self.gpkg_fname)[1] == ".gz":
+                    self.gdf = pandas.read_pickle(self.gpkg_fname)
+                else:
+                    raise NotImplementedError(
+                        "Uknown file format for photon_tile_geopackage: {0}. Can accept .gpkg or .gz.".format(
+                            os.path.basename(self.gpkg_fname)))
             else:
                 self.gdf = self.create_new_geopackage(verbose=verbose)
 
@@ -74,10 +82,11 @@ class ICESat2_Database:
 
         # Since we're interested in land-only, we will use the CopernicusDEM dataset
         # to determine where land tiles might be.
-        copernicus_gdf = Copernicus.source_dataset_CopernicusDEM().get_geodataframe(verbose=verbose)
+        copernicus_gdf = None # TODO: Read the default Copernicus dataframe here to get a list of 1* land tiles.
+        # copernicus_gdf = Copernicus.source_dataset_CopernicusDEM().get_geodataframe(verbose=verbose)
         copernicus_fnames = [os.path.split(fn)[1] for fn in copernicus_gdf["filename"].tolist()]
         copernicus_bboxes = [self.get_bbox_from_copernicus_filename(fn) for fn in copernicus_fnames]
-        copernicus_bboxes.extend(etopo.generate_empty_grids.get_azerbaijan_1deg_bboxes())
+        copernicus_bboxes.extend(etopo.generate_empty_grids.get_azerbaijan_1deg_bboxes()) # TODO: Eliminate this dependency as well.
         # Skip all bounding boxes with a y-min of -90, since ICESat-2 only goes down to -89.
         # Don't need to worry about north pole, since the northernmost land bbox tops out at 84*N
         copernicus_bboxes = [bbox for bbox in copernicus_bboxes if bbox[1] > -90]
@@ -281,8 +290,9 @@ class ICESat2_Database:
         if not gdf is self.gdf:
             self.gdf = gdf
 
+        base, ext = os.path.splitext(self.gpkg_fname)
+
         if use_tempfile:
-            base, ext = os.path.splitext(self.gpkg_fname)
             tempfile_name = base + "_TEMP" + ext
             if os.path.exists(tempfile_name):
                 if verbose:
@@ -293,7 +303,14 @@ class ICESat2_Database:
             success = False
             while not success:
                 try:
-                    gdf.to_file(tempfile_name, layer="icesat2", driver="GPKG")
+                    if ext == ".gpkg":
+                        gdf.to_file(tempfile_name, layer="icesat2", driver="GPKG")
+                    elif ext == ".gz":
+                        gdf.to_pickle(tempfile_name)
+                    else:
+                        raise NotImplementedError(
+                            "Uknown file format for photon_tile_geopackage: {0}. Can accept .gpkg or .gz.".format(
+                                os.path.basename(self.gpkg_fname)))
                     os.remove(self.gpkg_fname)
                     shutil.move(tempfile_name, self.gpkg_fname)
                     success = True
@@ -302,11 +319,16 @@ class ICESat2_Database:
                     if os.path.exists(tempfile_name):
                         os.remove(tempfile_name)
                     if verbose:
-                        print("Error occurred while writing", os.path.split(self.gpkg_fname) + ". Waiting 30 seconds to retry...")
+                        print("Error occurred while writing", os.path.basename(self.gpkg_fname) + ". Waiting 30 seconds to retry...")
                     time.sleep(30)
         else:
             # Write the file.
-            gdf.to_file(self.gpkg_fname, layer="icesat2", driver='GPKG')
+            if ext == ".gpkg":
+                gdf.to_file(self.gpkg_fname, layer="icesat2", driver='GPKG')
+            elif ext == ".gz":
+                gdf.to_pickle(self.gpkg_fname)
+            else:
+                raise NotImplementedError("Uknown file format for photon_tile_geopackage: {0}. Can accept .gpkg or .gz.".format(os.path.basename(self.gpkg_fname)))
 
         if verbose:
             print(os.path.split(self.gpkg_fname)[1], "written with", len(gdf), "entries.")
@@ -317,7 +339,7 @@ class ICESat2_Database:
         #                                          force_read_from_disk = False,
         #                                          verbose = verbose)
 
-    def query_geopackage(self, polygon_or_bbox, use_sindex=True, return_whole_records=True):
+    def query_geopackage(self, polygon_or_bbox, return_whole_records=True):
         """Return the photon database tile filenames that intersect the polygon in question.
 
         Called by get_photon_database().
@@ -341,7 +363,9 @@ class ICESat2_Database:
         gdf = self.get_gdf()
 
         # Subset the records that overlap but don't just "touch" (on an edge or corner).
-        gdf_subset = gdf[ gdf.intersects(polygon) & ~gdf.touches(polygon)]
+        # gdf_subset = gdf[ gdf.intersects(polygon) & ~gdf.touches(polygon)]
+        gdf_sub1 = gdf.loc[gdf.sindex.query(polygon)]
+        gdf_subset = gdf_sub1[~gdf_sub1.touches(polygon)]
 
         if return_whole_records:
             return gdf_subset
@@ -368,7 +392,7 @@ class ICESat2_Database:
 
         dataframes_list = [None] * len(df_tiles_subset.index)
 
-        for i,(idx, df_row) in enumerate(df_tiles_subset.iterrows()):
+        for i, (idx, df_row) in enumerate(df_tiles_subset.iterrows()):
             fname = df_row['filename']
             # If the file already exists, read it and get the data.
             # Look for either the .feather or the .h5 file.
@@ -410,9 +434,9 @@ class ICESat2_Database:
 
         If the empty dataframe doesn't exist, just read a random dataframe (hoping
         one of those exists), empty it, and save it out to the
-        etopo_config.icesat2_photon_empty_tile file."""
-        if os.path.exists(self.etopo_config.icesat2_photon_empty_tile):
-            empty_df = pandas.read_hdf(self.etopo_config.icesat2_photon_empty_tile, mode="r")
+        ivert_config.icesat2_photon_empty_tile file."""
+        if os.path.exists(self.ivert_config.icesat2_photon_empty_tile):
+            empty_df = pandas.read_hdf(self.ivert_config.icesat2_photon_empty_tile, mode="r")
         else:
             # If we can't find the empty tile, create it by gleaming off one of the other databases.
             # NOTE: This assumes at least one photon tile or one photon granul
@@ -425,15 +449,15 @@ class ICESat2_Database:
             else:
                 list_of_files = [fn for fn in os.listdir(self.granules_directory) if re.search("\AATL03_(\w)+_photons\.((h5)|(feather))\Z", fn) != None]
                 if len(list_of_files) == 0:
-                    raise FileNotFoundError("Could not find an existing photon tile or granule to use to create the file", self.etopo_config.icesat2_photon_empty_tile)
+                    raise FileNotFoundError("Could not find an existing photon tile or granule to use to create the file", self.ivert_config.icesat2_photon_empty_tile)
                 example_file = os.path.join(self.granules_directory, list_of_files[0])
 
             df = pandas.read_hdf(example_file, mode="r")
             # Empty out all the records and return the empty dataframe.
             empty_df = df[[False] * len(df)]
-            empty_df.to_hdf(self.etopo_config.icesat2_photon_empty_tile, key="icesat2")
+            empty_df.to_hdf(self.ivert_config.icesat2_photon_empty_tile, key="icesat2")
             if verbose:
-                print(self.etopo_config.icesat2_photon_empty_tile, "written.")
+                print(self.ivert_config.icesat2_photon_empty_tile, "written.")
 
         assert len(empty_df) == 0
         return empty_df
@@ -680,8 +704,8 @@ class ICESat2_Database:
             tile_df.to_hdf(tilename, "icesat2", complib="zlib", complevel=3, mode='w')
         elif ext_out == ".feather":
             tile_df.to_feather(tilename,
-                               compression=self.etopo_config.feather_database_compress_algorithm,
-                               compression_level=self.etopo_config.feather_database_compress_level)
+                               compression=self.ivert_config.feather_database_compress_algorithm,
+                               compression_level=self.ivert_config.feather_database_compress_level)
         if verbose:
             print(os.path.split(tilename)[1], "written.")
 
@@ -959,14 +983,14 @@ class ICESat2_Database:
         This will make subsetting them much easier down the line."""
         bin_boundaries = numpy.arange(lon_min, lon_max + (lon_deg_chunksize*0.5), lon_deg_chunksize)
 
-        granule_dir = self.etopo_config._abspath(self.etopo_config.icesat2_granules_directory)
+        granule_dir = self.ivert_config._abspath(self.ivert_config.icesat2_granules_directory)
         granule_fnames = os.listdir(granule_dir)
         if icesat2_region_num is not None:
             granule_fnames = [fn for fn in granule_fnames if int(re.search("(?<=ATL03_(\d){14}_(\d){6})(\d){2}(?=_005_01_photons)", fn).group()) == icesat2_region_num]
 
         granule_fnames = [os.path.join(granule_dir, fn) for fn in granule_fnames]
 
-        external_drive = self.etopo_config._abspath(self.etopo_config.icesat2_granules_directory_alternate)
+        external_drive = self.ivert_config._abspath(self.ivert_config.icesat2_granules_directory_alternate)
 
         for i,gfn in enumerate(granule_fnames):
             # TODO: REMOVE THIS LATER. JUST SKIPPING ALREADY_DONE PORTIONS.
@@ -1066,7 +1090,7 @@ class ICESat2_Database:
         """Given an ICESat-2 granule name, return the names of the granule_subset file that should correspond to it."""
         fname = os.path.basename(granule_name)
         base, ext = os.path.splitext(fname)
-        dirname_out = self.etopo_config._abspath(self.etopo_config.icesat2_granules_subset_directory)
+        dirname_out = self.ivert_config._abspath(self.ivert_config.icesat2_granules_subset_directory)
 
         bin_left = int(numpy.floor(longitude / lon_deg_chunksize) * lon_deg_chunksize)
         bin_right = int(bin_left + lon_deg_chunksize)
@@ -1081,6 +1105,152 @@ class ICESat2_Database:
 if __name__ == "__main__":
     is2db = ICESat2_Database()
 
+    poly = shapely.geometry.Polygon(shell=[(0, -88), (0, -87.99), (0.01, -87.99), (0.01, -88), (0, -88)])
+
+    print(is2db.query_geopackage(poly, return_whole_records=False))
+    import timeit
+    import time
+    # print(timeit.timeit(lambda: is2db.query_geopackage(poly, return_whole_records=False), number=500) / 500.0, "s each query (without sindex).")
+    gdf = is2db.get_gdf()
+
+    gdfs_list = [gdf.copy() for i in range(50)]
+    # How long does it take to create the spatial indices, vs query them?
+
+    def subset_example(gdf, poly):
+        gdf_sub = gdf.loc[gdf.sindex.query(poly)]
+        return gdf_sub[~gdf_sub.touches(poly)]
+
+    # Test how long it takes to build each sindex, vs to just query it already existing.
+    # t1 = time.time()
+    # for gdf_copy in gdfs_list:
+    #     subset_example(gdf_copy, poly)
+    # t2 = time.time()
+    # print((t2 - t1)/50., "s each query (building sindex).")
+    # del gdfs_list
+
+    print(subset_example(gdf, poly).filename.tolist())
+    # print(timeit.timeit(lambda: subset_example(gdf, poly), number=50) / 50.0, "s each query (with sindex).")
+
+    import pickle
+    import gzip
+    import lzma
+    import bz2
+    # import utils.pickle_blosc
+
+    # Convert the photon database to the .gz pickle file.
+    new_gpkg_picklename = os.path.splitext(is2db.gpkg_fname)[0] + ".gz"
+    gdf.to_pickle(new_gpkg_picklename)
+    print(new_gpkg_picklename, "written.")
+
+    import sys
+    sys.exit()
+
+    test_exts = ['', '.pkl', '.gz', '.bz2', '.xz', '.feather'] #, ".bsc"]
+    test_openfuncs = {'': geopandas.read_file,
+                      ".pkl": open,
+                      ".gz": gzip.open,
+                      ".bz2": bz2.BZ2File,
+                      ".xz": lzma.open,
+                      ".feather": geopandas.read_feather}
+    # Tests using pandas.read_pickle, which unfortunatley doesn't seem to save the sindex.
+    # for extension in test_exts:
+    #     outfile = is2db.gpkg_fname + extension
+    #     print()
+    #     if extension != '':
+    #         if os.path.exists(outfile):
+    #             os.remove(outfile)
+    #         print(os.path.basename(outfile), "has" if gdf.has_sindex else "does not have", "sindex before being written.")
+    #         gdf.to_pickle(outfile)
+    #
+    #     print(outfile, "written,", utils.sizeof_format.sizeof_fmt(os.path.getsize(outfile)))
+    #
+    #     if extension == "":
+    #         continue
+    #     read_func = geopandas.read_file if (extension == "") else pandas.read_pickle
+    #
+    #     # Test reading it.
+    #     gdf_in = read_func(outfile)
+    #     print(outfile, "read with", len(gdf_in), "records", "has" if gdf_in.has_sindex else "does not have", "sindex.")
+    #
+    #     print(timeit.timeit(lambda: read_func(outfile), number=10) / 10., "s per read.")
+    #
+    #     print(gdf_in.has_sindex)
+    #     t1 = time.time()
+    #     sidx = gdf_in.sindex
+    #     t2 = time.time()
+    #     print(gdf_in.has_sindex)
+    #     print(t2 - t1, "s to build sindex after read.")
+
+    # Tests using the native pickle function. Seems to do that same thing, also isn't saving the sindex? WTF.
+    for extension in test_exts:
+        openfunc = test_openfuncs[extension]
+        if extension == '':
+            print()
+            outfile = is2db.gpkg_fname
+        elif extension == ".bsc":
+            continue
+            outfile = is2db.gpkg_fname + ".2" + extension
+            if os.path.exists(outfile):
+                os.remove(outfile)
+
+            print("\n" + os.path.basename(outfile), "has" if gdf.has_sindex else "does not have",
+                  "sindex before being written.")
+
+            utils.pickle_blosc.write(gdf, outfile)
+
+        elif extension == ".feather":
+            outfile = is2db.gpkg_fname + ".2" + extension
+            if os.path.exists(outfile):
+                os.remove(outfile)
+
+            print("\n" + os.path.basename(outfile), "has" if gdf.has_sindex else "does not have",
+                  "sindex before being written.")
+
+            gdf.to_feather(outfile)
+
+        else:
+            continue
+            outfile = is2db.gpkg_fname + ".2" + extension
+            if os.path.exists(outfile):
+                os.remove(outfile)
+
+            print("\n" + os.path.basename(outfile), "has" if gdf.has_sindex else "does not have",
+                  "sindex before being written.")
+
+            with openfunc(outfile, "wb") as f:
+                pickle.dump(gdf, f)
+
+        print(outfile, "written,", utils.sizeof_format.sizeof_fmt(os.path.getsize(outfile)))
+
+        if extension == '':
+            continue
+            # gdf_in = geopandas.read_file(outfile)
+            # print(outfile, "read with", len(gdf_in), "records", "has" if gdf_in.has_sindex else "does not have", "sindex.")
+            # print(timeit.timeit(lambda: geopandas.read_file(outfile), number=10) / 10., "s per read.")
+        elif extension == ".bsc":
+            continue
+            gdf_in = utils.pickle_blosc.read(outfile)
+            print(outfile, "read with", len(gdf_in), "records", "has" if gdf_in.has_sindex else "does not have", "sindex.")
+            print(timeit.timeit(lambda: utils.pickle_blosc.read(outfile), number=10) / 10., "s per read.")
+        elif extension == ".feather":
+            gdf_in = geopandas.read_feather(outfile)
+            print(outfile, "read with", len(gdf_in), "records", "has" if gdf_in.has_sindex else "does not have",
+                  "sindex.")
+            print(timeit.timeit(lambda: geopandas.read_feather(outfile), number=10) / 10., "s per read.")
+        else:
+            gdf_in = pickle.load(openfunc(outfile, 'rb'))
+            print(outfile, "read with", len(gdf_in), "records", "has" if gdf_in.has_sindex else "does not have", "sindex.")
+            print(timeit.timeit(lambda: pickle.load(openfunc(outfile, 'rb')), number=10) / 10., "s per read.")
+
+            print(gdf_in.has_sindex)
+            t1 = time.time()
+            sidx = gdf_in.sindex
+            t2 = time.time()
+            print(gdf_in.has_sindex)
+            print(t2-t1, "s to build sindex after read.")
+
+
+
     # is2db.update_and_fix_photon_database()
 
     # is2db.update_and_fix_photon_database(start_i=14200, end_i=14000+(50500*1))           # P1
@@ -1090,7 +1260,7 @@ if __name__ == "__main__":
     # is2db.update_and_fix_photon_database(start_i=14000+(50500*4), end_i=14000+(50500*5)) # P5
     # is2db.update_and_fix_photon_database(start_i=14000+(50500*5), end_i=14000+(50500*6)) # P6
     # is2db.update_and_fix_photon_database(start_i=14000+(50500*6), end_i=14000+(50500*7)) # P7
-    is2db.update_and_fix_photon_database(start_i=368_823, end_i=None)                    # P8
+    # is2db.update_and_fix_photon_database(start_i=368_823, end_i=None)                    # P8
 
 
 
