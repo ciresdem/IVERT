@@ -20,10 +20,11 @@ from osgeo import gdal
 import rich.console
 import subprocess
 import argparse
-import pyproj
+# import pyproj
 import time
 
 # Use config file to get the encrypted credentials.
+import utils.pyproj_funcs
 import utils.configfile as configfile
 ivert_config = configfile.config()
 
@@ -36,132 +37,132 @@ def is_this_run_in_ipython():
     except NameError:
         return False
 
-def get_bounding_box_and_step(gdal_dataset, invert_for_waffles=False):
-    """Get the [xmin, ymin, xmax, ymax] from the gdal geotransform, as well as the [xstep, ystep].
-    If 'invert_for_waffles', bbox returned as [xmin, xmax, ymin, ymax]."""
-    geotransform = gdal_dataset.GetGeoTransform()
-    x_size, y_size = gdal_dataset.RasterXSize, gdal_dataset.RasterYSize
-
-    xmin, xstep, _, ymin, _, ystep = geotransform
-
-    # print("geotransform", geotransform)
-    # print('x_size', x_size, "y_size", y_size)
-
-    xmax = xmin + (xstep * x_size)
-    ymax = ymin + (ystep * y_size)
-
-    # The geotransform can be based on any corner with negative step-sizes.
-    # Get the actual min/max by taking the min() & max() of each pair.
-    if invert_for_waffles:
-        # The waffles command wants (xmin,xmax,ymin,ymax)
-        return [min(xmin, xmax),
-                max(xmin, xmax),
-                min(ymin, ymax),
-                max(ymin, ymax)], \
-            [abs(xstep), abs(ystep)]
-    else:
-        # Everything else is looking for (xmin,ymin,xmax,ymax)
-        return [min(xmin, xmax),
-                min(ymin, ymax),
-                max(xmin, xmax),
-                max(ymin, ymax)], \
-            [abs(xstep), abs(ystep)]
-
-def get_horizontal_projection_only(gdal_ds_crs_wkt_or_epsg, as_epsg: bool = True):
-    """Given an input projection, which may be a combined horizontal+vertical projection, return only the horizontal
-    projection.
-
-    gdal_ds_prj_wkt_or_epsg can be any of the following:
-    - An open gdal.Dataset object.
-    - A pyproj.crs.CRS object
-    - A string of well-known-text projection
-    - An integer EPSG code (usually 4- or 5-digit)
-
-    If the input projection is horizontal only, it will return the projection identical to the input.
-    If the input projection is a combined horizontal+vetical, it will return the horizontal projection only.
-
-    If as_epsg is true, it will return an integer EPSG value.
-    If as_egsp is False, it will return a pyproj.crs.CRS object.
-
-    If the input is an unhandled datatype (includine NoneType), or unreadable, None will be returned."""
-    # If it's a gdal Dataset object, get the projection and turn it into a pyproj object.
-    if isinstance(gdal_ds_crs_wkt_or_epsg, gdal.Dataset):
-        prj = pyproj.crs.CRS.from_wkt(gdal_ds_crs_wkt_or_epsg.GetProjection())
-
-    # If it's an integer, presume it's an EPSG.
-    elif type(gdal_ds_crs_wkt_or_epsg) == int:
-        prj = pyproj.crs.CRS.from_epsg(gdal_ds_crs_wkt_or_epsg)
-
-    # If it's a string, presume it's a WKT, proj-string, or other user input (let the from_user_input() method handle that).
-    elif type(gdal_ds_crs_wkt_or_epsg) == str:
-        prj = pyproj.crs.CRS.from_user_input(gdal_ds_crs_wkt_or_epsg)
-
-    # If it's already a pyproj.crs.CRS object, just use it.
-    elif isinstance(gdal_ds_crs_wkt_or_epsg, pyproj.crs.CRS):
-        prj = gdal_ds_crs_wkt_or_epsg
-
-    # If it's none of these, return None (this includes if NoneType is given)
-    else:
-        return None
-
-    # If it has two or more sub_crs objects with it, then it's a combined projection and the first one in the list is the horizontal projection.
-    # Extract it.
-    if len(prj.sub_crs_list) >= 2:
-        prj = prj.sub_crs_list[0]
-
-    # Return either as an EPSG number or a pyprjo.crs.CRS object.
-    if as_epsg:
-        epsg = prj.to_epsg()
-        # Some of the CUDEM tiles are in NAD83 but the CRS doesn't explicitly give an
-        # EPSG code. Handle that special case manually here.
-        if epsg is None and prj.to_wkt().find('GEOGCS["NAD83",') >= 0:
-            epsg = 4269
-        return epsg
-    else:
-        return prj
-
-def get_dataset_epsg(gdal_dataset, warn_if_not_present=True, horizontal_only=False):
-    """Get the projection EPSG value from the dataset, if it's defined."""
-
-    # Testing some things out.
-    wkt = gdal_dataset.GetProjection()
-    prj = pyproj.crs.CRS.from_wkt(wkt)
-
-    # Some projections are combined (horizontal + vertical). If we only want the horizontal, retrieve that useing the sub-crs values.
-    # When it's a horizontal + vertical CRS, the horizontal comes first.
-    if horizontal_only:
-        prj = get_horizontal_projection_only(prj, as_epsg=False)
-
-    epsg = prj.to_epsg()
-    # Some of the CUDEM tiles are in NAD83 but the CRS doesn't explicitly give an
-    # EPSG code. Handle that manually here.
-    if epsg is None:
-        # print(wkt)
-        if wkt.find('GEOGCS["NAD83",') >= 0:
-            return 4269
-        elif warn_if_not_present:
-            raise UserWarning("File {0} has no retrievable EPSG value.".format(gdal_dataset.GetFileList()[0]))
-        return epsg
-
-    else:
-        return epsg
-
-    # print(prj)
-    # assert prj.lower().find("authority") >= 0
-
-    # srs=osr.SpatialReference(wkt=prj)
-
-    # # Under the AUTHORITY tag, it should have "ESPG" as the first value.
-    # assert srs.GetAttrValue('authority', 0).strip().upper() == "EPSG"
-
-    # # Get the EPSG number as the second value, converted to an integer.
-    # return int(srs.GetAttrValue('authority', 1))
+# def get_bounding_box_and_step(gdal_dataset, invert_for_waffles=False):
+#     """Get the [xmin, ymin, xmax, ymax] from the gdal geotransform, as well as the [xstep, ystep].
+#     If 'invert_for_waffles', bbox returned as [xmin, xmax, ymin, ymax]."""
+#     geotransform = gdal_dataset.GetGeoTransform()
+#     x_size, y_size = gdal_dataset.RasterXSize, gdal_dataset.RasterYSize
+#
+#     xmin, xstep, _, ymin, _, ystep = geotransform
+#
+#     # print("geotransform", geotransform)
+#     # print('x_size', x_size, "y_size", y_size)
+#
+#     xmax = xmin + (xstep * x_size)
+#     ymax = ymin + (ystep * y_size)
+#
+#     # The geotransform can be based on any corner with negative step-sizes.
+#     # Get the actual min/max by taking the min() & max() of each pair.
+#     if invert_for_waffles:
+#         # The waffles command wants (xmin,xmax,ymin,ymax)
+#         return [min(xmin, xmax),
+#                 max(xmin, xmax),
+#                 min(ymin, ymax),
+#                 max(ymin, ymax)], \
+#             [abs(xstep), abs(ystep)]
+#     else:
+#         # Everything else is looking for (xmin,ymin,xmax,ymax)
+#         return [min(xmin, xmax),
+#                 min(ymin, ymax),
+#                 max(xmin, xmax),
+#                 max(ymin, ymax)], \
+#             [abs(xstep), abs(ystep)]
+#
+# def get_horizontal_projection_only(gdal_ds_crs_wkt_or_epsg, as_epsg: bool = True):
+#     """Given an input projection, which may be a combined horizontal+vertical projection, return only the horizontal
+#     projection.
+#
+#     gdal_ds_prj_wkt_or_epsg can be any of the following:
+#     - An open gdal.Dataset object.
+#     - A pyproj.crs.CRS object
+#     - A string of well-known-text projection
+#     - An integer EPSG code (usually 4- or 5-digit)
+#
+#     If the input projection is horizontal only, it will return the projection identical to the input.
+#     If the input projection is a combined horizontal+vetical, it will return the horizontal projection only.
+#
+#     If as_epsg is true, it will return an integer EPSG value.
+#     If as_egsp is False, it will return a pyproj.crs.CRS object.
+#
+#     If the input is an unhandled datatype (includine NoneType), or unreadable, None will be returned."""
+#     # If it's a gdal Dataset object, get the projection and turn it into a pyproj object.
+#     if isinstance(gdal_ds_crs_wkt_or_epsg, gdal.Dataset):
+#         prj = pyproj.crs.CRS.from_wkt(gdal_ds_crs_wkt_or_epsg.GetProjection())
+#
+#     # If it's an integer, presume it's an EPSG.
+#     elif type(gdal_ds_crs_wkt_or_epsg) == int:
+#         prj = pyproj.crs.CRS.from_epsg(gdal_ds_crs_wkt_or_epsg)
+#
+#     # If it's a string, presume it's a WKT, proj-string, or other user input (let the from_user_input() method handle that).
+#     elif type(gdal_ds_crs_wkt_or_epsg) == str:
+#         prj = pyproj.crs.CRS.from_user_input(gdal_ds_crs_wkt_or_epsg)
+#
+#     # If it's already a pyproj.crs.CRS object, just use it.
+#     elif isinstance(gdal_ds_crs_wkt_or_epsg, pyproj.crs.CRS):
+#         prj = gdal_ds_crs_wkt_or_epsg
+#
+#     # If it's none of these, return None (this includes if NoneType is given)
+#     else:
+#         return None
+#
+#     # If it has two or more sub_crs objects with it, then it's a combined projection and the first one in the list is the horizontal projection.
+#     # Extract it.
+#     if len(prj.sub_crs_list) >= 2:
+#         prj = prj.sub_crs_list[0]
+#
+#     # Return either as an EPSG number or a pyprjo.crs.CRS object.
+#     if as_epsg:
+#         epsg = prj.to_epsg()
+#         # Some of the CUDEM tiles are in NAD83 but the CRS doesn't explicitly give an
+#         # EPSG code. Handle that special case manually here.
+#         if epsg is None and prj.to_wkt().find('GEOGCS["NAD83",') >= 0:
+#             epsg = 4269
+#         return epsg
+#     else:
+#         return prj
+#
+# def get_dataset_epsg(gdal_dataset, warn_if_not_present=True, horizontal_only=False):
+#     """Get the projection EPSG value from the dataset, if it's defined."""
+#
+#     # Testing some things out.
+#     wkt = gdal_dataset.GetProjection()
+#     prj = pyproj.crs.CRS.from_wkt(wkt)
+#
+#     # Some projections are combined (horizontal + vertical). If we only want the horizontal, retrieve that useing the sub-crs values.
+#     # When it's a horizontal + vertical CRS, the horizontal comes first.
+#     if horizontal_only:
+#         prj = get_horizontal_projection_only(prj, as_epsg=False)
+#
+#     epsg = prj.to_epsg()
+#     # Some of the CUDEM tiles are in NAD83 but the CRS doesn't explicitly give an
+#     # EPSG code. Handle that manually here.
+#     if epsg is None:
+#         # print(wkt)
+#         if wkt.find('GEOGCS["NAD83",') >= 0:
+#             return 4269
+#         elif warn_if_not_present:
+#             raise UserWarning("File {0} has no retrievable EPSG value.".format(gdal_dataset.GetFileList()[0]))
+#         return epsg
+#
+#     else:
+#         return epsg
+#
+#     # print(prj)
+#     # assert prj.lower().find("authority") >= 0
+#
+#     # srs=osr.SpatialReference(wkt=prj)
+#
+#     # # Under the AUTHORITY tag, it should have "ESPG" as the first value.
+#     # assert srs.GetAttrValue('authority', 0).strip().upper() == "EPSG"
+#
+#     # # Get the EPSG number as the second value, converted to an integer.
+#     # return int(srs.GetAttrValue('authority', 1))
 
 
 # TODO: Get coastline mask from:
     # 1. Copernicus mask (from waffles) -- this is what's existing.
     # 2. Extra tiles over Azerbaijan missing from Copernicus
-    # 3. Outlying minor island (ask Matt about that) -- GMRT!
+    # 3. Outlying minor island (ask Matt about that) -- GMRT! -- Nope, GMRT sucks. Never mind.
     # 4. Subtract off lakes mask from GLOBathy. -- Matt has that too
     # 5. Subtract buildings (just for dem validation). Matt has this too!
     # Combine all these ^^ together to return a complete coastline mask (possibly using stacks?)
@@ -204,10 +205,10 @@ def create_coastline_mask(input_dem,
     if not input_ds:
         raise FileNotFoundError("Input file '{input_dem}' not found.")
 
-    bbox, step_xy = get_bounding_box_and_step(input_ds, invert_for_waffles=True)
+    bbox, step_xy = utils.pyproj_funcs.get_bounding_box_and_step(input_ds, bbox_interleaved=False)
     # print(bbox, step_xy)
 
-    epsg = get_dataset_epsg(input_ds, horizontal_only=horizontal_datum_only)
+    epsg = utils.pyproj_funcs.get_dataset_epsg(input_ds, horizontal_only=horizontal_datum_only)
     # print(epsg)
 
     if output_file:
@@ -366,11 +367,11 @@ def get_coastline_mask_and_other_dem_data(dem_name,
             print("Done.")
 
         if not return_coastline_array_only:
-            dem_bbox, dem_step_xy = get_bounding_box_and_step(dem_ds)
-            dem_epsg = get_dataset_epsg(dem_ds)
+            dem_bbox, dem_step_xy = utils.pyproj_funcs.get_bounding_box_and_step(dem_ds)
+            dem_epsg = utils.pyproj_funcs.get_dataset_epsg(dem_ds)
 
         coastline_mask_array = coastline_ds.GetRasterBand(1).ReadAsArray()
-        coastline_ds = None
+        del coastline_ds
 
         if return_coastline_array_only:
             return coastline_mask_array

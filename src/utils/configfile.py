@@ -73,7 +73,8 @@ class config:
         except (NameError, ValueError, SyntaxError):
             pass
 
-        # Check to see if this is potentially a path. Interpret it as such of it contains any path characters ('\' in Windows or '/' in Linux).
+        # Check to see if this is potentially a path. Interpret it as such if it is a string and contains path
+        # characters ('\' in Windows or '/' in Linux).
         # If this is the case, return the absolute path of that file/directory *relative* to the current directory the
         # config.ini file is contained.
         try:

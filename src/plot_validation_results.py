@@ -290,7 +290,7 @@ def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
     # Crop the right edge at the 99th percentile
     cutoff = numpy.percentile(canopy_fraction, 99)
     # Add just a bit of padding on the left to make more room for the "D" label.
-    xmin = ax4.get_xlim()[0] - 0.025*(cutoff - ax4.get_xlim()[0])
+    xmin = ax4.get_xlim()[0] - 0.025 * (cutoff - ax4.get_xlim()[0])
     ax4.set_xlim(xmin, cutoff)
 
     # center = numpy.mean(canopy_fraction)

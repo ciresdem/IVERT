@@ -33,8 +33,6 @@ my_config = utils.configfile.config()
 #     We assume that """
 
 
-
-
 # def add_file_to_bad_granule_list(granule_fname,
 #                                  bad_granule_list_fname = my_config._abspath(my_config.icesat2_bad_granules_list)):
 #     """If we've found a bad granule in the list, add it to the list of bad granules.

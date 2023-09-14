@@ -32,25 +32,30 @@ import utils.configfile
 import utils.progress_bar
 import utils.sizeof_format
 
+
 class ICESat2_Database:
     """A database to manage ICESat-2 photon clouds for land-surface validations.
     The database is a set of a tiles, managed spatially by a GeoPackage object,
     with each tile being an HDF5 database of all land & canopy photons classified
     from ICESat-2 granules that overlap each tile."""
 
-    def __init__(self, tile_resolution_deg = 0.25):
+    def __init__(self, ivert_config=None):
         """tile_resolutin_deg should be some even fraction of 1. I.e. 1, or 0.5, or 0.25, or 0.1, etc.
 
         The current geodatabase consists of 0.25 degree tiles, 417,760 of them covering the planet's land surface."""
-        self.ivert_config = utils.configfile.config()
+        if ivert_config is None:
+            self.ivert_config = utils.configfile.config()
+        else:
+            self.ivert_config = ivert_config
         self.gpkg_fname = self.ivert_config.icesat2_photon_geopackage
         self.tiles_directory = self.ivert_config.icesat2_photon_tiles_directory
         self.granules_directory = self.ivert_config.icesat2_granules_directory
         self.alt_granules_directories = [self.ivert_config.icesat2_granules_directory_alternate,
-                                         self.ivert_config.icesat2_granules_directory_alternate_2]
+                                         self.ivert_config.icesat2_granules_directory_alternate_2,
+                                         self.ivert_config.icesat2_granules_directory_alternate_3]
 
         self.gdf = None # The actual geodataframe object.
-        self.tile_resolution_deg = tile_resolution_deg
+        self.tile_resolution_deg = 0.25
         self.crs = pyproj.CRS.from_epsg(4326)
 
     def get_gdf(self, verbose=True):
@@ -364,8 +369,10 @@ class ICESat2_Database:
 
         # Subset the records that overlap but don't just "touch" (on an edge or corner).
         # gdf_subset = gdf[ gdf.intersects(polygon) & ~gdf.touches(polygon)]
+        # First, use the spatial index to dramatically (and quickly) narrow down the overlapping tiles using bboxes.
         gdf_sub1 = gdf.loc[gdf.sindex.query(polygon)]
-        gdf_subset = gdf_sub1[~gdf_sub1.touches(polygon)]
+        # Then find all tiles in that subset that overlap but do not just "touch" on an edge or corner.
+        gdf_subset = gdf_sub1[gdf_sub1.intersects(polygon) & ~gdf_sub1.touches(polygon)]
 
         if return_whole_records:
             return gdf_subset
