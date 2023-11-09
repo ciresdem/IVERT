@@ -137,12 +137,12 @@ def convert_vdatum(input_dem,
         shutil.copyfile(input_dem, output_dem)
         return 0
 
-    command_template = "vertical_datum_convert.py -i {0} -o {1} -D {2:s} --keep-cache {3:s} {4:s}"
+    command_template = "vertical_datum_convert.py {3:s} {4:s} -i {0} -o {1} -D {2:s} --keep-cache"
     command = command_template.format(input_vertical_datum,
                                       output_vertical_datum,
-                                      my_config.etopo_cudem_cache_directory,
-                                      input_dem.replace(" ", "\ "),
-                                      output_dem.replace(" ", "\ "))
+                                      my_config.cudem_cache_directory,
+                                      input_dem.replace(" ", r"\ "),
+                                      output_dem.replace(" ", r"\ "))
 
     if verbose:
         print("Running:", command)

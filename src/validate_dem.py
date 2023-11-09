@@ -27,6 +27,7 @@ import icesat2_photon_database
 import find_bad_icesat2_granules
 
 # import subprocess
+import ast
 from osgeo import gdal, osr
 import os
 import argparse
@@ -482,6 +483,7 @@ def validate_dem_parallel(dem_name,
                           write_result_tifs=True,
                           write_summary_stats=True,
                           # skip_icesat2_download=True,
+                          outliers_sd_threshold=2.5,
                           include_photon_level_validation=False,
                           plot_results=True,
                           location_name=None,
@@ -1196,6 +1198,20 @@ def validate_dem_parallel(dem_name,
     if not quiet:
         print("{0:,} valid interdecile photon records in {1:,} DEM cells.".format(results_dataframe["numphotons_intd"].sum(), len(results_dataframe)))
 
+    # The outliers_sd_threshold is the # of standard deviations outside the mean to call outliers in the data, and omit
+    # results of those outliers. "None" does not omit anything. Default is 2.5 SDs, which is how outliers are defined
+    # in box-and-whisker plots.
+    if outliers_sd_threshold is not None:
+        assert type(outliers_sd_threshold) in (int, float)
+        diff_mean = results_dataframe["diff_mean"]
+        meanval, stdval = diff_mean.mean(), diff_mean.std()
+        low_cutoff = meanval - (stdval * outliers_sd_threshold)
+        hi_cutoff = meanval + (stdval * outliers_sd_threshold)
+        valid_mask = (diff_mean >= low_cutoff) & (diff_mean <= hi_cutoff)
+        results_dataframe = results_dataframe[valid_mask].copy()
+        if not quiet:
+            print("{0:,} DEM cells after removing outliers.".format(len(results_dataframe)))
+
     if len(results_dataframe) == 0:
         if not quiet:
             print("No valid results in results dataframe. No outputs computed.")
@@ -1378,6 +1394,8 @@ def read_and_parse_args():
                         help=""""Write output geotiff with the errors in cells that have ICESat-2 photons, NDVs elsewhere.""")
     # parser.add_argument('--skip_icesat2_download', action="store_true", default=False,
     #                     help="Skip ICESat-2 granule downloads. Get existing granules files from -datadir. Usefuil if you've already downloaded the needed data from NSIDC.")
+    parser.add_argument("--outlier_sd_threshold", default="2.5",
+                        help="Number of standard-deviations away from the mean to omit outliers. Default 2.5 (standard deviations). Choose 'None' if no outlier filtering is requested.")
     parser.add_argument('--plot_results', action="store_true", default=False,
                         help="Make summary plots of the validation statistics.")
     parser.add_argument('--overwrite', action='store_true', default=False,
@@ -1419,8 +1437,6 @@ if __name__ == "__main__":
     else:
         output_h5 = args.output_h5
 
-    # kwargs = {}
-
     validate_dem_parallel(args.input_dem,
                           # args.photon_h5,
                           # use_icesat2_photon_database = args.use_icesat2_photon_database,
@@ -1437,6 +1453,7 @@ if __name__ == "__main__":
                           # skip_icesat2_download=True,
                           plot_results = args.plot_results,
                           location_name = args.place_name,
+                          outliers_sd_threshold=ast.literal_eval(args.outlier_sd_threshold),
                           mask_out_buildings=not args.use_urban_mask,
                           mask_out_urban=args.use_urban_mask,
                           quiet=args.quiet)
