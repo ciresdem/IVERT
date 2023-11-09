@@ -1303,7 +1303,7 @@ def write_summary_stats_file(results_df, statsfile_name, verbose=True):
 
     lines.append("Mean canopy cover (% cover): {0:0.02f}".format(results_df["canopy_fraction"].mean()*100))
     lines.append("% of cells with >0 measured canopy (%): {0}".format(len(results_df.canopy_fraction > 0.0) / len(results_df)))
-    lines.append("Mean canopy cover in cells containing >0 canopy (% cover among 'wooded' cells): {0}".format(results_df[results_df["canopy_fraction"] > 0].mean()))
+    lines.append("Mean canopy cover in cells containing >0 canopy (% cover among 'wooded' cells): {0}".format(results_df[results_df["canopy_fraction"] > 0]["canopy_fraction"].mean()))
     lines.append("Mean roughness (std. dev. of photon elevations within each cell (m)): {0}".format(results_df["stddev"].mean()))
 
     out_text = "\n".join(lines)
