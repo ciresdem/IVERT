@@ -1,6 +1,6 @@
 blosc==1.11.1
 Cartopy==0.20.2
-cryptography==38.0.4
+cryptography==41.0.6
 cudem==1.10.6
 dask_geopandas==0.3.1
 dateparser==1.0.0
