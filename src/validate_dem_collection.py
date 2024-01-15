@@ -192,7 +192,8 @@ def validate_list_of_dems(dem_list_or_dir,
                           input_vdatum="wgs84",
                           output_vdatum="wgs84",
                           overwrite=False,
-                          place_name = None,
+                          place_name=None,
+                          use_urban_mask=False,
                           create_individual_results = False,
                           delete_datafiles=False,
                           include_photon_validation=True,
@@ -332,6 +333,8 @@ def validate_list_of_dems(dem_list_or_dir,
                                            overwrite=overwrite,
                                            delete_datafiles = delete_datafiles,
                                            write_result_tifs = write_result_tifs,
+                                           mask_out_buildings=not use_urban_mask,
+                                           mask_out_urban=use_urban_mask,
                                            write_summary_stats = create_individual_results,
                                            include_photon_level_validation = include_photon_validation,
                                            plot_results = create_individual_results,
@@ -396,7 +399,7 @@ def define_and_parse_args():
         help="A directory path, or a list of individual DEM tiles. Defaults to the same as the input directory, or the directory in which the first DEM resides.")
 
     parser.add_argument("-fname_filter", "-ff", type=str, default=r"\.tif\Z",
-        help="A regex string to search for in all DEM file names, to use as a filter. Defaults to r'\.tif\Z', indicating .tif at the end of the file name. Helps elimiate files that shouldn't be considered.")
+        help=r"A regex string to search for in all DEM file names, to use as a filter. Defaults to r'\.tif\Z', indicating .tif at the end of the file name. Helps elimiate files that shouldn't be considered.")
 
     parser.add_argument("-fname_omit", "-fo", type=str, default=None,
         help="A regex string to search for and OMIT if it contains a match in the file name. Useful for avoiding derived datasets (such as converted DEMs) in the folder.")
@@ -421,6 +424,9 @@ def define_and_parse_args():
 
     parser.add_argument("--create_folders", action="store_true", default=False,
         help="Create folders specified in -output_dir and -data_dir, as well as the full path to -photon_h5, if they do not already exist. Default: Raise errors if paths don't already exist.")
+
+    parser.add_argument('--use_urban_mask', action='store_true', default=False,
+        help="Use the WSL 'Urban Area' mask rather than OSM building footprints to mask out IceSat-2 data. Useful over lower-resolution (10m or coarser) dems, which tend to be bigger than building footprints.")
 
     parser.add_argument("--individual_results", "--ind", action="store_true", default=False,
         help="By default, a summary plot and text file are generated for the dataset. If this is selected, they will be generated for each individual DEM as well. Files will be placed in the -output_dir directory.")
@@ -489,6 +495,7 @@ def main():
                           delete_datafiles=args.delete_datafiles,
                           include_photon_validation=args.include_photon_validation,
                           write_result_tifs=args.write_result_tifs,
+                          use_urban_mask=args.use_urban_mask,
                           omit_bad_granules=True,
                           write_summary_csv=args.write_summary_csv,
                           outliers_sd_threshold=ast.literal_eval(args.outlier_sd_threshold),

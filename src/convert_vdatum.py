@@ -137,7 +137,7 @@ def convert_vdatum(input_dem,
         shutil.copyfile(input_dem, output_dem)
         return 0
 
-    command_template = "vertical_datum_convert.py {3:s} {4:s} -i {0} -o {1} -D {2:s} --keep-cache"
+    command_template = "vdatums {3:s} {4:s} -i {0} -o {1} -D {2:s} --keep-cache"
     command = command_template.format(input_vertical_datum,
                                       output_vertical_datum,
                                       my_config.cudem_cache_directory,
@@ -166,7 +166,7 @@ def define_args():
                         help="Input vertical datum.")
     parser.add_argument("-output_vdatum", "-o", type=str, default="itrf2014",
                         help="Output vertical datum.")
-    parser.add_argument("-input_file_filter", "-filter", type=str, default=".tif\Z",
+    parser.add_argument("-input_file_filter", "-filter", type=str, default=r".tif\Z",
                         help="Regex string to search for in input file names. Ignore all other files. Default '.tif\Z', indicating .tif at the end of the string.")
     parser.add_argument("-output_folder", "-dir", default=None,
                         help="Directory in which to put the output files. Ignored if -output_filename is given. Default: Use same directory as input file directory.")

@@ -7,9 +7,10 @@ Code for isolating land photons from ATL08, 06, and 03 datasets, for land-elevat
 Author: Mike MacFerrin
 Created: 2021-06-10
 """
+import argparse
+import geopandas
 import numpy
 import pandas
-import geopandas
 import os
 import shapely
 import sys
@@ -673,6 +674,10 @@ def save_granule_ground_photons(granule_path,
                 print(atl08_granule, "deleted.")
 
     return dataframe
+
+def define_and_parse_args():
+    # TODO: Fill in command-line options to be able to classify some photon granules on the fly.
+    pass
 
 if __name__ == "__main__":
     print("Nothing in __main__ executable here. This is a set of utilities primarily used by ./validate_dem.py")

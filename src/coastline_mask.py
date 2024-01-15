@@ -221,7 +221,7 @@ def create_coastline_mask(input_dem,
     # Run a rich-text console for the output.
     console = rich.console.Console(force_jupyter=(True if is_this_run_in_ipython() else None))
     # Sometimes waffles can give some rounding error effects if the boundaries aren't exactly right.
-    # If we round up half a pixel on each file extent size, it can ensure we
+    # If we round up half a pixel on each file extent size, it can ensure we include everything.
 
     waffle_args = ["waffles",
                    "-M","coastline:polygonize=False" + \
