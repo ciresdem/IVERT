@@ -21,7 +21,7 @@ import utils.progress_bar
 
 def is_iterable(obj):
     """Tell whether an object is a non-string iterable. (list, tuple, etc)."""
-    return ( isinstance(obj, collections.Iterable) \
+    return (isinstance(obj, collections.abc.Iterable)
             and not isinstance(obj, six.string_types))
 
 def get_data_from_h5_or_list(h5_name_or_list,
