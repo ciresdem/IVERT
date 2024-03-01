@@ -62,14 +62,17 @@ class S3_Manager:
         return client.upload_file(filename, bucket_name, key)
 
     def listdir(self, key, bucket_type="database"):
-        """List all the files within a given directory."""
+        """List all the files within a given directory.
+
+        NOTE: This lists all objects recursively, even in sub-directories, so it doesn't behave exactly like os.listdir.
+        """
         # client = self.get_client()
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
         resource = boto3.resource("s3")
         bucket = resource.Bucket(bucket_name)
         files = bucket.objects.filter(Prefix=key).all()
-        return files
+        return [obj.key for obj in files]
 
 
 if __name__ == "__main__":
