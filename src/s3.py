@@ -14,8 +14,8 @@ class S3_Manager:
         assert self.config._is_aws
         # Different buckets for each type.
         self.bucket_dict = {"database": self.config.s3_name_database,
-                            "inputs": self.config.s3_name_inputs,
-                            "outputs": self.config.s3_name_outputs}
+                            "input": self.config.s3_name_inputs,
+                            "output": self.config.s3_name_outputs}
         self.client = None
 
 
@@ -150,10 +150,24 @@ class S3_Manager:
 def define_and_parse_args():
     parser = argparse.ArgumentParser(description="Quick python utility for interacting with IVERT's S3 buckets.")
     parser.add_argument("command", help="""The command to run. Options are:
-    ls [prefix] -- List all the files in that prefix directory. Use --recursive (-r) to recursively get all the files.
-    rm [key] -- Remove a file from the S3.
-    cp [key] [filename] -- Copy a file from the S3 to a local file.
-    cp
+       ls [prefix] -- List all the files in that prefix directory. Use --recursive (-r) to recursively get all the files.
+       rm [key] :                   Remove a file from the S3.
+       cp [key] [filename_or_dir] : Copy a file from the S3 to a local file.
+       cp [filename] [key] :        Copy a local file into the S3. If the key is a
+                                    prefix (directory), copy it into that directory/prefix.
+       mv [key] [filename_or_dir] : Move a file from the S3 to a local file. Delete the
+                                    original in the S3.
+       mv [filename] [key] :        Move a local file into the S3. Delete the original.
+                                    If key is a prefix (directory), copy it into that prefix.
+    """)
+    parser.add_argument("--bucket", "-b", default="database", help=
+                        "The shorthand for which ivert S3 bucket we're pulling from. Options are 'database' "
+                        "(where the IVERT database and other data sit), 'input' (the S3 bucket where files sit that "
+                        "just passed secure ingest), 'output' (where IVERT puts files to disseminate). These are "
+                        "abstractions. The actual S3 bucket names are defined in ivert_config.ini."
+    parser.add_argument("--recursive", "-r", default=False, action="store_true", help=
+                        "For the 'ls' command, list all the files recursively, including all sub-directories.")
+
 
 if __name__ == "__main__":
     s3 = S3_Manager()
