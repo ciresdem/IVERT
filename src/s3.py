@@ -1,7 +1,9 @@
+import argparse
 import boto3
 import botocore.exceptions
-import utils.configfile
 import warnings
+
+import utils.configfile
 
 class S3_Manager:
     """Class for copying files into and out-of the IVERT AWS S3 buckets, as needed."""
@@ -36,7 +38,8 @@ class S3_Manager:
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
         try:
-            client.head_object(Bucket=bucket_name, Key=key)
+            head = client.head_object(Bucket=bucket_name, Key=key)
+            print(head)
             return True
         except botocore.exceptions.ClientError as e:
             if e.response["Error"]["Code"] == "404":
@@ -45,21 +48,31 @@ class S3_Manager:
                 warnings.warn(f"Warning: Unknown error fetching status of s3://{bucket_name}/{key}")
                 return False
 
-    def download(self, key, filename, bucket_type="database"):
+    def download(self, key, filename, bucket_type="database", delete_original=False):
         """Download a file from the S3 to the local file system."""
         client = self.get_client()
 
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
-        return client.download_file(bucket_name, key, filename)
+        response = client.download_file(bucket_name, key, filename)
 
-    def upload(self, filename, key, bucket_type="database"):
+        if delete_original:
+            client.delete_object(Bucket=bucket_name, Key=key)
+
+        return response
+
+    def upload(self, filename, key, bucket_type="database", delete_original=False):
         """Upload a file from the local file system to the S3."""
         client = self.get_client()
 
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
-        return client.upload_file(filename, bucket_name, key)
+        response = client.upload_file(filename, bucket_name, key)
+
+        if delete_original:
+            os.remove(filename)
+
+        return response
 
     def listdir(self, key, bucket_type="database"):
         """List all the files within a given directory.
@@ -74,6 +87,8 @@ class S3_Manager:
         files = bucket.objects.filter(Prefix=key).all()
         return [obj.key for obj in files]
 
+
+def define_and_parse_args()
 
 if __name__ == "__main__":
     s3 = S3_Manager()

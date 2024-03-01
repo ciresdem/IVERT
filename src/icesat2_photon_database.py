@@ -25,7 +25,7 @@ warnings.filterwarnings("ignore", message=".*pandas.Int64Index is deprecated*")
 
 import classify_icesat2_photons
 import nsidc_download
-import s3_manager
+import s3
 # import datasets.CopernicusDEM.source_dataset_CopernicusDEM as Copernicus
 # import datasets.dataset_geopackage                         as dataset_geopackage
 # import etopo.generate_empty_grids # ??? TODO: Get rid of this dependency.
