@@ -111,7 +111,8 @@ class S3_Manager:
         # the character right after it in the matching prefix is "/".
         if (key[-1] == "/") or (obj.key[len(key)] == "/"):
             return True
-
+        else:
+            return False
 
     def download(self, key, filename, bucket_type="database", delete_original=False, fail_quietly=True):
         """Download a file from the S3 to the local file system."""
