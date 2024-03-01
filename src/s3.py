@@ -40,7 +40,7 @@ class S3_Manager:
 
     def verify_same_length(self, filename, key, bucket_type="database"):
         """Return True if the local file is the exact same length as the S3 key."""
-        head = self.exists(key, bucket_type=bucket_type)
+        head = self.exists(key, bucket_type=bucket_type, return_head=True)
         if head is False:
             return False
 
