@@ -61,6 +61,16 @@ class S3_Manager:
 
         return client.upload_file(filename, bucket_name, key)
 
+    def listdir(self, key, bucket_type="database"):
+        """List all the files within a given directory."""
+        # client = self.get_client()
+        bucket_name = self.get_bucketname(bucket_type=bucket_type)
+
+        resource = boto3.resource("s3")
+        bucket = resource.Bucket(bucket_name)
+        files = bucket.objects.filter(Prefix=key).all()
+        return files
+
 
 if __name__ == "__main__":
     s3 = S3_Manager()
