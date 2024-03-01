@@ -9,6 +9,8 @@ import utils.configfile
 class S3_Manager:
     """Class for copying files into and out-of the IVERT AWS S3 buckets, as needed."""
 
+    available_bucket_types = ("database", "input", "output")
+
     def __init__(self):
         self.config = utils.configfile.config()
         assert self.config._is_aws
@@ -27,7 +29,10 @@ class S3_Manager:
         return self.client
 
     def get_bucketname(self, bucket_type="database"):
+        bucket_type = bucket_type.strip().lower()
+
         if bucket_type.lower() not in self.bucket_dict.keys():
+            # Try to see if it's a valid bucket name already, rather than a bucket_type.
             raise ValueError(f"Unknown bucket type '{bucket_type}'. Must be one of {list(self.bucket_dict.keys())}.")
 
         return self.bucket_dict[bucket_type]
@@ -48,7 +53,7 @@ class S3_Manager:
         return s3_size == local_size
 
     def exists(self, key, bucket_type="database", return_head=False):
-        """Look in the appropriate bucket, and see if a file exists there."""
+        """Look in the appropriate bucket, and see if a file or directory exists there."""
         client = self.get_client()
 
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
@@ -61,6 +66,12 @@ class S3_Manager:
                 return True
 
         except botocore.exceptions.ClientError as e:
+            try:
+                if self.is_existing_s3_directory(key, bucket_type=bucket_type):
+                    return True
+            except botocore.exceptions.ClientError:
+                pass
+
             if e.response["Error"]["Code"] == "404":
                 return False
             else:
@@ -68,18 +79,35 @@ class S3_Manager:
                 return False
 
     def is_existing_s3_directory(self, key, bucket_type="database"):
-        "Return True if 'key' points to an existing directory (prefix) in the bucket. False otherwise."
+        "Return True if 'key' points to an existing directory (prefix) in the bucket. NOT a file. False otherwise."
         client = self.get_client()
 
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
-        head = self.exists(key, bucket_type=bucket_type)
-        # If the key doesn't even exist, return False.
-        if head is False:
+        resource = boto3.resource('s3')
+        bucket = resource.Bucket(bucket_name)
+
+        objects = bucket.objects.filter(Prefix=key)
+
+        i = -1
+        # Try to loop through the first object. If the prefix doesn't exist this will be empty.
+        for i, obj in enumerate(objects):
+            # This "break on the first instance" thing seems stupid, but I don't yet know how to just get the first
+            # object of the filter() method back, besides iterating over it.
+            if i == 0:
+                break
+
+        # If we didn't enter the loop (i.e. there were no matching objects) then return False.
+        if i == -1:
+            return False
+        # If it's an exact match with the key, then it's a file (not a directory). Return False.
+        if obj.key == key:
             return False
 
-        print(head)
-        return head
+        # Otherwise, the key should be the start of the first object there.
+        assert obj.key.find(key) == 0
+        return True
+
 
     def download(self, key, filename, bucket_type="database", delete_original=False, fail_quietly=True):
         """Download a file from the S3 to the local file system."""
@@ -128,7 +156,7 @@ class S3_Manager:
 
         return response
 
-    def listdir(self, key, bucket_type="database"):
+    def listdir(self, key, bucket_type="database", recursive=False):
         """List all the files within a given directory.
 
         NOTE: This lists all objects recursively, even in sub-directories, so it doesn't behave exactly like os.listdir.
@@ -162,10 +190,11 @@ def define_and_parse_args():
                                     If key is a prefix (directory), copy it into that prefix.
     """)
     parser.add_argument("--bucket", "-b", default="database", help=
-                        "The shorthand for which ivert S3 bucket we're pulling from. Options are 'database' "
-                        "(where the IVERT database and other data sit), 'input' (the S3 bucket where files sit that "
-                        "just passed secure ingest), 'output' (where IVERT puts files to disseminate). These are "
-                        "abstractions. The actual S3 bucket names are defined in ivert_config.ini.")
+                        "The shorthand for which ivert S3 bucket we're pulling from, or the explicit name of a bucket."
+                        "Shorthand options are 'database' "
+                        "(location of the IVERT database & other core data), 'input' (the S3 bucket for inpt files that"
+                        "just passed secure ingest), 'output' (where IVERT puts output files to disseminate). These are "
+                        "abstractions. The actual S3 bucket names for each category are defined in ivert_config.ini.")
     parser.add_argument("--recursive", "-r", default=False, action="store_true", help=
                         "For the 'ls' command, list all the files recursively, including all sub-directories.")
 
