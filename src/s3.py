@@ -172,7 +172,7 @@ class S3_Manager:
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
         # Directories must end in '/' for an S3 bucket.
-        if key[-1] != "/":
+        if len(key) > 0 and key[-1] != "/":
             key = key + "/"
 
         # First make sure it's actually a directory we're looking at, not just a random matching substring.
