@@ -32,7 +32,22 @@ class S3_Manager:
 
         return self.bucket_dict[bucket_type]
 
-    def exists(self, key, bucket_type="database"):
+    def verify_same_length(self, filename, key, bucket_type="database"):
+        """Return True if the local file is the exact same length as the S3 key."""
+        head = self.exists(key, bucket_type=bucket_type)
+        if head is False:
+            return False
+
+        s3_size = int(head['content-length'])
+
+        if os.path.exists(filename):
+            local_size = os.stat(filename).st_size
+        else:
+            return False
+
+        return s3_size == local_size
+
+    def exists(self, key, bucket_type="database", return_head=False):
         """Look in the appropriate bucket, and see if a file exists there."""
         client = self.get_client()
 
@@ -40,8 +55,11 @@ class S3_Manager:
 
         try:
             head = client.head_object(Bucket=bucket_name, Key=key)
-            print(head) # JUST FOR DEBUGGING. DELETE LATER.
-            return True
+            if return_head:
+                return head
+            else:
+                return True
+
         except botocore.exceptions.ClientError as e:
             if e.response["Error"]["Code"] == "404":
                 return False
@@ -49,26 +67,60 @@ class S3_Manager:
                 warnings.warn(f"Warning: Unknown error fetching status of s3://{bucket_name}/{key}")
                 return False
 
-    def download(self, key, filename, bucket_type="database", delete_original=False):
+    def is_existing_s3_directory(self, key, bucket_type="database"):
+        "Return True if 'key' points to an existing directory (prefix) in the bucket. False otherwise."
+        client = self.get_client()
+
+        bucket_name = self.get_bucketname(bucket_type=bucket_type)
+
+        head = self.exists(key, bucket_type=bucket_type)
+        # If the key doesn't even exist, return False.
+        if head is False:
+            return False
+
+        print(head)
+
+    def download(self, key, filename, bucket_type="database", delete_original=False, fail_quietly=True):
         """Download a file from the S3 to the local file system."""
         client = self.get_client()
 
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
+        # If the 'filename' given is a directory, use the same filename as the key, put the file in that directory.
+        if os.path.isdir(filename):
+            filename = os.path.join(filename, key.split("/")[-1])
+
         response = client.download_file(bucket_name, key, filename)
+
+        if not self.verify_same_length(filename, key, bucket_type=bucket_type):
+            if fail_quietly:
+                return False
+            else:
+                raise RuntimeError("Error: S3_Manager.download() failed to download file correctly.")
 
         if delete_original:
             client.delete_object(Bucket=bucket_name, Key=key)
 
         return response
 
-    def upload(self, filename, key, bucket_type="database", delete_original=False):
+    def upload(self, filename, key, bucket_type="database", delete_original=False, fail_quietly=True):
         """Upload a file from the local file system to the S3."""
         client = self.get_client()
 
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
+        # If the key is pointing to an S3 directory (prefix), then use the same filename as filename, and put it in that
+        # directory.
+        if self.is_existing_s3_directory(key, bucket_type=bucket_type):
+            key = key + "/" + os.path.basename(filename)
+
         response = client.upload_file(filename, bucket_name, key)
+
+        if not self.verify_same_length(filename, key, bucket_type=bucket_type):
+            if fail_quietly:
+                return False
+            else:
+                raise RuntimeError("Error: S3_Manager.upload() failed to upload file correctly.")
 
         if delete_original:
             os.remove(filename)
@@ -96,7 +148,12 @@ class S3_Manager:
 
 
 def define_and_parse_args():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Quick python utility for interacting with IVERT's S3 buckets.")
+    parser.add_argument("command", help="""The command to run. Options are:
+    ls [prefix] -- List all the files in that prefix directory. Use --recursive (-r) to recursively get all the files.
+    rm [key] -- Remove a file from the S3.
+    cp [key] [filename] -- Copy a file from the S3 to a local file.
+    cp
 
 if __name__ == "__main__":
     s3 = S3_Manager()
