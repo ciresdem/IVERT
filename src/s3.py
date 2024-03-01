@@ -1,6 +1,7 @@
 import argparse
 import boto3
 import botocore.exceptions
+import os
 import warnings
 
 import utils.configfile
@@ -39,7 +40,7 @@ class S3_Manager:
 
         try:
             head = client.head_object(Bucket=bucket_name, Key=key)
-            print(head)
+            print(head) # JUST FOR DEBUGGING. DELETE LATER.
             return True
         except botocore.exceptions.ClientError as e:
             if e.response["Error"]["Code"] == "404":
@@ -79,7 +80,6 @@ class S3_Manager:
 
         NOTE: This lists all objects recursively, even in sub-directories, so it doesn't behave exactly like os.listdir.
         """
-        # client = self.get_client()
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
         resource = boto3.resource("s3")
@@ -87,8 +87,16 @@ class S3_Manager:
         files = bucket.objects.filter(Prefix=key).all()
         return [obj.key for obj in files]
 
+    def delete(self, key, bucket_type="database"):
+        """Delete a key (file) from the S3."""
+        client = self.get_client()
+        bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
-def define_and_parse_args()
+        return client.delete_object(Bucket=bucket_name, Key=key)
+
+
+def define_and_parse_args():
+    parser = argparse.ArgumentParser()
 
 if __name__ == "__main__":
     s3 = S3_Manager()
