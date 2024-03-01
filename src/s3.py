@@ -44,9 +44,7 @@ class S3_Manager:
         if head is False:
             return False
 
-        print(head)
-        sys.exit(0)
-        s3_size = int(head['content-length'])
+        s3_size = int(head['ContentLength'])
 
         if os.path.exists(filename):
             local_size = os.stat(filename).st_size
