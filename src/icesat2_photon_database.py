@@ -25,6 +25,7 @@ warnings.filterwarnings("ignore", message=".*pandas.Int64Index is deprecated*")
 
 import classify_icesat2_photons
 import nsidc_download
+import s3_manager
 # import datasets.CopernicusDEM.source_dataset_CopernicusDEM as Copernicus
 # import datasets.dataset_geopackage                         as dataset_geopackage
 # import etopo.generate_empty_grids # ??? TODO: Get rid of this dependency.
@@ -57,13 +58,20 @@ class ICESat2_Database:
         self.gdf = None # The actual geodataframe object.
         self.tile_resolution_deg = 0.25
         self.crs = pyproj.CRS.from_epsg(4326)
+        self.s3_manager = None
 
     def get_gdf(self, verbose=True):
         """Return self.gdf if exists, otherwise read self.gpkg_name, save it to self.gdf and return."""
         if self.gdf is None:
             if not os.path.exists(self.gpkg_fname) and not os.path.exists(self.gpkg_fname_compressed):
                 if self.ivert_config._is_aws:
-                    s3_manager.get_file() #TODO: FINISH HERE.
+                    s3 = self.get_s3_manager()
+                    s3_geopackage = self.ivert_config.s3_photon_geopackage
+                    s3_geopaclage_compressed = os.path.splitext(s3_geopackage)[0] + ".blosc2"
+                    if s3.exists(self.ivert_config.s3_photon_geopackage, bucket_type="database"):
+                        s3.get_file()
+                        # TODO: FINISH HERE.
+
 
             if os.path.exists(self.gpkg_fname):
                 print("Reading", os.path.basename(self.gpkg_fname))
@@ -79,12 +87,19 @@ class ICESat2_Database:
                 print("Reading", os.path.basenem(self.gpkg_fname_compressed))
 
             elif self.ivert_config._is_aws:
+                pass
                 # If we're on an AWS bucket and the GeoPackage isn't in its local space, it might be sitting in an S3
                 # bucket. Download it from there.
             else:
                 self.gdf = self.create_new_geopackage(verbose=verbose)
 
         return self.gdf
+
+    def get_s3_manager(self):
+        if self.s3_manager is None:
+            self.s3_manager = s3_manager.S3_Manager()
+
+        return self.s3_manager
 
     def numrecords(self):
         return len(self.get_gdf(verbose=False))
