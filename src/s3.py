@@ -201,17 +201,17 @@ class S3_Manager:
 
 def define_and_parse_args():
     parser = argparse.ArgumentParser(description="Quick python utility for interacting with IVERT's S3 buckets.")
-    parser.add_argument("command", nargs="+", help="""The command to run. Options are:
-       ls [prefix] -- List all the files in that prefix directory. Use --recursive (-r) to recursively get all the files.
-       rm [key] :                   Remove a file from the S3.
-       cp [s3:key] [filename_or_dir] : Copy a file from the S3 to a local file.
+    parser.add_argument("command", nargs="+", help="""The command to run. Options are:\n
+       ls [prefix] -- List all the files in that prefix directory. Use --recursive (-r) to recursively get all the files.\n
+       rm [key] :                   Remove a file from the S3.\n
+       cp [s3:key] [filename_or_dir] : Copy a file from the S3 to a local file.\n
        cp [filename] [s3:key] :        Copy a local file into the S3. If the key is a
-                                       prefix (directory), copy it into that directory/prefix.
+                                       prefix (directory), copy it into that directory/prefix.\n
        mv [s3:key] [filename_or_dir] : Move a file from the S3 to a local file. Delete the
                                        original in the S3. The prefix "s3:" identifies the s3 key. You do not need
-                                       to list the bucket name.
+                                       to list the bucket name.\n
        mv [filename] [s3:key] :        Move a local file into the S3. Delete the original.
-                                       If key is a prefix (directory), copy it into that prefix.
+                                       If key is a prefix (directory), copy it into that prefix.\n
     """)
     parser.add_argument("--bucket", "-b", default="database", help=
                         "The shorthand for which ivert S3 bucket we're pulling from, or the explicit name of a bucket."
