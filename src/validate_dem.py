@@ -6,13 +6,14 @@ Created on Tue Jun 22 16:06:21 2021
 @author: mmacferrin
 """
 
-# try:
-#     # We don't actually use the cudem modules here, but we make command-line
-#     # calls to "waffles", so check here to make sure cudem is installed on this
-#     # machine. If we can import the waffles module, we can use it from the command-line.
-#     from cudem import waffles
-# except:
-#     raise ModuleNotFoundError("Module 'cudem/waffles.py' required. Update paths, or refer to https://github.com/ciresdem/cudem for installation instructions.")
+
+try:
+    # We don't actually use the cudem modules here, but we make command-line
+    # calls to "waffles", so check here to make sure cudem is installed on this
+    # machine. If we can import the waffles module, we can use it from the command-line.
+    from cudem import waffles
+except:
+    raise ModuleNotFoundError("Module 'cudem/waffles.py' required. Update paths, or refer to https://github.com/ciresdem/cudem for installation instructions.")
 # EMPTY_VAL = -9999
 
 import utils.progress_bar as progress_bar
@@ -37,6 +38,10 @@ import multiprocessing as mp
 import time
 import numexpr
 import pyproj
+
+# NOTE: This eliminates a Deprecation error in GDAL v3.x. In GDAL 4.0, they will use Exceptions by default and this
+# command will be unnecessary.
+gdal.UseExceptions()
 
 etopo_config = utils.configfile.config()
 EMPTY_VAL = etopo_config.dem_default_ndv

@@ -128,6 +128,7 @@ def signed_area(xs, ys):
      indicates a counter-clockwise oriented ring."""
     return sum([xs[i]*(ys[(i+1)%len(xs)]-ys[i-1]) for i in range(1, len(xs))])/2.0
 
+
 def get_username():
     username = ''
 
@@ -140,11 +141,13 @@ def get_username():
     username = do_input('NASA Earthdata username: ')
     return username
 
+
 def get_password():
     password = ''
     while not password:
         password = getpass('password: ')
     return password
+
 
 def get_username_and_pwd_from_creds():
     uname, pwd = my_config._read_credentials()
@@ -164,11 +167,12 @@ def get_username_and_pwd_from_creds():
 
 
 def get_login_credentials():
-    """Get user credentials from the NSIDC credentials file specified in etopo_config.ini, or prompt for input."""
+    """Get user credentials."""
     credentials = None
     token = None
 
-    username, password = get_username_and_pwd_from_creds()
+#    username, password = get_username_and_pwd_from_creds()
+    username, password = get_username(), get_password()
     credentials = '{0}:{1}'.format(username, password)
     credentials = base64.b64encode(credentials.encode('ascii')).decode('ascii')
 

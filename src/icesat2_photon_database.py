@@ -12,7 +12,7 @@ import numpy
 import shapely.geometry
 import shutil
 import tables
-import time
+# import time
 import itertools
 
 #####################################
@@ -25,12 +25,13 @@ warnings.filterwarnings("ignore", message=".*pandas.Int64Index is deprecated*")
 
 import classify_icesat2_photons
 import nsidc_download
-# import datasets.CopernicusDEM.source_dataset_CopernicusDEM as Copernicus # WTF am I using Copernicus for here?
+# import datasets.CopernicusDEM.source_dataset_CopernicusDEM as Copernicus
 # import datasets.dataset_geopackage                         as dataset_geopackage
 # import etopo.generate_empty_grids # ??? TODO: Get rid of this dependency.
 import utils.configfile
 import utils.progress_bar
 import utils.sizeof_format
+import utils.pickle_blosc
 
 
 class ICESat2_Database:
@@ -48,19 +49,22 @@ class ICESat2_Database:
         else:
             self.ivert_config = ivert_config
         self.gpkg_fname = self.ivert_config.icesat2_photon_geopackage
+        # Same file, just pickled using blosc2 compression in the utils/pickle_blosc.py script.
+        self.gpkg_fname_compressed = os.path.splitext(self.gpkg_fname)[0] + ".blosc2"
         self.tiles_directory = self.ivert_config.icesat2_photon_tiles_directory
         self.granules_directory = self.ivert_config.icesat2_granules_directory
-        self.alt_granules_directories = [self.ivert_config.icesat2_granules_directory_alternate,
-                                         self.ivert_config.icesat2_granules_directory_alternate_2,
-                                         self.ivert_config.icesat2_granules_directory_alternate_3]
 
         self.gdf = None # The actual geodataframe object.
         self.tile_resolution_deg = 0.25
         self.crs = pyproj.CRS.from_epsg(4326)
 
     def get_gdf(self, verbose=True):
-        """Return self.gpkg if exists, otherwise read self.gpkg_name, save it to self.gdf and return."""
+        """Return self.gdf if exists, otherwise read self.gpkg_name, save it to self.gdf and return."""
         if self.gdf is None:
+            if not os.path.exists(self.gpkg_fname) and not os.path.exists(self.gpkg_fname_compressed):
+                if self.ivert_config._is_aws:
+                    s3_manager.get_file() #TODO: FINISH HERE.
+
             if os.path.exists(self.gpkg_fname):
                 print("Reading", os.path.basename(self.gpkg_fname))
                 if os.path.splitext(self.gpkg_fname)[1] == ".gpkg":
@@ -71,6 +75,12 @@ class ICESat2_Database:
                     raise NotImplementedError(
                         "Uknown file format for photon_tile_geopackage: {0}. Can accept .gpkg or .gz.".format(
                             os.path.basename(self.gpkg_fname)))
+            elif os.path.exists(self.gpkg_fname_compressed):
+                print("Reading", os.path.basenem(self.gpkg_fname_compressed))
+
+            elif self.ivert_config._is_aws:
+                # If we're on an AWS bucket and the GeoPackage isn't in its local space, it might be sitting in an S3
+                # bucket. Download it from there.
             else:
                 self.gdf = self.create_new_geopackage(verbose=verbose)
 
@@ -84,6 +94,9 @@ class ICESat2_Database:
         # Columns to have : filename, xmin, xmax, ymin, ymax, numphotons, numphotons_canopy, numphotons_ground, geometry
         # "numphotons", "numphotons_canopy", "numphotons_ground" are all set to zero at first. Are populated later as files are written.
         # "geometry" will be a square polygon bounded by xmin, xmax, ymin, ymax
+
+        # TODO: Get rid of the Copernicus data dependency for "where ICESat-2 data exists". We need to find another way
+        # to do this, especially since we'll be grabbing bathymetry data using CShelph as well.
 
         # Since we're interested in land-only, we will use the CopernicusDEM dataset
         # to determine where land tiles might be.
@@ -237,7 +250,8 @@ class ICESat2_Database:
                                        save_to_disk = save_to_disk,
                                        verbose=verbose)
 
-        existing_tiles = [os.path.join(self.tiles_directory, fn) for fn in os.listdir(self.tiles_directory) if (re.search("\Aphoton_tile_[\w\.]+\.h5\Z", fn) != None)]
+        existing_tiles = [os.path.join(self.tiles_directory, fn) for fn in os.listdir(self.tiles_directory) if \
+                          (re.search(r"\Aphoton_tile_[\w\.]+\.h5\Z", fn) != None)]
         num_filled_in = 0
         for tilename in existing_tiles:
             tile_record = gdf.loc[gdf.filename == tilename]
@@ -344,7 +358,7 @@ class ICESat2_Database:
         #                                          force_read_from_disk = False,
         #                                          verbose = verbose)
 
-    def query_geopackage(self, polygon_or_bbox, return_whole_records=True):
+    def query_geopackage(self, polygon_or_bbox, return_whole_records=True, verbose=True):
         """Return the photon database tile filenames that intersect the polygon in question.
 
         Called by get_photon_database().
@@ -365,7 +379,7 @@ class ICESat2_Database:
             polygon = polygon_or_bbox
 
         # Use the polygon intersection tool to find the intersection.
-        gdf = self.get_gdf()
+        gdf = self.get_gdf(verbose=verbose)
 
         # Subset the records that overlap but don't just "touch" (on an edge or corner).
         # gdf_subset = gdf[ gdf.intersects(polygon) & ~gdf.touches(polygon)]
@@ -450,11 +464,13 @@ class ICESat2_Database:
             # database already exists in their respective folders. It might be a good idea down
             # the line to not rely upon this assumption. Maybe include the empty tile in the
             # git repository so we ensure it's there.
-            list_of_files = [fn for fn in os.listdir(self.tiles_directory) if (re.search("\Aphoton_tile_[\w\.]+\.((h5)|(feather))\Z", fn) != None)]
+            list_of_files = [fn for fn in os.listdir(self.tiles_directory) \
+                             if (re.search(r"\Aphoton_tile_[\w\.]+\.((h5)|(feather))\Z", fn) != None)]
             if len(list_of_files) > 0:
                 example_file = os.path.join(self.tiles_directory, list_of_files[0])
             else:
-                list_of_files = [fn for fn in os.listdir(self.granules_directory) if re.search("\AATL03_(\w)+_photons\.((h5)|(feather))\Z", fn) != None]
+                list_of_files = [fn for fn in os.listdir(self.granules_directory) \
+                                 if re.search(r"\AATL03_(\w)+_photons\.((h5)|(feather))\Z", fn) != None]
                 if len(list_of_files) == 0:
                     raise FileNotFoundError("Could not find an existing photon tile or granule to use to create the file", self.ivert_config.icesat2_photon_empty_tile)
                 example_file = os.path.join(self.granules_directory, list_of_files[0])
@@ -484,7 +500,7 @@ class ICESat2_Database:
         # Otherwise, look for either a .h5 or .feather file in the granules directory.
         # If you can't find it in the main granules directory, look in the alternate directories.
         possible_exts = [".h5", ".feather"]
-        possible_dirs = [self.granules_directory] + self.alt_granules_directories
+        possible_dirs = [self.granules_directory] ## + self.alt_granules_directories
 
         basename, ext = os.path.splitext(os.path.basename(db_name))
         assert ext in possible_exts
@@ -749,7 +765,8 @@ class ICESat2_Database:
         geopackage could be more "recent" than what's on disk, use
         'force_read_from_disk' to only use the version of the gpkg that is on disk,
         not the one in memory here."""
-        csv_filenames = [os.path.join(self.tiles_directory,fname) for fname in os.listdir(self.tiles_directory) if (re.search("_summary\.csv\Z", fname) != None)]
+        csv_filenames = [os.path.join(self.tiles_directory,fname) for fname in os.listdir(self.tiles_directory) \
+                         if (re.search(r"_summary\.csv\Z", fname) != None)]
         if force_read_from_disk:
             gdf = geopandas.read_file(self.gpkg_fname, mode='r')
             if verbose:
@@ -798,7 +815,8 @@ class ICESat2_Database:
             gdf = self.get_gdf(verbose=verbose)
 
         # Get the filenames from the csv files.
-        csv_filenames = [os.path.join(self.tiles_directory,fname) for fname in os.listdir(self.tiles_directory) if (re.search("_summary\.csv\Z", fname) != None)]
+        csv_filenames = [os.path.join(self.tiles_directory,fname) for fname in os.listdir(self.tiles_directory) \
+                         if (re.search(r"_summary\.csv\Z", fname) != None)]
         if verbose and len(csv_filenames) > 0:
             print("Found", len(csv_filenames), "csv records to update the tile database... ", end="")
 
@@ -850,6 +868,15 @@ class ICESat2_Database:
                 os.remove(csv_fname)
 
         return self.gdf
+
+    def upgrade_database_to_v2(self):
+        """The version 2 of the database has:
+        - Just the file name to each feather file. Getting rid of full file paths. File paths will be appended using the configfile.
+        - adding column 'numphotons_bathy'
+        - adding column 'start_date_YYYYMMDD'
+        - adding column 'end_date_YYYYMMDD'
+        """
+        gdf = self.get_gdf()
 
     def read_photon_tile(self, tilename):
         """Read a photon tile. If the tilename doesn't exist, return None."""
@@ -993,11 +1020,13 @@ class ICESat2_Database:
         granule_dir = self.ivert_config._abspath(self.ivert_config.icesat2_granules_directory)
         granule_fnames = os.listdir(granule_dir)
         if icesat2_region_num is not None:
-            granule_fnames = [fn for fn in granule_fnames if int(re.search("(?<=ATL03_(\d){14}_(\d){6})(\d){2}(?=_005_01_photons)", fn).group()) == icesat2_region_num]
+            granule_fnames = [fn for fn in granule_fnames \
+                              if int(re.search(r"(?<=ATL03_(\d){14}_(\d){6})(\d){2}(?=_005_01_photons)",
+                                               fn).group()) == icesat2_region_num]
 
         granule_fnames = [os.path.join(granule_dir, fn) for fn in granule_fnames]
 
-        external_drive = self.ivert_config._abspath(self.ivert_config.icesat2_granules_directory_alternate)
+        # external_drive = self.ivert_config._abspath(self.ivert_config.icesat2_granules_directory_alternate)
 
         for i,gfn in enumerate(granule_fnames):
             # TODO: REMOVE THIS LATER. JUST SKIPPING ALREADY_DONE PORTIONS.
