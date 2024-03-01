@@ -106,7 +106,11 @@ class S3_Manager:
 
         # Otherwise, the key should be the start of the first object there.
         assert obj.key.find(key) == 0
-        return True
+
+        # To make sure we don't just match any substring of the key, make sure that either the key ends in "/" or
+        # the character right after it in the matching prefix is "/".
+        if (key[-1] == "/") or (obj.key[len(key)] == "/"):
+            return True
 
 
     def download(self, key, filename, bucket_type="database", delete_original=False, fail_quietly=True):
