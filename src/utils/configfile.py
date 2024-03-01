@@ -105,6 +105,10 @@ class config:
                     setattr(self, key, os.path.abspath(value))
                 # If it's a relative path, make it relative to the _configfile's local directory.
                 else:
+                    # If this points to an S3-bucket key-path, don't return an absolute path, just keep it as it is.
+                    # if key[:2].lower() == "s3":
+                    #     setattr(self, key, value)
+                    # else:
                     setattr(self, key, self._abspath(os.path.join(os.path.dirname(self._configfile), value)))
                 return
 
@@ -115,6 +119,9 @@ class config:
                     setattr(self, key, os.path.abspath(value))
                 # If it's a relative path, make it relative to the _configfile directory.
                 else:
+                    # if key[:2].lower() == "s3":
+                    #     setattr(self, key, value)
+                    # else:
                     setattr(self, key, self._abspath(os.path.join(os.path.dirname(self._configfile), value)))
                 return
         except ValueError:
