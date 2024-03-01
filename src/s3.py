@@ -272,7 +272,7 @@ if __name__ == "__main__":
         #           "\n            The S3 location must be preceded by an 's3:' prefix."
         #           "\n            Only one entry should contain this 's3:' prefix.")
 
-        elif len(command) != 3:
+        if len(command) != 3:
             raise ValueError(f"'{command[0]}' should be followed by exactly 2 files, one of them preceded by 's3:'")
         c1 = command[1]
         c2 = command[2]
