@@ -164,7 +164,7 @@ def define_and_parse_args():
                         "The shorthand for which ivert S3 bucket we're pulling from. Options are 'database' "
                         "(where the IVERT database and other data sit), 'input' (the S3 bucket where files sit that "
                         "just passed secure ingest), 'output' (where IVERT puts files to disseminate). These are "
-                        "abstractions. The actual S3 bucket names are defined in ivert_config.ini."
+                        "abstractions. The actual S3 bucket names are defined in ivert_config.ini.")
     parser.add_argument("--recursive", "-r", default=False, action="store_true", help=
                         "For the 'ls' command, list all the files recursively, including all sub-directories.")
 
