@@ -81,6 +81,9 @@ class S3_Manager:
 
     def is_existing_s3_directory(self, key, bucket_type="database"):
         "Return True if 'key' points to an existing directory (prefix) in the bucket. NOT a file. False otherwise."
+        if key == "":
+            return True
+
         client = self.get_client()
 
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
