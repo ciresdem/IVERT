@@ -203,7 +203,7 @@ class S3_Manager:
 def define_and_parse_args():
     parser = argparse.ArgumentParser(description="Quick python utility for interacting with IVERT's S3 buckets.")
     parser.add_argument("command", nargs="+", help=f"The command to run. Options are 'ls', 'rm', 'cp', or 'mv'.  "
-                        "'ls' and 'rm' are followed by 1 argument: a prefix-directory (for 'ls') or a filename (for 'rm')."
+                        "'ls' and 'rm' are followed by 1 argument: a prefix-directory (for 'ls') or a full file key (for 'rm')."
                         "'rm' and 'cp' are followed by 2 arguments, one of which must be prefixed by 's3:' to indicate"
                         "which identifier is associated with the S3 Bucket. The name of the S3 bucket does NOT need to be "
                         "included. Use the '--bucket | -b' argument to specify a specific IVERT bucket.")
