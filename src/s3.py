@@ -79,6 +79,7 @@ class S3_Manager:
             return False
 
         print(head)
+        return head
 
     def download(self, key, filename, bucket_type="database", delete_original=False, fail_quietly=True):
         """Download a file from the S3 to the local file system."""
