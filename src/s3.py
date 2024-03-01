@@ -203,8 +203,8 @@ class S3_Manager:
 def define_and_parse_args():
     parser = argparse.ArgumentParser(description="Quick python utility for interacting with IVERT's S3 buckets.")
     parser.add_argument("command", nargs="+", help=f"The command to run. Options are 'ls', 'rm', 'cp', or 'mv'.  "
-                        "'ls' and 'rm' are followed by 1 argument: a prefix-directory (for 'ls') or a full file key (for 'rm')."
-                        "'rm' and 'cp' are followed by 2 arguments, one of which must be prefixed by 's3:' to indicate"
+                        "'ls' and 'rm' are followed by 1 argument: a prefix-directory (for 'ls') or a full file key (for 'rm').  "
+                        "'rm' and 'cp' are followed by 2 arguments, one of which must be prefixed by 's3:' to indicate "
                         "which identifier is associated with the S3 Bucket. The name of the S3 bucket does NOT need to be "
                         "included. Use the '--bucket | -b' argument to specify a specific IVERT bucket.")
     # Type 'python {os.path.basename(__file__)} [command] -h' for help on a particular command.""")
@@ -228,15 +228,18 @@ if __name__ == "__main__":
 
     command = args.command
     if command[0] == "ls":
-        if len(command) == 1 or len(command) > 2:
-            raise ValueError("'ls' should have exactly 1 positional argument after it.")
+        if len(command) > 2:
+            raise ValueError("'ls' should have exactly 0 or 1 positional argument after it.")
         # The "s3:" is not mandatory. Strip it off if it exists.
 
-        if command[1] in ("-h", "--help"):
-            print("python s3.py ls S3_DIRNAME [--recursive | -r] [--bucket | -b BUCKET]"
-                  "\n            List all the files in that prefix directory."
-                  "\n            Add --recursive or -r to recursively list all files, including files in sub-directories.")
-            sys.exit(0)
+        # if command[1] in ("-h", "--help"):
+        #     print("python s3.py ls S3_DIRNAME [--recursive | -r] [--bucket | -b BUCKET]"
+        #           "\n            List all the files in that prefix directory."
+        #           "\n            Add --recursive or -r to recursively list all files, including files in sub-directories.")
+        #     sys.exit(0)
+
+        if len(command) == 1:
+            command = command + [""]
 
         key = command[1].lstrip("s3:").lstrip("S3:")
         results = s3m.listdir(key, bucket_type=args.bucket, recursive=args.recursive)
@@ -247,10 +250,10 @@ if __name__ == "__main__":
         if len(command) == 1:
             raise ValueError("'rm' should be followed by at least one file key.")
 
-        if command[1] in ("-h", "--help"):
-            print("python s3.py rm S3_FILENAME  [--bucket | -b BUCKET]"
-                  "\n            Remove a file from the S3.")
-            sys.exit(0)
+        # if command[1] in ("-h", "--help"):
+        #     print("python s3.py rm S3_FILENAME  [--bucket | -b BUCKET]"
+        #           "\n            Remove a file from the S3.")
+        #     sys.exit(0)
 
         for key in command[1:]:
             # The "s3:" is not mandatory. Strip it off if it exists.
@@ -260,14 +263,14 @@ if __name__ == "__main__":
     elif command[0] in ("cp", "mv"):
         # The only difference between "cp" and "mv" is whether we delete the original file after copying over.
         # handle them both here.
-        if len(command) > 1 and command[1] in ("-h", "--help"):
-            print(f"python s3.py {command[0]} s3:S3_FILENAME LOCAL_FILE_OR_DIR [--bucket | -b BUCKET]"
-                  "\n   or"
-                  f"python s3.py {command[0]} LOCAL_FILE s3:S3_FILENAME_OR_DIR [--bucket | -b BUCKET]" +
-                  "\n            {0}".format("Copy" if command[0] == "cp" else "Move") +
-                  " a file to/from the S3."
-                  "\n            The S3 location must be preceded by an 's3:' prefix."
-                  "\n            Only one entry should contain this 's3:' prefix.")
+        # if len(command) > 1 and command[1] in ("-h", "--help"):
+        #     print(f"python s3.py {command[0]} s3:S3_FILENAME LOCAL_FILE_OR_DIR [--bucket | -b BUCKET]"
+        #           "\n   or"
+        #           f"python s3.py {command[0]} LOCAL_FILE s3:S3_FILENAME_OR_DIR [--bucket | -b BUCKET]" +
+        #           "\n            {0}".format("Copy" if command[0] == "cp" else "Move") +
+        #           " a file to/from the S3."
+        #           "\n            The S3 location must be preceded by an 's3:' prefix."
+        #           "\n            Only one entry should contain this 's3:' prefix.")
 
         elif len(command) != 3:
             raise ValueError(f"'{command[0]}' should be followed by exactly 2 files, one of them preceded by 's3:'")
