@@ -164,14 +164,32 @@ class S3_Manager:
     def listdir(self, key, bucket_type="database", recursive=False):
         """List all the files within a given directory.
 
+        Returns the full key path, since that's how S3's operate. But this make it a bit different than os.listdir().
+
         NOTE: This lists all objects recursively, even in sub-directories, so it doesn't behave exactly like os.listdir.
         """
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
+        # Directories must end in '/' for an S3 bucket.
+        if key[-1] != "/":
+            key = key + "/"
+
+        # First make sure it's actually a directory we're looking at, not just a random matching substring.
+        if not self.is_existing_s3_directory(key, bucket_type=bucket_type):
+            raise FileNotFoundError(f"'{key}' is not a directory in bucket '{bucket_name}'")
+
         resource = boto3.resource("s3")
         bucket = resource.Bucket(bucket_name)
-        files = bucket.objects.filter(Prefix=key).all()
-        return [obj.key for obj in files]
+        # If we're recursing, just return everything.
+        if recursive:
+            files = bucket.objects.filter(Prefix=key).all()
+            return [obj.key for obj in files]
+        else:
+            # Get the full string that occurs after the directory listed, for each subset.
+            result = self.get_client().list_objects(Bucket=bucket_name, Prefix=key, Delimiter="/")
+            subdirs = [subdir["Prefix"] for subdir in result["CommonPrefixes"]]
+            files = [f["Key"] for f in result["Contents"]]
+            return subdirs + files
 
     def delete(self, key, bucket_type="database"):
         """Delete a key (file) from the S3."""
@@ -183,16 +201,17 @@ class S3_Manager:
 
 def define_and_parse_args():
     parser = argparse.ArgumentParser(description="Quick python utility for interacting with IVERT's S3 buckets.")
-    parser.add_argument("command", help="""The command to run. Options are:
+    parser.add_argument("command", nargs="+", help="""The command to run. Options are:
        ls [prefix] -- List all the files in that prefix directory. Use --recursive (-r) to recursively get all the files.
        rm [key] :                   Remove a file from the S3.
-       cp [key] [filename_or_dir] : Copy a file from the S3 to a local file.
-       cp [filename] [key] :        Copy a local file into the S3. If the key is a
-                                    prefix (directory), copy it into that directory/prefix.
-       mv [key] [filename_or_dir] : Move a file from the S3 to a local file. Delete the
-                                    original in the S3.
-       mv [filename] [key] :        Move a local file into the S3. Delete the original.
-                                    If key is a prefix (directory), copy it into that prefix.
+       cp [s3:key] [filename_or_dir] : Copy a file from the S3 to a local file.
+       cp [filename] [s3:key] :        Copy a local file into the S3. If the key is a
+                                       prefix (directory), copy it into that directory/prefix.
+       mv [s3:key] [filename_or_dir] : Move a file from the S3 to a local file. Delete the
+                                       original in the S3. The prefix "s3:" identifies the s3 key. You do not need
+                                       to list the bucket name.
+       mv [filename] [s3:key] :        Move a local file into the S3. Delete the original.
+                                       If key is a prefix (directory), copy it into that prefix.
     """)
     parser.add_argument("--bucket", "-b", default="database", help=
                         "The shorthand for which ivert S3 bucket we're pulling from, or the explicit name of a bucket."
@@ -203,6 +222,67 @@ def define_and_parse_args():
     parser.add_argument("--recursive", "-r", default=False, action="store_true", help=
                         "For the 'ls' command, list all the files recursively, including all sub-directories.")
 
+    return parser.parse_args()
+
 
 if __name__ == "__main__":
-    s3 = S3_Manager()
+    args = define_and_parse_args()
+
+    s3m = S3_Manager()
+
+    command = args.command
+    if command[0] == "ls":
+        if len(command) == 1 or len(command) > 2:
+            raise ValueError("'ls' should have exactly 1 positional argument after it.")
+        # The "s3:" is not mandatory. Strip it off if it exists.
+        key = command[1].lstrip("s3:").lstrip("S3:")
+        results = s3m.listdir(key, bucket_type=args.bucket, recursive=args.recursive)
+        for line in results:
+            print(line)
+
+    elif command[0] == "rm":
+        if len(command) == 1:
+            raise ValueError("'rm' should be followed by at least one file key.")
+        for key in command[1:]:
+            # The "s3:" is not mandatory. Strip it off if it exists.
+            key = key.lstrip("s3:").lstrip("S3:")
+            s3m.delete(key, bucket_type=args.bucket)
+
+    elif command[0] in ("cp", "mv"):
+        # The only difference between "cp" and "mv" is whether we delete the original file after copying over.
+        # handle them both here.
+        if len(command) != 3:
+            raise ValueError(f"'{command[0]}' should be followed by exactly 2 files, one of them preceded by 's3:'")
+        c1 = command[1]
+        c2 = command[2]
+
+        local_file = [fn for fn in [c1, c2] if fn.lower().find("s3:") == -1]
+        s3_file = [fn for fn in [c1, c2] if fn.lower().find("s3:") == 0]
+
+        if len(s3_file) != 1 or len(local_file) != 1:
+            raise ValueError(f"'{command[0]}' should be followed by exactly 2 files, one of them preceded by 's3:'")
+
+        # Determine if we're uploading or downloading. Which one came first?
+        downloading = True
+        if local_file[0] == command[1]:
+            downloading = False
+
+        local_file = local_file[0]
+        # Trim off the "s3:" in front of the s3 file.
+        s3_file = s3_file[0][3:]
+
+        if downloading:
+            s3m.download(s3_file,
+                         local_file,
+                         bucket_type=args.bucket,
+                         delete_original=(command[0] == "mv"),
+                         fail_quietly=False)
+        else:
+            s3m.upload(local_file,
+                       s3_file,
+                       bucket_type=args.bucket,
+                       delete_original=(command[0] == "mv"),
+                       fail_quietly=False)
+
+    else:
+        raise ValueError(f"Unhandled command '{command[0]}'")
