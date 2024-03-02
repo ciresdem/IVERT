@@ -38,8 +38,8 @@ class S3_Manager:
 
         return self.bucket_dict[bucket_type]
 
-    def verify_same_length(self, filename, key, bucket_type="database"):
-        """Return True if the local file is the exact same length as the S3 key."""
+    def verify_same_size(self, filename, key, bucket_type="database"):
+        """Return True if the local file is the exact same size in bytes as the S3 key."""
         head = self.exists(key, bucket_type=bucket_type, return_head=True)
         if head is False:
             return False
@@ -58,6 +58,9 @@ class S3_Manager:
         client = self.get_client()
 
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
+
+        if key == "/":
+            key = ""
 
         try:
             head = client.head_object(Bucket=bucket_name, Key=key)
@@ -81,7 +84,7 @@ class S3_Manager:
 
     def is_existing_s3_directory(self, key, bucket_type="database"):
         "Return True if 'key' points to an existing directory (prefix) in the bucket. NOT a file. False otherwise."
-        if key == "":
+        if key in ("", "/"):
             return True
 
         client = self.get_client()
@@ -130,7 +133,7 @@ class S3_Manager:
 
         response = client.download_file(bucket_name, key, filename)
 
-        if not self.verify_same_length(filename, key, bucket_type=bucket_type):
+        if not self.verify_same_size(filename, key, bucket_type=bucket_type):
             if fail_quietly:
                 return False
             else:
@@ -154,7 +157,7 @@ class S3_Manager:
 
         response = client.upload_file(filename, bucket_name, key)
 
-        if not self.verify_same_length(filename, key, bucket_type=bucket_type):
+        if not self.verify_same_size(filename, key, bucket_type=bucket_type):
             if fail_quietly:
                 return False
             else:
