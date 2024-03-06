@@ -231,6 +231,7 @@ def define_and_parse_args():
 if __name__ == "__main__":
     args = define_and_parse_args()
 
+    # This optional parameter appears in most
     bucketopt_message = \
     "\n  --bucket BUCKET, -b BUCKET" + \
     "\n                     Tag for the IVERT bucket type being used. Options are 'database', 'input' and 'output'." + \
@@ -250,7 +251,7 @@ if __name__ == "__main__":
                   "\n\nList all the files in that prefix directory." +
                   "\n\npositional arguments:" +
                   "\n  s3_prefix          The directory (called a 'prefix' in s3) in which to list all files present." +
-                  "\n                     Prints the full keyname (with prefix directories). Use an empty prefix ('s3:')"
+                  "\n                     Prints the full keyname (with prefix directories). Use an empty prefix ('s3:', '.', or '/'))"
                   "\n                     to list files in the root directory of the bucket." +
                   "\n\noptions:" +
                   "\n  --recursive, -r    Recursively list all files in that directory, including within sub-folders." +
@@ -262,7 +263,7 @@ if __name__ == "__main__":
         #     command = command + [""]
 
         key = command[1].lstrip("s3:").lstrip("S3:").strip()
-        if key == "/":
+        if key == "/" or key == ".":
             key = ""
 
         s3m = S3_Manager()
