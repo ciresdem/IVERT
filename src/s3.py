@@ -208,11 +208,12 @@ class S3_Manager:
 
 def define_and_parse_args():
     parser = argparse.ArgumentParser(description="Quick python utility for interacting with IVERT's S3 buckets.")
-    parser.add_argument("command", nargs="+", help=f"The command to run. Options are 'ls', 'rm', 'cp', or 'mv'.  "
-                        "'ls' and 'rm' are followed by 1 argument: a prefix-directory (for 'ls') or a full file key (for 'rm').  "
-                        "'rm' and 'cp' are followed by 2 arguments, one of which must be prefixed by 's3:' to indicate "
-                        "which identifier is associated with the S3 Bucket. The name of the S3 bucket does NOT need to be "
-                        "included. Use the '--bucket | -b' argument to specify a specific IVERT bucket.")
+    parser.add_argument("command", nargs="+", help=f"The command to run. Options are 'ls', 'rm', 'cp', or 'mv'."
+                        " Run each command without arguments to see usage messages for it.")
+                        # "'ls' and 'rm' are followed by 1 argument: a prefix-directory (for 'ls') or a full file key (for 'rm').  "
+                        # "'rm' and 'cp' are followed by 2 arguments, one of which must be prefixed by 's3:' to indicate "
+                        # "which identifier is associated with the S3 Bucket. The name of the S3 bucket does NOT need to be "
+                        # "included. Use the '--bucket | -b' argument to specify a specific IVERT bucket.")
     # Type 'python {os.path.basename(__file__)} [command] -h' for help on a particular command.""")
     parser.add_argument("--bucket", "-b", default="database", help=
                         "The shorthand for which ivert S3 bucket we're pulling from, or the explicit name of a bucket."
@@ -230,7 +231,13 @@ def define_and_parse_args():
 if __name__ == "__main__":
     args = define_and_parse_args()
 
-    s3m = S3_Manager()
+    bucketopt_message = \
+    "\n  --bucket BUCKET, -b BUCKET" + \
+    "\n                     Tag for the IVERT bucket type being used. Options are 'database', 'input' and 'output'." + \
+    "\n                     The actual names of the buckets are pulled from ivert_config.ini." + \
+    "\n                     Default is 'database', so commands will (by default) be referenced to the s3 bucket" + \
+    "\n                     Where the IVERT database resides."
+
 
     command = args.command
     if command[0] == "ls":
@@ -238,28 +245,44 @@ if __name__ == "__main__":
             raise ValueError("'ls' should have exactly 0 or 1 positional argument after it.")
         # The "s3:" is not mandatory. Strip it off if it exists.
 
-        # if command[1] in ("-h", "--help"):
-        #     print("python s3.py ls S3_DIRNAME [--recursive | -r] [--bucket | -b BUCKET]"
-        #           "\n            List all the files in that prefix directory."
-        #           "\n            Add --recursive or -r to recursively list all files, including files in sub-directories.")
-        #     sys.exit(0)
-
         if len(command) == 1:
-            command = command + [""]
+            print("usage: python {0} ls s3_prefix [--recursive] [--bucket BUCKET]".format(os.path.basename(__file__)) +
+                  "\n\nList all the files in that prefix directory." +
+                  "\n\npositional arguments:" +
+                  "\n  s3_prefix          The directory (called a 'prefix' in s3) in which to list all files present." +
+                  "\n                     Prints the full keyname (with prefix directories). Use an empty prefix ('s3:')"
+                  "\n                     to list files in the root directory of the bucket." +
+                  "\n\noptions:" +
+                  "\n  --recursive, -r    Recursively list all files in that directory, including within sub-folders." +
+                  bucketopt_message
+                  )
+            sys.exit(0)
 
-        key = command[1].lstrip("s3:").lstrip("S3:")
+        # if len(command) == 1:
+        #     command = command + [""]
+
+        key = command[1].lstrip("s3:").lstrip("S3:").strip()
+        if key == "/":
+            key = ""
+
+        s3m = S3_Manager()
+
         results = s3m.listdir(key, bucket_type=args.bucket, recursive=args.recursive)
         for line in results:
             print(line)
 
     elif command[0] == "rm":
         if len(command) == 1:
-            raise ValueError("'rm' should be followed by at least one file key.")
+            print("usage: python {0} rm s3_key [--bucket BUCKET]".format(os.path.basename(__file__)) +
+                  "\n\nRemove a file from the s3." +
+                  "\n\npositional arguments:" +
+                  "\n  s3_key             The file to remove." +
+                  "\n\noptions:" +
+                  bucketopt_message
+                  )
+            sys.exit(0)
 
-        # if command[1] in ("-h", "--help"):
-        #     print("python s3.py rm S3_FILENAME  [--bucket | -b BUCKET]"
-        #           "\n            Remove a file from the S3.")
-        #     sys.exit(0)
+        s3m = S3_Manager()
 
         for key in command[1:]:
             # The "s3:" is not mandatory. Strip it off if it exists.
@@ -267,16 +290,25 @@ if __name__ == "__main__":
             s3m.delete(key, bucket_type=args.bucket)
 
     elif command[0] in ("cp", "mv"):
-        # The only difference between "cp" and "mv" is whether we delete the original file after copying over.
-        # handle them both here.
-        # if len(command) > 1 and command[1] in ("-h", "--help"):
-        #     print(f"python s3.py {command[0]} s3:S3_FILENAME LOCAL_FILE_OR_DIR [--bucket | -b BUCKET]"
-        #           "\n   or"
-        #           f"python s3.py {command[0]} LOCAL_FILE s3:S3_FILENAME_OR_DIR [--bucket | -b BUCKET]" +
-        #           "\n            {0}".format("Copy" if command[0] == "cp" else "Move") +
-        #           " a file to/from the S3."
-        #           "\n            The S3 location must be preceded by an 's3:' prefix."
-        #           "\n            Only one entry should contain this 's3:' prefix.")
+        if len(command) == 1:
+            move_or_copy = "copy" if (command[0] == "cp") else "move"
+            print("usage 1: python {0} {1} s3:s3_key file_or_directory [--bucket BUCKET]".format(os.path.basename(__file__), command[0]) +
+                  f"\n             {move_or_copy.capitalize()} a file from the s3 into the local file system." +
+                  "\n\nusage 2: python {0} {1} file s3:s3_key_or_prefix [--bucket BUCKET]".format(os.path.basename(__file__), command[0]) +
+                  f"\n             {move_or_copy.capitalize()} a local file into the s3." +
+                  "\n\nOne of the positional arguments must start with 's3:' to identify which argument corresponds to the s3 bucket."
+                  "The other is assumed to be a local file."
+                  "\n\npositional arguments (only two are used in any command, one s3: argument and another local):" +
+                  "\n  s3:s3_key            A file in the s3 bucket." +
+                  "\n  s3:s3_key_or_prefix  A file or directory (prefix) in the s3 bucket. Use an empty prefix ('s3:')"
+                  f"\n                       to {move_or_copy} files into the root directory of the bucket." +
+                  "\n  file                 A file on the local file system." +
+                  "\n  file_or_directory    A file or directory on the local file system."
+                  "\n\noptions:" +
+                  bucketopt_message
+                  )
+            sys.exit(0)
+
 
         if len(command) != 3:
             raise ValueError(f"'{command[0]}' should be followed by exactly 2 files, one of them preceded by 's3:'")
@@ -296,7 +328,9 @@ if __name__ == "__main__":
 
         local_file = local_file[0]
         # Trim off the "s3:" in front of the s3 file.
-        s3_file = s3_file[0][3:]
+        s3_file = s3_file.lstrip("s3:").lstrip("S3:").strip()
+        if (s3_file == "") and downloading:
+                raise ValueError(f"Cannot {move_or_copy} the base directory (s3:) of the s3 bucket.")
 
         if downloading:
             s3m.download(s3_file,
