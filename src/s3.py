@@ -194,7 +194,10 @@ class S3_Manager:
         else:
             # Get the full string that occurs after the directory listed, for each subset.
             result = self.get_client().list_objects(Bucket=bucket_name, Prefix=key, Delimiter="/")
-            subdirs = [subdir["Prefix"] for subdir in result["CommonPrefixes"]]
+            if "CommonPrefixes" in result.keys():
+                subdirs = [subdir["Prefix"] for subdir in result["CommonPrefixes"]]
+            else:
+                subdirs = []
             files = [f["Key"] for f in result["Contents"]]
             return subdirs + files
 
@@ -234,9 +237,11 @@ if __name__ == "__main__":
     # This optional parameter appears in most
     bucketopt_message = \
     "\n  --bucket BUCKET, -b BUCKET" + \
-    "\n                     Tag for the IVERT bucket type being used. Options are 'database', 'input' and 'output'." + \
-    "\n                     The actual names of the buckets are pulled from ivert_config.ini." + \
-    "\n                     Default is 'database', so commands will (by default) be referenced to the s3 bucket" + \
+    "\n                     Tag for the IVERT bucket type being used. Options are" + \
+    "\n                     'database', 'input' and 'output'." + \
+    "\n                     The actual names of the buckets are pulled from"
+    "\n                     ivert_config.ini. Default is 'database', so commands" + \
+    "\n                     will (by default) be referenced to the s3 bucket" + \
     "\n                     Where the IVERT database resides."
 
 
@@ -250,11 +255,13 @@ if __name__ == "__main__":
             print("usage: python {0} ls s3_prefix [--recursive] [--bucket BUCKET]".format(os.path.basename(__file__)) +
                   "\n\nList all the files in that prefix directory." +
                   "\n\npositional arguments:" +
-                  "\n  s3_prefix          The directory (called a 'prefix' in s3) in which to list all files present." +
-                  "\n                     Prints the full keyname (with prefix directories). Use an empty prefix ('s3:', '.', or '/'))"
+                  "\n  s3_prefix          The directory (called a 'prefix' in s3) in which to list"
+                  "\n                     all files present. Prints the full keyname (with prefix"
+                  "\n                     directories). Use an empty prefix ('s3:', '.', or '/'))"
                   "\n                     to list files in the root directory of the bucket." +
                   "\n\noptions:" +
-                  "\n  --recursive, -r    Recursively list all files in that directory, including within sub-folders." +
+                  "\n  --recursive, -r    Recursively list all files in that directory, including"
+                  "\n                     within sub-folders." +
                   bucketopt_message
                   )
             sys.exit(0)
