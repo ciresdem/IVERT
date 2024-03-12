@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import ast
 import configparser
-from .is_aws import is_aws
+from . import is_aws
 import os
 import re
 import sys
@@ -35,7 +35,7 @@ class config:
         self._configfile = os.path.abspath(configfile)
         # print(self._configfile)
         self._config = configparser.ConfigParser()
-        self._is_aws = is_aws()
+        self.is_aws = is_aws.is_aws()
 
         self._config.read(configfile)
 
@@ -65,7 +65,7 @@ class config:
             self._read_option(k, v)
 
         # Then, if we're running in an AWS environment, read all the values from the [AWS] section.
-        if self._is_aws:
+        if self.is_aws:
             section = self._config["AWS"]
             for k, v in section.items():
                 self._read_option(k, v)

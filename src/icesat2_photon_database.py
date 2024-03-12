@@ -28,7 +28,6 @@ import nsidc_download
 import s3
 # import datasets.CopernicusDEM.source_dataset_CopernicusDEM as Copernicus
 # import datasets.dataset_geopackage                         as dataset_geopackage
-# import etopo.generate_empty_grids # ??? TODO: Get rid of this dependency.
 import utils.configfile
 import utils.progress_bar
 import utils.sizeof_format
@@ -64,194 +63,192 @@ class ICESat2_Database:
         """Return self.gdf if exists, otherwise read self.gpkg_name, save it to self.gdf and return."""
         if self.gdf is None:
             if not os.path.exists(self.gpkg_fname) and not os.path.exists(self.gpkg_fname_compressed):
-                if self.ivert_config._is_aws:
-                    s3 = self.get_s3_manager()
+                if self.ivert_config.is_aws:
+                    s3_manager = self.get_s3_manager()
                     s3_geopackage = self.ivert_config.s3_photon_geopackage
-                    s3_geopaclage_compressed = os.path.splitext(s3_geopackage)[0] + ".blosc2"
-                    if s3.exists(self.ivert_config.s3_photon_geopackage, bucket_type="database"):
-                        s3.get_file()
-                        # TODO: FINISH HERE.
+                    s3_geopackage_compressed = os.path.splitext(s3_geopackage)[0] + ".blosc2"
+                    if s3_manager.exists(s3_geopackage_compressed, bucket_type="database"):
+                        is_compressed = True
+                        s3_file_to_fetch = s3_geopackage_compressed
+                    elif s3_manager.exists(self.ivert_config.s3_photon_geopackage, bucket_type="database"):
+                        is_compressed = False
+                        s3_file_to_fetch = s3_geopackage
+                    else:
+                        raise FileNotFoundError(os.path.basename(self.gpkg_fname) + " not found on disk nor in S3 bucket '{0}'".format(s3.get_bucketname()))
 
+                    s3_manager.download(s3_file_to_fetch,
+                                        self.gpkg_fname_compressed if is_compressed else self.gpkg_fname,
+                                        delete_original=False,
+                                        fail_quietly=not verbose)
 
             if os.path.exists(self.gpkg_fname):
                 print("Reading", os.path.basename(self.gpkg_fname))
-                if os.path.splitext(self.gpkg_fname)[1] == ".gpkg":
-                    self.gdf = geopandas.read_file(self.gpkg_fname, mode='r')
-                elif os.path.splitext(self.gpkg_fname)[1] == ".gz":
-                    self.gdf = pandas.read_pickle(self.gpkg_fname)
-                else:
-                    raise NotImplementedError(
-                        "Uknown file format for photon_tile_geopackage: {0}. Can accept .gpkg or .gz.".format(
-                            os.path.basename(self.gpkg_fname)))
+                self.gdf = geopandas.read_file(self.gpkg_fname, mode='r')
             elif os.path.exists(self.gpkg_fname_compressed):
-                print("Reading", os.path.basenem(self.gpkg_fname_compressed))
-
-            elif self.ivert_config._is_aws:
-                pass
-                # If we're on an AWS bucket and the GeoPackage isn't in its local space, it might be sitting in an S3
-                # bucket. Download it from there.
+                print("Reading", os.path.basename(self.gpkg_fname_compressed))
+                self.gdf = utils.pickle_blosc.read(self.gpkg_fname_compressed)
             else:
-                self.gdf = self.create_new_geopackage(verbose=verbose)
+                raise FileNotFoundError("Could not located photon_tile_geopackage to read IVERT GeoDataFrame.")
 
         return self.gdf
 
     def get_s3_manager(self):
         if self.s3_manager is None:
-            self.s3_manager = s3_manager.S3_Manager()
+            self.s3_manager = s3.S3_Manager()
 
         return self.s3_manager
 
     def numrecords(self):
         return len(self.get_gdf(verbose=False))
 
-    def create_new_geopackage(self, populate_with_existing_tiles=True, verbose=True):
-        """Create the geopackage that handles the photon database files of ICESat-2 data."""
-        # Columns to have : filename, xmin, xmax, ymin, ymax, numphotons, numphotons_canopy, numphotons_ground, geometry
-        # "numphotons", "numphotons_canopy", "numphotons_ground" are all set to zero at first. Are populated later as files are written.
-        # "geometry" will be a square polygon bounded by xmin, xmax, ymin, ymax
+    # def create_new_geopackage(self, populate_with_existing_tiles=True, verbose=True):
+    #     """Create the geopackage that handles the photon database files of ICESat-2 data."""
+    #     # Columns to have : filename, xmin, xmax, ymin, ymax, numphotons, numphotons_canopy, numphotons_ground, geometry
+    #     # "numphotons", "numphotons_canopy", "numphotons_ground" are all set to zero at first. Are populated later as files are written.
+    #     # "geometry" will be a square polygon bounded by xmin, xmax, ymin, ymax
+    #
+    #     # TODO: Get rid of the Copernicus data dependency for "where ICESat-2 data exists". We need to find another way
+    #     # to do this, especially since we'll be grabbing bathymetry data using CShelph as well.
+    #
+    #     # Since we're interested in land-only, we will use the CopernicusDEM dataset
+    #     # to determine where land tiles might be.
+    #     copernicus_gdf = None # TODO: Read the default Copernicus dataframe here to get a list of 1* land tiles.
+    #     # copernicus_gdf = Copernicus.source_dataset_CopernicusDEM().get_geodataframe(verbose=verbose)
+    #     copernicus_fnames = [os.path.split(fn)[1] for fn in copernicus_gdf["filename"].tolist()]
+    #     copernicus_bboxes = [self.get_bbox_from_copernicus_filename(fn) for fn in copernicus_fnames]
+    #     copernicus_bboxes.extend(etopo.generate_empty_grids.get_azerbaijan_1deg_bboxes()) # TODO: Eliminate this dependency as well.
+    #     # Skip all bounding boxes with a y-min of -90, since ICESat-2 only goes down to -89.
+    #     # Don't need to worry about north pole, since the northernmost land bbox tops out at 84*N
+    #     copernicus_bboxes = [bbox for bbox in copernicus_bboxes if bbox[1] > -90]
+    #
+    #     copernicus_bboxes = sorted(copernicus_bboxes)
+    #
+    #     # Subtract the epsilon just to make sure we don't accidentally add an extra box due to a rounding error
+    #     tiles_to_degree_ratio = int(1/(self.tile_resolution_deg - 0.0000000001))
+    #     N = len(copernicus_bboxes) * (tiles_to_degree_ratio)**2
+    #
+    #     tile_filenames = [None] * N
+    #     tile_xmins = numpy.empty((N,), dtype=numpy.float32)
+    #     tile_xmaxs = numpy.empty((N,), dtype=numpy.float32)
+    #     tile_ymins = numpy.empty((N,), dtype=numpy.float32)
+    #     tile_ymaxs = numpy.empty((N,), dtype=numpy.float32)
+    #     tile_geometries = [None] * N
+    #     # These fields are all initialized to zero. Will be filled in as files are created.
+    #     tile_numphotons = numpy.zeros((N,), dtype=numpy.uint32)
+    #     tile_numphotons_canopy = numpy.zeros((N,), dtype=numpy.uint32)
+    #     tile_numphotons_ground = numpy.zeros((N,), dtype=numpy.uint32)
+    #     tile_is_populated = numpy.zeros((N,), dtype=bool)
+    #     # Loop through each copernicus bbox, get tile bboxes
+    #     i_count = 0
+    #
+    #     if verbose:
+    #         print("Creating", self.gpkg_fname, "...")
+    #
+    #     for cop_bbox in copernicus_bboxes:
+    #
+    #         bbox_xrange = numpy.arange(cop_bbox[0], cop_bbox[2]-0.0000000001, self.tile_resolution_deg)
+    #         bbox_yrange = numpy.arange(cop_bbox[1], cop_bbox[3]-0.0000000001, self.tile_resolution_deg)
+    #         assert len(bbox_xrange) == tiles_to_degree_ratio
+    #         assert len(bbox_yrange) == tiles_to_degree_ratio
+    #         for tile_xmin in bbox_xrange:
+    #             tile_xmax = tile_xmin + self.tile_resolution_deg
+    #             for tile_ymin in bbox_yrange:
+    #                 tile_ymax = tile_ymin + self.tile_resolution_deg
+    #                 tile_fname = os.path.join(self.tiles_directory, "photon_tile_{0:s}{1:05.2f}_{2:s}{3:06.2f}_{4:s}{5:05.2f}_{6:s}{7:06.2f}.h5".format(\
+    #                                                         "S" if (tile_ymin < 0) else "N",
+    #                                                         abs(tile_ymin),
+    #                                                         "W" if (tile_xmin < 0) else "E",
+    #                                                         abs(tile_xmin),
+    #                                                         "S" if (tile_ymax < 0) else "N",
+    #                                                         abs(tile_ymax),
+    #                                                         "W" if (tile_xmax < 0) else "E",
+    #                                                         abs(tile_xmax)))
+    #
+    #                 tile_polygon = shapely.geometry.Polygon([(tile_xmin,tile_ymin),
+    #                                                          (tile_xmin,tile_ymax),
+    #                                                          (tile_xmax,tile_ymax),
+    #                                                          (tile_xmax,tile_ymin),
+    #                                                          (tile_xmin,tile_ymin)])
+    #
+    #                 tile_filenames[i_count] = tile_fname
+    #                 tile_xmins[i_count] = tile_xmin
+    #                 tile_xmaxs[i_count] = tile_xmax
+    #                 tile_ymins[i_count] = tile_ymin
+    #                 tile_ymaxs[i_count] = tile_ymax
+    #                 tile_geometries[i_count] = tile_polygon
+    #
+    #                 i_count += 1
+    #
+    #     data_dict = {'filename': tile_filenames,
+    #                  'xmin'    : tile_xmins,
+    #                  'xmax'    : tile_xmaxs,
+    #                  'ymin'    : tile_ymins,
+    #                  'ymax'    : tile_ymaxs,
+    #                  'numphotons'       : tile_numphotons,
+    #                  'numphotons_canopy': tile_numphotons_canopy,
+    #                  'numphotons_ground': tile_numphotons_ground,
+    #                  'is_populated'     : tile_is_populated,
+    #                  'geometry': tile_geometries
+    #                  }
+    #
+    #     # Create the geodataframe
+    #     self.gdf = geopandas.GeoDataFrame(data_dict, geometry='geometry', crs=self.crs)
+    #     # Compute the spatial index, just to see if it saves it (don't think so but ???)
+    #     # sindex = self.gdf.sindex
+    #
+    #     if verbose:
+    #         print("gdf has", len(self.gdf), "tile bounding boxes.")
+    #
+    #     if populate_with_existing_tiles:
+    #         # Read all the existing tiles, get the stats, put them in there.
+    #         existing_mask = self.gdf['filename'].apply(os.path.exists, convert_dtype=False)
+    #         # Get the subset of tiles where the file currently exists on disk.
+    #         gdf_existing = self.gdf[existing_mask]
+    #
+    #         if verbose:
+    #             print("Reading", len(gdf_existing), "existing tiles to populate database.")
+    #
+    #         for i,row in enumerate(gdf_existing.itertuples()):
+    #             tile_df = pandas.read_hdf(row.filename, mode='r')
+    #
+    #             self.gdf.loc[row.Index, "numphotons"] = len(tile_df)
+    #             self.gdf.loc[row.Index, "numphotons_canopy"] = numpy.count_nonzero(tile_df['class_code'].between(2,3,inclusive='both'))
+    #             self.gdf.loc[row.Index, "numphotons_ground"] = numpy.count_nonzero(tile_df['class_code']==1)
+    #             self.gdf.loc[row.Index, 'is_populated'] = True
+    #
+    #             if verbose:
+    #                 utils.progress_bar.ProgressBar(i+1, len(gdf_existing), suffix="{0}/{1}".format(i+1, len(gdf_existing)))
+    #
+    #     # Save it out to an HDF file.
+    #     self.save_geopackage(verbose=verbose)
+    #
+    #     return self.gdf
 
-        # TODO: Get rid of the Copernicus data dependency for "where ICESat-2 data exists". We need to find another way
-        # to do this, especially since we'll be grabbing bathymetry data using CShelph as well.
-
-        # Since we're interested in land-only, we will use the CopernicusDEM dataset
-        # to determine where land tiles might be.
-        copernicus_gdf = None # TODO: Read the default Copernicus dataframe here to get a list of 1* land tiles.
-        # copernicus_gdf = Copernicus.source_dataset_CopernicusDEM().get_geodataframe(verbose=verbose)
-        copernicus_fnames = [os.path.split(fn)[1] for fn in copernicus_gdf["filename"].tolist()]
-        copernicus_bboxes = [self.get_bbox_from_copernicus_filename(fn) for fn in copernicus_fnames]
-        copernicus_bboxes.extend(etopo.generate_empty_grids.get_azerbaijan_1deg_bboxes()) # TODO: Eliminate this dependency as well.
-        # Skip all bounding boxes with a y-min of -90, since ICESat-2 only goes down to -89.
-        # Don't need to worry about north pole, since the northernmost land bbox tops out at 84*N
-        copernicus_bboxes = [bbox for bbox in copernicus_bboxes if bbox[1] > -90]
-
-        copernicus_bboxes = sorted(copernicus_bboxes)
-
-        # Subtract the epsilon just to make sure we don't accidentally add an extra box due to a rounding error
-        tiles_to_degree_ratio = int(1/(self.tile_resolution_deg - 0.0000000001))
-        N = len(copernicus_bboxes) * (tiles_to_degree_ratio)**2
-
-        tile_filenames = [None] * N
-        tile_xmins = numpy.empty((N,), dtype=numpy.float32)
-        tile_xmaxs = numpy.empty((N,), dtype=numpy.float32)
-        tile_ymins = numpy.empty((N,), dtype=numpy.float32)
-        tile_ymaxs = numpy.empty((N,), dtype=numpy.float32)
-        tile_geometries = [None] * N
-        # These fields are all initialized to zero. Will be filled in as files are created.
-        tile_numphotons = numpy.zeros((N,), dtype=numpy.uint32)
-        tile_numphotons_canopy = numpy.zeros((N,), dtype=numpy.uint32)
-        tile_numphotons_ground = numpy.zeros((N,), dtype=numpy.uint32)
-        tile_is_populated = numpy.zeros((N,), dtype=bool)
-        # Loop through each copernicus bbox, get tile bboxes
-        i_count = 0
-
-        if verbose:
-            print("Creating", self.gpkg_fname, "...")
-
-        for cop_bbox in copernicus_bboxes:
-
-            bbox_xrange = numpy.arange(cop_bbox[0], cop_bbox[2]-0.0000000001, self.tile_resolution_deg)
-            bbox_yrange = numpy.arange(cop_bbox[1], cop_bbox[3]-0.0000000001, self.tile_resolution_deg)
-            assert len(bbox_xrange) == tiles_to_degree_ratio
-            assert len(bbox_yrange) == tiles_to_degree_ratio
-            for tile_xmin in bbox_xrange:
-                tile_xmax = tile_xmin + self.tile_resolution_deg
-                for tile_ymin in bbox_yrange:
-                    tile_ymax = tile_ymin + self.tile_resolution_deg
-                    tile_fname = os.path.join(self.tiles_directory, "photon_tile_{0:s}{1:05.2f}_{2:s}{3:06.2f}_{4:s}{5:05.2f}_{6:s}{7:06.2f}.h5".format(\
-                                                            "S" if (tile_ymin < 0) else "N",
-                                                            abs(tile_ymin),
-                                                            "W" if (tile_xmin < 0) else "E",
-                                                            abs(tile_xmin),
-                                                            "S" if (tile_ymax < 0) else "N",
-                                                            abs(tile_ymax),
-                                                            "W" if (tile_xmax < 0) else "E",
-                                                            abs(tile_xmax)))
-
-                    tile_polygon = shapely.geometry.Polygon([(tile_xmin,tile_ymin),
-                                                             (tile_xmin,tile_ymax),
-                                                             (tile_xmax,tile_ymax),
-                                                             (tile_xmax,tile_ymin),
-                                                             (tile_xmin,tile_ymin)])
-
-                    tile_filenames[i_count] = tile_fname
-                    tile_xmins[i_count] = tile_xmin
-                    tile_xmaxs[i_count] = tile_xmax
-                    tile_ymins[i_count] = tile_ymin
-                    tile_ymaxs[i_count] = tile_ymax
-                    tile_geometries[i_count] = tile_polygon
-
-                    i_count += 1
-
-        data_dict = {'filename': tile_filenames,
-                     'xmin'    : tile_xmins,
-                     'xmax'    : tile_xmaxs,
-                     'ymin'    : tile_ymins,
-                     'ymax'    : tile_ymaxs,
-                     'numphotons'       : tile_numphotons,
-                     'numphotons_canopy': tile_numphotons_canopy,
-                     'numphotons_ground': tile_numphotons_ground,
-                     'is_populated'     : tile_is_populated,
-                     'geometry': tile_geometries
-                     }
-
-        # Create the geodataframe
-        self.gdf = geopandas.GeoDataFrame(data_dict, geometry='geometry', crs=self.crs)
-        # Compute the spatial index, just to see if it saves it (don't think so but ???)
-        # sindex = self.gdf.sindex
-
-        if verbose:
-            print("gdf has", len(self.gdf), "tile bounding boxes.")
-
-        if populate_with_existing_tiles:
-            # Read all the existing tiles, get the stats, put them in there.
-            existing_mask = self.gdf['filename'].apply(os.path.exists, convert_dtype=False)
-            # Get the subset of tiles where the file currently exists on disk.
-            gdf_existing = self.gdf[existing_mask]
-
-            if verbose:
-                print("Reading", len(gdf_existing), "existing tiles to populate database.")
-
-            for i,row in enumerate(gdf_existing.itertuples()):
-                tile_df = pandas.read_hdf(row.filename, mode='r')
-
-                self.gdf.loc[row.Index, "numphotons"] = len(tile_df)
-                self.gdf.loc[row.Index, "numphotons_canopy"] = numpy.count_nonzero(tile_df['class_code'].between(2,3,inclusive='both'))
-                self.gdf.loc[row.Index, "numphotons_ground"] = numpy.count_nonzero(tile_df['class_code']==1)
-                self.gdf.loc[row.Index, 'is_populated'] = True
-
-                if verbose:
-                    utils.progress_bar.ProgressBar(i+1, len(gdf_existing), suffix="{0}/{1}".format(i+1, len(gdf_existing)))
-
-        # Save it out to an HDF file.
-        self.save_geopackage(verbose=verbose)
-
-        return self.gdf
-
-    def get_bbox_from_copernicus_filename(self, filename):
-        """From a CopernicusDEM filename, get the bbox [xmin,ymin,xmax,ymax].
-
-        We use this to generate where our icesat-2 photon tiles need to be.
-
-        This is specifically the Coperinicus 30m datasets (1 arc-second),
-        which are 1-degree tiles."""
-        # Copernicus tiles are all in Coperinicus_DSM_COG_10_NYY_00_EXXX_00_DEM.tif formats. Get the bboxes from there.
-        lat_letter_regex_filter = r"(?<=Copernicus_DSM_COG_10_)[NS](?=\d{2}_00_)"
-        lat_regex_filter = r"(?<=Copernicus_DSM_COG_10_[NS])\d{2}(?=_00_)"
-        lon_letter_regex_filter = r"(?<=Copernicus_DSM_COG_10_[NS]\d{2}_00_)[EW](?=\d{3}_00_DEM\.tif)"
-        lon_regex_filter = r"(?<=Copernicus_DSM_COG_10_[NS]\d{2}_00_[EW])\d{3}(?=_00_DEM\.tif)"
-
-        min_y = (1 if (re.search(lat_letter_regex_filter, filename).group() == "N") else -1) * \
-                int(re.search(lat_regex_filter, filename).group())
-        max_y = min_y + 1
-
-        min_x = (1 if (re.search(lon_letter_regex_filter, filename).group() == "E") else -1) * \
-                int(re.search(lon_regex_filter, filename).group())
-        max_x = min_x + 1
-
-        bbox = (min_x, min_y, max_x, max_y)
-
-        # print(filename, bbox)
-        return bbox
+    # def get_bbox_from_copernicus_filename(self, filename):
+    #     """From a CopernicusDEM filename, get the bbox [xmin,ymin,xmax,ymax].
+    #
+    #     We use this to generate where our icesat-2 photon tiles need to be.
+    #
+    #     This is specifically the Coperinicus 30m datasets (1 arc-second),
+    #     which are 1-degree tiles."""
+    #     # Copernicus tiles are all in Coperinicus_DSM_COG_10_NYY_00_EXXX_00_DEM.tif formats. Get the bboxes from there.
+    #     lat_letter_regex_filter = r"(?<=Copernicus_DSM_COG_10_)[NS](?=\d{2}_00_)"
+    #     lat_regex_filter = r"(?<=Copernicus_DSM_COG_10_[NS])\d{2}(?=_00_)"
+    #     lon_letter_regex_filter = r"(?<=Copernicus_DSM_COG_10_[NS]\d{2}_00_)[EW](?=\d{3}_00_DEM\.tif)"
+    #     lon_regex_filter = r"(?<=Copernicus_DSM_COG_10_[NS]\d{2}_00_[EW])\d{3}(?=_00_DEM\.tif)"
+    #
+    #     min_y = (1 if (re.search(lat_letter_regex_filter, filename).group() == "N") else -1) * \
+    #             int(re.search(lat_regex_filter, filename).group())
+    #     max_y = min_y + 1
+    #
+    #     min_x = (1 if (re.search(lon_letter_regex_filter, filename).group() == "E") else -1) * \
+    #             int(re.search(lon_regex_filter, filename).group())
+    #     max_x = min_x + 1
+    #
+    #     bbox = (min_x, min_y, max_x, max_y)
+    #
+    #     # print(filename, bbox)
+    #     return bbox
 
     def fill_in_missing_tile_entries(self, delete_csvs = True, save_to_disk = True, verbose = True):
         """Sometimes a photon_tile gets created and the _summary.csv file got deleted,
@@ -895,42 +892,38 @@ class ICESat2_Database:
 
     def read_photon_tile(self, tilename):
         """Read a photon tile. If the tilename doesn't exist, return None."""
-        # Check to make sure this is actually an HDF5 file we're reading.
+        # In v1 of the database we saved the entire path of the tile. This may be different on different machines.
+        # Instead, use the directory from ivert_config.icesat2_photon_tiles_directory
+        # v2 of the database uses just the file names (no directory). This will work either way.
+        tilename = os.path.join(self.ivert_config.icesat2_photon_tiles_directory, os.path.basename(tilename))
         base, ext = os.path.splitext(tilename)
-        assert ext.lower() in (".h5",".feather")
+        assert ext.lower() in (".h5", ".feather")
         # Read it here and return it. Pretty simple.
+
+        feather_name = base + ".feather"
+        h5_name = base + ".h5"
+        # If the file doesn't exist locally but we're in the AWS cloud, see if we can download it from an S3 bucket.
+        if not os.path.exists(feather_name) and not os.path.exists(h5_name) and self.ivert_config.is_aws:
+            s3_manager = self.get_s3_manager()
+            s3_photon_tiles_dir = self.ivert_config.s3_photon_tiles_directory
+            assert s3_photon_tiles_dir is not None
+            s3_feather_key = s3_photon_tiles_dir.rstrip("/") + "/" + os.path.basename(feather_name)
+            s3_h5_key = s3_photon_tiles_dir.rstrip("/") + "/" + os.path.basename(h5_name)
+            if s3_manager.exists(s3_feather_key):
+                s3_manager.download(s3_feather_key, tilename)
+            elif s3_manager.exists(s3_h5_key):
+                s3_manager.download(s3_h5_key, tilename)
 
         # To make the HDF5 and Feather formats basically interchangeable, first look for the one.
         # Then if you can't find it, look for the other.
         # Try the feather file first.
-        feather_name = base + ".feather"
         if os.path.exists(feather_name):
             return pandas.read_feather(feather_name)
-        h5_name = base + ".h5"
         if os.path.exists(h5_name):
             return pandas.read_hdf(h5_name, mode='r')
 
         # If neither of those work, return None if the file is not found.
         return None
-
-        # if ext == ".h5":
-        #     try:
-        #         return pandas.read_hdf(tilename, mode='r')
-        #     except FileNotFoundError:
-        #         feather_name = os.path.splitext(tilename)[0] + ".feather"
-        #         if os.path.exists(feather_name):
-        #             return pandas.read_feather(tilename)
-        #         else:
-        #             return None
-        # else:
-        #     try:
-        #         return pandas.read_feather(tilename)
-        #     except FileNotFoundError:
-        #         h5_name = os.path.splitext(tilename)[0] + ".h5"
-        #         if os.path.exists(h5_name):
-        #             return pandas.read_hdf(tilename, mode='r')
-        #         else:
-        #             return None
 
     def get_tiling_progress_mapname(self):
         """Output a map of the tiling progress so far.
@@ -1301,6 +1294,8 @@ if __name__ == "__main__":
             print(t2-t1, "s to build sindex after read.")
 
 
+if __name__ == "__main__":
+    pass
 
     # is2db.update_and_fix_photon_database()
 

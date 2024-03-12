@@ -187,7 +187,7 @@ class S3_Manager:
 
         resource = boto3.resource("s3")
         bucket = resource.Bucket(bucket_name)
-        # If we're recursing, just return everything.
+        # If we're recursing, just return everything that is in that Prefix.
         if recursive:
             files = bucket.objects.filter(Prefix=key).all()
             return [obj.key for obj in files]

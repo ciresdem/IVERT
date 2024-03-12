@@ -19,9 +19,10 @@ except:
 import utils.progress_bar as progress_bar
 import utils.parallel_funcs as parallel_funcs
 import utils.configfile
+import utils.pickle_blosc
 import convert_vdatum
 import coastline_mask
-import nsidc_download
+# import nsidc_download
 import plot_validation_results
 import classify_icesat2_photons
 import icesat2_photon_database
@@ -68,8 +69,10 @@ def read_dataframe_file(df_filename):
         dataframe = pandas.read_csv(df_filename)
     elif ext == ".feather":
         dataframe = pandas.read_feather(df_filename)
+    elif ext == ".blosc2":
+        dataframe = utils.pickle_blosc.read(df_filename)
     else:
-        raise NotImplementedError(f"ERROR: Unknown dataframe file extension '{ext}'. (Currently supporting .pickle, .h5, .hdf, .csv, .txt, or .feather)")
+        raise NotImplementedError(f"ERROR: Unknown dataframe file extension '{ext}'. (Currently supporting .pickle, .h5, .hdf, .csv, .txt, .feather, or .blosc2)")
 
     return dataframe
 
