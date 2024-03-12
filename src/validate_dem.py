@@ -1374,34 +1374,26 @@ def read_and_parse_args():
                         help='The input DEM.')
     parser.add_argument('output_h5', type=str, nargs="?", default="",
                         help='A .h5 file to put the output summary results. Default: Will put in the same directory & filename as the input_dem, just with .h5 instead of .tif.')
-    # parser.add_argument('-photon_h5', type=str, default="",
-    #                     help='The .h5 files where the ICESat-2 photon data resides. If this file exists (and --overwrite is not selected), this file will be read rather than generated. Otherwise, photon data will be put in here.')
-    parser.add_argument('-input_vdatum','-ivd', type=str, default="wgs84",
+    parser.add_argument('--input_vdatum','-ivd', type=str, default="wgs84",
                         help="Input DEM vertical datum. (Default: 'wgs84')" + \
                         " Currently supported datum arguments, not case-sensitive: ({})".format(",".join([str(vd) for vd in convert_vdatum.SUPPORTED_VDATUMS])))
-    parser.add_argument('-output_vdatum','-ovd', type=str, default="wgs84",
+    parser.add_argument('--output_vdatum','-ovd', type=str, default="wgs84",
                         help="Output vertical datum. (Default: 'wgs84')" + \
                         " Supports same datum list as input_vdatum, except for egm96 and equivalent.")
-    parser.add_argument('-datadir', type=str, default="",
+    parser.add_argument('--datadir', type=str, default="",
                         help="A scratch directory to write interim data files. Useful if user would like to save temp files elsewhere. Defaults to the output_h5 directory.")
-    # parser.add_argument('-interp_method', type=str, default="cubic",
-    #                     help="Interpolation method passed to gdal_warp for vertical datum conversions. Default 'cubic'. Call 'gdal_warp -h' for complete list of options.")
-    parser.add_argument('-band_num', type=int, default=1,
+    parser.add_argument('--band_num', type=int, default=1,
                         help="The band number (1-indexed) of the input_dem. (Default: 1)")
-    # parser.add_argument('-date_range', type=str, default="",
-    #                     help='The date range in which to search for signal photons, comma-separated. Ex: 2021-01-01,2021-12-31 (Default)')
-    parser.add_argument('-place_name', '-name', type=str, default=None,
+    parser.add_argument('--place_name', '-name', type=str, default=None,
                         help='A text name of the location, to put in the title of the plot (if --plot_results is selected)')
-    # parser.add_argument('--use_icesat2_photon_database', action='store_true', default=False,
-    #                     help="Use the optimized ICESat-2 photon database rather than downloading granules separately. This can save time & memory if the database has already been built on this machine.")
+    parser.add_argument("--numprocs", '-np', type=int, default=parallel_funcs.physical_cpu_count(),
+                        help='The number of sub-processes to run for this validation. Default to the maximum physical CPU count on this machine.')
     parser.add_argument('--delete_datafiles', action='store_true', default=False,
                         help='Delete the interim data files generated. Reduces storage requirements. (Default: keep them all.)')
     parser.add_argument('--use_urban_mask', action='store_true', default=False,
                         help="Use the WSL 'Urban Area' mask rather than OSM building footprints to mask out IceSat-2 data. Useful over lower-resolution (10m or coarser) dems, which tend to be bigger than building footprints.")
     parser.add_argument('--write_result_tifs', action='store_true', default=False,
                         help=""""Write output geotiff with the errors in cells that have ICESat-2 photons, NDVs elsewhere.""")
-    # parser.add_argument('--skip_icesat2_download', action="store_true", default=False,
-    #                     help="Skip ICESat-2 granule downloads. Get existing granules files from -datadir. Usefuil if you've already downloaded the needed data from NSIDC.")
     parser.add_argument("--outlier_sd_threshold", default="2.5",
                         help="Number of standard-deviations away from the mean to omit outliers. Default 2.5 (standard deviations). Choose 'None' if no outlier filtering is requested.")
     parser.add_argument('--plot_results', action="store_true", default=False,
@@ -1464,6 +1456,7 @@ if __name__ == "__main__":
                           outliers_sd_threshold=ast.literal_eval(args.outlier_sd_threshold),
                           mask_out_buildings=not args.use_urban_mask,
                           mask_out_urban=args.use_urban_mask,
+                          numprocs=args.numprocs,
                           quiet=args.quiet)
     # # fname = '/home/mmacferrin/Research/DATA/CopernicusDEM/data/30m/COP30_hh/Copernicus_DSM_COG_10_N26_00_W079_00_DEM.tif'
     # # output_file = "../data/freeport_coastline"
