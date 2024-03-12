@@ -426,22 +426,23 @@ class ICESat2_Database:
         dataframes_list = [None] * len(df_tiles_subset.index)
 
         for i, (idx, df_row) in enumerate(df_tiles_subset.iterrows()):
-            fname = df_row['filename']
-            # If the file already exists, read it and get the data.
-            # Look for either the .feather or the .h5 file.
-            if os.path.exists(fname) or os.path.exists(os.path.splitext(fname)[0]+".feather") or os.path.exists(os.path.splitext(fname)[0]+".h5"):
-                if os.path.exists(os.path.splitext(fname)[0]+".feather"):
-                    fname = os.path.splitext(fname)[0]+".feather"
-                elif os.path.exists(os.path.splitext(fname)[0]+".h5"):
-                    fname = os.path.splitext(fname)[0]+".h5"
-
-                if verbose:
-                    print("\t{0}/{1} Reading".format(i+1, len(df_tiles_subset)), os.path.split(fname)[1], "...", end="")
-                dataframes_list[i] = self.read_photon_tile(fname)
-                if verbose:
-                    print("Done.")
+            # fname = df_row['filename']
+            # # If the file already exists, read it and get the data.
+            # # Look for either the .feather or the .h5 file.
+            # if os.path.exists(fname) or os.path.exists(os.path.splitext(fname)[0]+".feather") or os.path.exists(os.path.splitext(fname)[0]+".h5"):
+            #     if os.path.exists(os.path.splitext(fname)[0]+".feather"):
+            #         fname = os.path.splitext(fname)[0]+".feather"
+            #     elif os.path.exists(os.path.splitext(fname)[0]+".h5"):
+            #         fname = os.path.splitext(fname)[0]+".h5"
+            #
+            if verbose:
+                print("\t{0}/{1} Reading".format(i+1, len(df_tiles_subset)), os.path.split(fname)[1], "...", end="")
+            tile_df = self.read_photon_tile(fname)
+            dataframes_list[i] = tile_df
+            if verbose:
+                print("Done.")
             # If the file doesn't exist, create it and get the data.
-            elif build_tiles_if_nonexistent:
+            if tile_df is None and build_tiles_if_nonexistent:
                 if verbose:
                     print("\t{0}/{1} Creating".format(i+1, len(df_tiles_subset)), os.path.split(fname)[1], "...")
                 dataframes_list[i] = self.create_photon_tile(df_row['geometry'],
