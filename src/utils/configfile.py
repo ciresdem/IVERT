@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 import ast
 import configparser
-import is_aws
+# If I import this script from a script in the parent directory, the "import is_aws" breaks. Instead, use "import utils/is_aws"
+try:
+    import is_aws
+except ModuleNotFoundError:
+    import utils.is_aws
 import os
 import re
 import sys
