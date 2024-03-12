@@ -14,7 +14,7 @@ class S3_Manager:
 
     def __init__(self):
         self.config = utils.configfile.config()
-        assert self.config._is_aws
+        assert self.config.is_aws
         # Different buckets for each type.
         self.bucket_dict = {"database": self.config.s3_name_database,
                             "input": self.config.s3_name_inputs,
