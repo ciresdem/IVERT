@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import ast
 import configparser
-from . import is_aws
+import is_aws
 import os
 import re
 import sys
