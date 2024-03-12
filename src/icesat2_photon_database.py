@@ -81,12 +81,12 @@ class ICESat2_Database:
                                         delete_original=False,
                                         fail_quietly=not verbose)
 
-            if os.path.exists(self.gpkg_fname):
-                print("Reading", os.path.basename(self.gpkg_fname))
-                self.gdf = geopandas.read_file(self.gpkg_fname, mode='r')
-            elif os.path.exists(self.gpkg_fname_compressed):
+            if os.path.exists(self.gpkg_fname_compressed):
                 print("Reading", os.path.basename(self.gpkg_fname_compressed))
                 self.gdf = utils.pickle_blosc.read(self.gpkg_fname_compressed)
+            elif os.path.exists(self.gpkg_fname):
+                print("Reading", os.path.basename(self.gpkg_fname))
+                self.gdf = geopandas.read_file(self.gpkg_fname, mode='r')
             else:
                 raise FileNotFoundError("Could not located photon_tile_geopackage to read IVERT GeoDataFrame.")
 
@@ -307,7 +307,8 @@ class ICESat2_Database:
 
     def save_geopackage(self, gdf=None,
                               use_tempfile = False,
-                              also_delete_redundant_csvs=False,
+                              compress = False,
+                              # also_delete_redundant_csvs=False,
                               verbose=True):
         """After writing or altering data in the geo-dataframe, save it back out to disk.
 
@@ -321,7 +322,9 @@ class ICESat2_Database:
         if not gdf is self.gdf:
             self.gdf = gdf
 
-        base, ext = os.path.splitext(self.gpkg_fname)
+        file_to_write = self.gpkg_fname_compressed if compress else self.gpkg_fname
+
+        base, ext = os.path.splitext(file_to_write)
 
         if use_tempfile:
             tempfile_name = base + "_TEMP" + ext
@@ -336,14 +339,14 @@ class ICESat2_Database:
                 try:
                     if ext == ".gpkg":
                         gdf.to_file(tempfile_name, layer="icesat2", driver="GPKG")
-                    elif ext == ".gz":
-                        gdf.to_pickle(tempfile_name)
+                    elif ext == ".blosc2":
+                        utils.pickle_blosc.write(gdf, tempfile_name)
                     else:
                         raise NotImplementedError(
                             "Uknown file format for photon_tile_geopackage: {0}. Can accept .gpkg or .gz.".format(
-                                os.path.basename(self.gpkg_fname)))
-                    os.remove(self.gpkg_fname)
-                    shutil.move(tempfile_name, self.gpkg_fname)
+                                os.path.basename(file_to_write)))
+                    os.remove(file_to_write)
+                    shutil.move(tempfile_name, file_to_write)
                     success = True
                 except:
                     # Delete the tempfile, then re-raise the exception.
@@ -355,14 +358,14 @@ class ICESat2_Database:
         else:
             # Write the file.
             if ext == ".gpkg":
-                gdf.to_file(self.gpkg_fname, layer="icesat2", driver='GPKG')
-            elif ext == ".gz":
-                gdf.to_pickle(self.gpkg_fname)
+                gdf.to_file(file_to_write, layer="icesat2", driver='GPKG')
+            elif ext == ".blosc2":
+                utils.pickle_blosc.write(gdf, file_to_write)
             else:
-                raise NotImplementedError("Uknown file format for photon_tile_geopackage: {0}. Can accept .gpkg or .gz.".format(os.path.basename(self.gpkg_fname)))
+                raise NotImplementedError("Uknown file format for photon_tile_geopackage: {0}. Can accept .gpkg or .gz.".format(os.path.basename(file_to_write)))
 
         if verbose:
-            print(os.path.split(self.gpkg_fname)[1], "written with", len(gdf), "entries.")
+            print(os.path.basename(file_to_write), "written with", len(gdf), "entries.")
         return
 
         # if also_delete_redundant_csvs:
@@ -426,17 +429,9 @@ class ICESat2_Database:
         dataframes_list = [None] * len(df_tiles_subset.index)
 
         for i, (idx, df_row) in enumerate(df_tiles_subset.iterrows()):
-            # fname = df_row['filename']
-            # # If the file already exists, read it and get the data.
-            # # Look for either the .feather or the .h5 file.
-            # if os.path.exists(fname) or os.path.exists(os.path.splitext(fname)[0]+".feather") or os.path.exists(os.path.splitext(fname)[0]+".h5"):
-            #     if os.path.exists(os.path.splitext(fname)[0]+".feather"):
-            #         fname = os.path.splitext(fname)[0]+".feather"
-            #     elif os.path.exists(os.path.splitext(fname)[0]+".h5"):
-            #         fname = os.path.splitext(fname)[0]+".h5"
-            #
+            fname = df_row['filename']
             if verbose:
-                print("\t{0}/{1} Reading".format(i+1, len(df_tiles_subset)), os.path.split(fname)[1], "...", end="")
+                print("\t{0}/{1} Reading".format(i+1, len(df_tiles_subset)), os.path.basename(fname), "...", end="")
             tile_df = self.read_photon_tile(fname)
             dataframes_list[i] = tile_df
             if verbose:
