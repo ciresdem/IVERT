@@ -197,7 +197,7 @@ def find_bad_granules_in_a_dataset(results_dirname,
 
     # Find the DEM name (.tif) associated with each photon_database fname in the same directory.
     fbases = [os.path.basename(fn[:re.search(photon_results_regex, fn).span()[0]]) + ".tif" for fn in list_of_photon_results_datasets]
-    tif_list = utils.traverse_directory.list_files(results_dirname, regex_match="\.tif\Z", depth=-1 if recurse else 1)
+    tif_list = utils.traverse_directory.list_files(results_dirname, regex_match=r"\.tif\Z", depth=-1 if recurse else 1)
     list_of_dems = [None] * len(fbases)
     for i,fb in enumerate(fbases):
         for tif in tif_list:
@@ -592,7 +592,7 @@ def symlink_bad_granule_plots_to_histogram_dir(plotdir, histdir):
 
 
 def accumulate_bad_granule_dfs(dirname,
-                               bad_granule_regex = "_BAD_GRANULES\.csv\Z",
+                               bad_granule_regex=r"_BAD_GRANULES\.csv\Z",
                                verbose = True):
     """Run through a whole dataset, find all the "_BAD_GRANULES.csv" filenames, accumulate them all into a collective dataframe.
     NOTE: Many may have repeat granule names from their respective DEMs. This is okay.
@@ -727,9 +727,9 @@ def get_list_of_granules_to_reject(bad_granule_csv = my_config._abspath(my_confi
 
 
 def delete_results_with_bad_granules(dirname,
-                                     dem_regex = "v[123]\.tif\Z",
-                                     photon_db_regex = r"_results_photon_level_results\.h5\Z",
-                                     verbose = True):
+                                     dem_regex=r"v[123]\.tif\Z",
+                                     photon_db_regex=r"_results_photon_level_results\.h5\Z",
+                                     verbose=True):
     """Run through a results directory and elimiate all results that contain bad granules.
 
     It will be assumed that the "photon-level results" will have been generated, which

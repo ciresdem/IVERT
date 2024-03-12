@@ -167,7 +167,7 @@ def define_args():
     parser.add_argument("-output_vdatum", "-o", type=str, default="itrf2014",
                         help="Output vertical datum.")
     parser.add_argument("-input_file_filter", "-filter", type=str, default=r".tif\Z",
-                        help="Regex string to search for in input file names. Ignore all other files. Default '.tif\Z', indicating .tif at the end of the string.")
+                        help=r"Regex string to search for in input file names. Ignore all other files. Default '.tif\Z', indicating .tif at the end of the string.")
     parser.add_argument("-output_folder", "-dir", default=None,
                         help="Directory in which to put the output files. Ignored if -output_filename is given. Default: Use same directory as input file directory.")
     parser.add_argument("-output_subdir", "-sdir", default=None,

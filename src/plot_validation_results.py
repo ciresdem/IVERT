@@ -176,7 +176,7 @@ def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
     text_left = False # not ((center - cutoffs[0]) < (cutoffs[1] - center))
     txt = ax1.text(0.11, # if text_left else 0.97,
                    0.95, # 0.85 if text_left else 0.95,
-                   "{0:.2f} $\pm$ {1:.2f} m".format(center, std),
+                   r"{0:.2f} $\pm$ {1:.2f} m".format(center, std),
                    ha="left", # if text_left else "right",
                    va="top",
                    fontsize="small",
@@ -262,7 +262,7 @@ def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
     center = numpy.mean(numphotons_intd)
     std = numpy.std(numphotons_intd)
 
-    ax3.text(0.95, 0.95, "{0:d} $\pm$ {1:d}\nphotons per cell".format(int(numpy.round(center)), int(numpy.round(std))),
+    ax3.text(0.95, 0.95, "{0:d} $\\pm$ {1:d}\nphotons per cell".format(int(numpy.round(center)), int(numpy.round(std))),
              ha="right", va="top",
              fontsize="small",
              transform=ax3.transAxes)
@@ -298,7 +298,7 @@ def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
     # median = numpy.median(canopy_fraction)
     canopy_mask = (canopy_fraction > 0.0) & numpy.isfinite(canopy_fraction) & ~numpy.isnan(canopy_fraction)
 
-    ax4.text(0.95, 0.95, "{0:0.1f} % of cells have >0 cover:\n{1:0.1f} $\pm$ {2:0.1f} % canopy cover\nin non-zero cells".format( \
+    ax4.text(0.95, 0.95, "{0:0.1f} % of cells have >0 cover:\n{1:0.1f} $\\pm$ {2:0.1f} % canopy cover\nin non-zero cells".format( \
                          numpy.count_nonzero(canopy_mask) * 100 / canopy_fraction.size,
                          numpy.mean(canopy_fraction[canopy_mask]),
                          numpy.std(canopy_fraction[canopy_mask])),
