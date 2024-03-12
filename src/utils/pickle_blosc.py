@@ -2,9 +2,6 @@
 import pickle
 import blosc2
 
-
-
-
 def write(obj, fname, flags='wb'):
     pickled_data = pickle.dumps(obj)
     compressed_pickle = blosc2.compress(pickled_data)
