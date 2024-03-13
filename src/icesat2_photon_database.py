@@ -376,15 +376,8 @@ class ICESat2_Database:
     def query_geopackage(self, polygon_or_bbox, return_whole_records=True, verbose=True):
         """Return the photon database tile filenames that intersect the polygon in question.
 
-        Called by get_photon_database().
-
-        'use_sindex' determines whether or not we use a spatial index (geopackage.sindex) to
-        spatially query the database or not. If I'm querying it repeatedly it makes sense.
-        If I'm only opening the file once and querying once, it doesn't make sense since it
-        has to re-generate the spatial index upon the first use of it.
-
         If return_whole_records is True, then return the entire dataset subset, including all the fields.
-            If False, then just return the list of filenames.
+        If False, then just return the list of filenames.
         """
         # If we have a bounding box, query it using the bounds
         if (type(polygon_or_bbox) in (list, tuple)) and (len(polygon_or_bbox) == 4):

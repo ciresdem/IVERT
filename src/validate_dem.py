@@ -668,8 +668,8 @@ def validate_dem_parallel(dem_name,
         icesat2_photon_database_obj = icesat2_photon_database.ICESat2_Database()
 
     photon_df = icesat2_photon_database_obj.get_photon_database(dem_bbox,
-                                                                build_tiles_if_nonexistent = True,
-                                                                verbose = not quiet)
+                                                                build_tiles_if_nonexistent=False,
+                                                                verbose=not quiet)
     if photon_df is None:
         if mark_empty_results:
             with open(empty_results_filename, 'w') as f:

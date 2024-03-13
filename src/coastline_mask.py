@@ -28,6 +28,7 @@ import utils.pyproj_funcs
 import utils.configfile as configfile
 ivert_config = configfile.config()
 
+gdal.UseExceptions()
 
 def is_this_run_in_ipython():
     """Tell whether we're running in an IPython console or not. Useful for rich.print()."""
