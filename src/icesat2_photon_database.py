@@ -899,7 +899,8 @@ class ICESat2_Database:
             assert s3_photon_tiles_dir is not None
             s3_feather_key = s3_photon_tiles_dir.rstrip("/") + "/" + os.path.basename(feather_name)
             s3_h5_key = s3_photon_tiles_dir.rstrip("/") + "/" + os.path.basename(h5_name)
-            print("DEBUG 2", s3_feather_key, s3_h5_key)
+            print("DEBUG 2", s3_feather_key, s3_manager.exists(s3_feather_key)
+            print("DEBUG 3", s3_h5_key, s3_manager.exists(s3_h5_key))
             if s3_manager.exists(s3_feather_key):
                 print("DEBUG 2", s3_feather_key)
                 s3_manager.download(s3_feather_key, tilename)
