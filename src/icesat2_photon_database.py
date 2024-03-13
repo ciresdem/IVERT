@@ -885,7 +885,6 @@ class ICESat2_Database:
         # Instead, use the directory from ivert_config.icesat2_photon_tiles_directory
         # v2 of the database uses just the file names (no directory). This will work either way.
         tilename = os.path.join(self.ivert_config.icesat2_photon_tiles_directory, os.path.basename(tilename))
-        print("\n", "DEBUG 1", tilename)
         base, ext = os.path.splitext(tilename)
         assert ext.lower() in (".h5", ".feather")
         # Read it here and return it. Pretty simple.
