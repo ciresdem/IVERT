@@ -408,8 +408,8 @@ class ICESat2_Database:
         else:
             return gdf_subset["filename"].tolist()
 
-    def get_photon_database(self, polygon_or_bbox = None,
-                                  build_tiles_if_nonexistent = True,
+    def get_photon_database(self, polygon_or_bbox=None,
+                                  build_tiles_if_nonexistent=False,
                                   verbose=True):
         """Given a polygon or bounding box, return the combined database of all
         the photons within the polygon or bounding box.
