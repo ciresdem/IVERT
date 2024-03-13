@@ -885,6 +885,7 @@ class ICESat2_Database:
         # Instead, use the directory from ivert_config.icesat2_photon_tiles_directory
         # v2 of the database uses just the file names (no directory). This will work either way.
         tilename = os.path.join(self.ivert_config.icesat2_photon_tiles_directory, os.path.basename(tilename))
+        print("\n", "DEBUG 1", tilename)
         base, ext = os.path.splitext(tilename)
         assert ext.lower() in (".h5", ".feather")
         # Read it here and return it. Pretty simple.
@@ -899,9 +900,14 @@ class ICESat2_Database:
             s3_feather_key = s3_photon_tiles_dir.rstrip("/") + "/" + os.path.basename(feather_name)
             s3_h5_key = s3_photon_tiles_dir.rstrip("/") + "/" + os.path.basename(h5_name)
             if s3_manager.exists(s3_feather_key):
+                print("DEBUG 2", s3_feather_key)
                 s3_manager.download(s3_feather_key, tilename)
             elif s3_manager.exists(s3_h5_key):
+                print("DEBUG 2", s3_h5_key)
                 s3_manager.download(s3_h5_key, tilename)
+            else:
+                print("FOOBAR")
+                sys.exit(0)
 
         # To make the HDF5 and Feather formats basically interchangeable, first look for the one.
         # Then if you can't find it, look for the other.
