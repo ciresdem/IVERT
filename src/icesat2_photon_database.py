@@ -899,6 +899,7 @@ class ICESat2_Database:
             assert s3_photon_tiles_dir is not None
             s3_feather_key = s3_photon_tiles_dir.rstrip("/") + "/" + os.path.basename(feather_name)
             s3_h5_key = s3_photon_tiles_dir.rstrip("/") + "/" + os.path.basename(h5_name)
+            print("DEBUG 2", s3_feather_key, s3_h5_key)
             if s3_manager.exists(s3_feather_key):
                 print("DEBUG 2", s3_feather_key)
                 s3_manager.download(s3_feather_key, tilename)
@@ -907,6 +908,7 @@ class ICESat2_Database:
                 s3_manager.download(s3_h5_key, tilename)
             else:
                 print("FOOBAR")
+                import sys
                 sys.exit(0)
 
         # To make the HDF5 and Feather formats basically interchangeable, first look for the one.
