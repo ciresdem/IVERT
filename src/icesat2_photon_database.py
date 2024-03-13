@@ -899,9 +899,9 @@ class ICESat2_Database:
             s3_feather_key = s3_photon_tiles_dir.rstrip("/") + "/" + os.path.basename(feather_name)
             s3_h5_key = s3_photon_tiles_dir.rstrip("/") + "/" + os.path.basename(h5_name)
             if s3_manager.exists(s3_feather_key):
-                s3_manager.download(s3_feather_key, tilename)
+                s3_manager.download(s3_feather_key, feather_name)
             elif s3_manager.exists(s3_h5_key):
-                s3_manager.download(s3_h5_key, tilename)
+                s3_manager.download(s3_h5_key, h5_name)
             else:
                 return None
 
