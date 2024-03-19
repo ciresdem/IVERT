@@ -3,6 +3,7 @@ import boto3
 import botocore.exceptions
 import os
 import sys
+import textwrap
 import warnings
 
 import utils.configfile
@@ -16,9 +17,10 @@ class S3_Manager:
         self.config = utils.configfile.config()
         assert self.config.is_aws
         # Different buckets for each type.
-        self.bucket_dict = {"database": self.config.s3_name_database,
-                            "input": self.config.s3_name_inputs,
-                            "output": self.config.s3_name_outputs}
+        self.bucket_dict = {"database": self.config.s3_bucket_database,
+                            "import_untrusted": self.config.s3_bucket_import_untrusted,
+                            "import_trusted": self.config.s3_bucket_import_trusted,
+                            "export": self.config.s3_bucket_export}
         self.client = None
 
 
@@ -38,9 +40,9 @@ class S3_Manager:
 
         return self.bucket_dict[bucket_type]
 
-    def verify_same_size(self, filename, key, bucket_type="database"):
+    def verify_same_size(self, filename, s3_key, bucket_type="database"):
         """Return True if the local file is the exact same size in bytes as the S3 key."""
-        head = self.exists(key, bucket_type=bucket_type, return_head=True)
+        head = self.exists(s3_key, bucket_type=bucket_type, return_head=True)
         if head is False:
             return False
 
@@ -53,17 +55,17 @@ class S3_Manager:
 
         return s3_size == local_size
 
-    def exists(self, key, bucket_type="database", return_head=False):
+    def exists(self, s3_key, bucket_type="database", return_head=False):
         """Look in the appropriate bucket, and see if a file or directory exists there."""
         client = self.get_client()
 
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
-        if key == "/":
-            key = ""
+        if s3_key == "/":
+            s3_key = ""
 
         try:
-            head = client.head_object(Bucket=bucket_name, Key=key)
+            head = client.head_object(Bucket=bucket_name, Key=s3_key)
             if return_head:
                 return head
             else:
@@ -82,9 +84,9 @@ class S3_Manager:
                 warnings.warn(f"Warning: Unknown error fetching status of s3://{bucket_name}/{key}")
                 return False
 
-    def is_existing_s3_directory(self, key, bucket_type="database"):
+    def is_existing_s3_directory(self, s3_key, bucket_type="database"):
         "Return True if 'key' points to an existing directory (prefix) in the bucket. NOT a file. False otherwise."
-        if key in ("", "/"):
+        if s3_key in ("", "/"):
             return True
 
         client = self.get_client()
@@ -94,7 +96,7 @@ class S3_Manager:
         resource = boto3.resource('s3')
         bucket = resource.Bucket(bucket_name)
 
-        objects = bucket.objects.filter(Prefix=key)
+        objects = bucket.objects.filter(Prefix=s3_key)
 
         i = -1
         # Try to loop through the first object. If the prefix doesn't exist this will be empty.
@@ -108,20 +110,20 @@ class S3_Manager:
         if i == -1:
             return False
         # If it's an exact match with the key, then it's a file (not a directory). Return False.
-        if obj.key == key:
+        if obj.key == s3_key:
             return False
 
         # Otherwise, the key should be the start of the first object there.
-        assert obj.key.find(key) == 0
+        assert obj.key.find(s3_key) == 0
 
         # To make sure we don't just match any substring of the key, make sure that either the key ends in "/" or
         # the character right after it in the matching prefix is "/".
-        if (key[-1] == "/") or (obj.key[len(key)] == "/"):
+        if (s3_key[-1] == "/") or (obj.key[len(s3_key)] == "/"):
             return True
         else:
             return False
 
-    def download(self, key, filename, bucket_type="database", delete_original=False, fail_quietly=True):
+    def download(self, s3_key, filename, bucket_type="database", delete_original=False, fail_quietly=True):
         """Download a file from the S3 to the local file system."""
         client = self.get_client()
 
@@ -129,22 +131,28 @@ class S3_Manager:
 
         # If the 'filename' given is a directory, use the same filename as the key, put the file in that directory.
         if os.path.isdir(filename):
-            filename = os.path.join(filename, key.split("/")[-1])
+            filename = os.path.join(filename, s3_key.split("/")[-1])
 
-        response = client.download_file(bucket_name, key, filename)
+        response = client.download_file(bucket_name, s3_key, filename)
 
-        if not self.verify_same_size(filename, key, bucket_type=bucket_type):
+        if not self.verify_same_size(filename, s3_key, bucket_type=bucket_type):
             if fail_quietly:
                 return False
             else:
                 raise RuntimeError("Error: S3_Manager.download() failed to download file correctly.")
 
         if delete_original:
-            client.delete_object(Bucket=bucket_name, Key=key)
+            client.delete_object(Bucket=bucket_name, Key=s3_key)
 
         return response
 
-    def upload(self, filename, key, bucket_type="database", delete_original=False, fail_quietly=True):
+    def upload(self,
+               filename,
+               s3_key,
+               bucket_type="database",
+               delete_original=False,
+               fail_quietly=True,
+               include_md5=False):
         """Upload a file from the local file system to the S3."""
         client = self.get_client()
 
@@ -152,12 +160,12 @@ class S3_Manager:
 
         # If the key is pointing to an S3 directory (prefix), then use the same filename as filename, and put it in that
         # directory.
-        if self.is_existing_s3_directory(key, bucket_type=bucket_type):
-            key = key + "/" + os.path.basename(filename)
+        if self.is_existing_s3_directory(s3_key, bucket_type=bucket_type):
+            s3_key = s3_key + "/" + os.path.basename(filename)
 
-        response = client.upload_file(filename, bucket_name, key)
+        response = client.upload_file(filename, bucket_name, s3_key)
 
-        if not self.verify_same_size(filename, key, bucket_type=bucket_type):
+        if not self.verify_same_size(filename, s3_key, bucket_type=bucket_type):
             if fail_quietly:
                 return False
             else:
@@ -168,7 +176,7 @@ class S3_Manager:
 
         return response
 
-    def listdir(self, key, bucket_type="database", recursive=False):
+    def listdir(self, s3_key, bucket_type="database", recursive=False):
         """List all the files within a given directory.
 
         Returns the full key path, since that's how S3's operate. But this make it a bit different than os.listdir().
@@ -178,8 +186,8 @@ class S3_Manager:
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
         # Directories must end in '/' for an S3 bucket.
-        if len(key) > 0 and key[-1] != "/":
-            key = key + "/"
+        if len(s3_key) > 0 and s3_key[-1] != "/":
+            s3_key = s3_key + "/"
 
         # First make sure it's actually a directory we're looking at, not just a random matching substring.
         if not self.is_existing_s3_directory(key, bucket_type=bucket_type):
@@ -189,11 +197,11 @@ class S3_Manager:
         bucket = resource.Bucket(bucket_name)
         # If we're recursing, just return everything that is in that Prefix.
         if recursive:
-            files = bucket.objects.filter(Prefix=key).all()
+            files = bucket.objects.filter(Prefix=s3_key).all()
             return [obj.key for obj in files]
         else:
             # Get the full string that occurs after the directory listed, for each subset.
-            result = self.get_client().list_objects(Bucket=bucket_name, Prefix=key, Delimiter="/")
+            result = self.get_client().list_objects(Bucket=bucket_name, Prefix=s3_key, Delimiter="/")
             if "CommonPrefixes" in result.keys():
                 subdirs = [subdir["Prefix"] for subdir in result["CommonPrefixes"]]
             else:
@@ -201,29 +209,25 @@ class S3_Manager:
             files = [f["Key"] for f in result["Contents"]]
             return subdirs + files
 
-    def delete(self, key, bucket_type="database"):
+    def delete(self, s3_key, bucket_type="database"):
         """Delete a key (file) from the S3."""
         client = self.get_client()
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
-        return client.delete_object(Bucket=bucket_name, Key=key)
+        return client.delete_object(Bucket=bucket_name, Key=s3_key)
 
 
 def define_and_parse_args():
     parser = argparse.ArgumentParser(description="Quick python utility for interacting with IVERT's S3 buckets.")
     parser.add_argument("command", nargs="+", help=f"The command to run. Options are 'ls', 'rm', 'cp', or 'mv'."
                         " Run each command without arguments to see usage messages for it.")
-                        # "'ls' and 'rm' are followed by 1 argument: a prefix-directory (for 'ls') or a full file key (for 'rm').  "
-                        # "'rm' and 'cp' are followed by 2 arguments, one of which must be prefixed by 's3:' to indicate "
-                        # "which identifier is associated with the S3 Bucket. The name of the S3 bucket does NOT need to be "
-                        # "included. Use the '--bucket | -b' argument to specify a specific IVERT bucket.")
-    # Type 'python {os.path.basename(__file__)} [command] -h' for help on a particular command.""")
     parser.add_argument("--bucket", "-b", default="database", help=
                         "The shorthand for which ivert S3 bucket we're pulling from, or the explicit name of a bucket."
-                        "Shorthand options are 'database' "
-                        "(location of the IVERT database & other core data), 'input' (the S3 bucket for inpt files that"
-                        "just passed secure ingest), 'output' (where IVERT puts output files to disseminate). These are "
-                        "abstractions. The actual S3 bucket names for each category are defined in ivert_config.ini."
+                        " Shorthand options are 'database' (s3 bucket of the IVERT database & other core data),"
+                        " 'import_trusted' (the S3 bucket for input files that just passed secure ingest),"
+                        " 'import_untrusted' (s3 bucket for pushing files into IVERT),"
+                        " and 'export' (where IVERT puts output files to disseminate). These are abstractions."
+                        " The actual S3 bucket names for each category are defined in ivert_config.ini."
                         " Default: 'database'")
     parser.add_argument("--recursive", "-r", default=False, action="store_true", help=
                         "For the 'ls' command, list all the files recursively, including in all sub-directories.")
@@ -236,14 +240,14 @@ if __name__ == "__main__":
 
     # This optional parameter appears in most
     bucketopt_message = \
-    "\n  --bucket BUCKET, -b BUCKET" + \
-    "\n                     Tag for the IVERT bucket type being used. Options are" + \
-    "\n                     'database', 'input' and 'output'." + \
-    "\n                     The actual names of the buckets are pulled from"
-    "\n                     ivert_config.ini. Default is 'database', so commands" + \
-    "\n                     will (by default) be referenced to the s3 bucket" + \
-    "\n                     Where the IVERT database resides."
-
+    "\n  --bucket BUCKET, -b BUCKET\n" +
+    textwrap.fill("Tag for the IVERT bucket type being used. Options are database', 'import_untrusted',"
+                  " 'import_trusted', and 'export'. The actual names of the buckets are pulled from"
+                  " ivert_config.ini. Default is 'database', so commands will (by default) be referenced to the"
+                  " s3 bucket where the IVERT database resides.",
+                  width=os.get_terminal_size().columns,
+                  initial_indent=20,
+                  subsequent_indent=20)
 
     command = args.command
     if command[0] == "ls":
@@ -255,13 +259,18 @@ if __name__ == "__main__":
             print("usage: python {0} ls s3_prefix [--recursive] [--bucket BUCKET]".format(os.path.basename(__file__)) +
                   "\n\nList all the files in that prefix directory." +
                   "\n\npositional arguments:" +
-                  "\n  s3_prefix          The directory (called a 'prefix' in s3) in which to list"
-                  "\n                     all files present. Prints the full keyname (with prefix"
-                  "\n                     directories). Use an empty prefix ('s3:', '.', or '/'))"
-                  "\n                     to list files in the root directory of the bucket." +
+                  textwrap.fill("\n  s3_prefix       The directory (called a 'prefix' in s3) in which to list all files"
+                                " present. Prints the full keyname (with prefix directories). Use an empty prefix"
+                                " ('s3:', '.', or '/') to list files in the root directory of the bucket.",
+                                width=os.get_terminal_size().columns,
+                                initial_indent=0,
+                                subsequent_indent=20) +
                   "\n\noptions:" +
-                  "\n  --recursive, -r    Recursively list all files in that directory, including"
-                  "\n                     within sub-folders." +
+                  textwrap.fill("  --recursive, -r Recursively list all files in that directory, including within"
+                                "sub-folders.",
+                                width=os.get_terminal_size().columns,
+                                initial_indent=0,
+                                subsequent_indent=20) +
                   bucketopt_message
                   )
             sys.exit(0)
@@ -284,7 +293,7 @@ if __name__ == "__main__":
             print("usage: python {0} rm s3_key [--bucket BUCKET]".format(os.path.basename(__file__)) +
                   "\n\nRemove a file from the s3." +
                   "\n\npositional arguments:" +
-                  "\n  s3_key             The file to remove." +
+                  "\n  s3_key          The file to remove." +
                   "\n\noptions:" +
                   bucketopt_message
                   )

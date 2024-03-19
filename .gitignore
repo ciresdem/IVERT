@@ -160,4 +160,5 @@ cython_debug/
 .idea/
 data/*
 !data/icesat2/
-scratch_data/
+!data/config_templates/
+scratch_data/*
