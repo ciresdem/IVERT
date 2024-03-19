@@ -8,6 +8,6 @@ Primary modules for DEM validation are:
 - **[validate_dem.py](https://github.com/ciresdem/IVERT/blob/main/src/validate_dem.py)** -- Code for performing ICESat-2 validations--with masking and vertical datum conversions--on a single DEM.
 - **[validate_dem_collection.py](https://github.com/ciresdem/IVERT/blob/main/src/validate_dem_collection.py)** -- Code for performing ICESat-2 validations on a group or directory of DEMs. A wrapper for looped execution and gathering summary results from looped calls of validate_dem.py
 
-Both the scripts can be run independently as Python scripts with the "-h" or "--help" flags to see a complete list of command-line options for them.
+Both the scripts can be run independently as Python scripts with the "-h" or "--help" flags to see a complete list of command-line options.
 
-Code to streamline the creation and updates of the underlying ICESat-2 photon database is currently being developed.
+Code to execute IVERT in a client-server setting in an AWS environment is currently underway. This README will be updated when that is completed.
