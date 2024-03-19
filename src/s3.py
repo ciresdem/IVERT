@@ -105,7 +105,7 @@ class S3_Manager:
             assert obj.key.find(s3_key) == 0
 
             # If we match with an object and the character immediately after the prefix is a '/', then it's a directory.
-            # If some other character is there, then we're not sure yet, move along.
+            # If some other character is there, then we're not sure yet, move along to the next object.
             if obj.key[len(s3_key)] == "/":
                 return True
 
