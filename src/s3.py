@@ -246,8 +246,8 @@ if __name__ == "__main__":
                   " ivert_config.ini. Default is 'database', so commands will (by default) be referenced to the"
                   " s3 bucket where the IVERT database resides.",
                   width=os.get_terminal_size().columns,
-                  initial_indent=20,
-                  subsequent_indent=20)
+                  initial_indent=' ' * 20,
+                  subsequent_indent=' ' * 20)
 
     command = args.command
     if command[0] == "ls":
@@ -263,14 +263,12 @@ if __name__ == "__main__":
                                 " present. Prints the full keyname (with prefix directories). Use an empty prefix"
                                 " ('s3:', '.', or '/') to list files in the root directory of the bucket.",
                                 width=os.get_terminal_size().columns,
-                                initial_indent=0,
-                                subsequent_indent=20) +
+                                subsequent_indent=' ' * 20) +
                   "\n\noptions:" +
                   textwrap.fill("  --recursive, -r Recursively list all files in that directory, including within"
                                 "sub-folders.",
                                 width=os.get_terminal_size().columns,
-                                initial_indent=0,
-                                subsequent_indent=20) +
+                                subsequent_indent=' ' * 20) +
                   bucketopt_message
                   )
             sys.exit(0)
