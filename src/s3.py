@@ -95,7 +95,6 @@ class S3_Manager:
 
         objects = bucket.objects.filter(Prefix=s3_key)
 
-        i = -1
         # Loop through the objects returned. If the prefix doesn't exist this will be empty.
         for i, obj in enumerate(objects):
             # If it's an exact match with the key, then it's a file (not a directory). Return False.
@@ -105,8 +104,8 @@ class S3_Manager:
             # Otherwise, the key should be the start of the object.
             assert obj.key.find(s3_key) == 0
 
-            # To make sure we don't just match any substring of the key, make sure that either the key ends in "/" or
-            # the character right after it in the matching prefix is "/".
+            # If we match with an object and the character immediately after the prefix is a '/', then it's a directory.
+            # If some other character is there, then we're not sure yet, move along.
             if obj.key[len(s3_key)] == "/":
                 return True
 
