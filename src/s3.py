@@ -88,9 +88,6 @@ class S3_Manager:
         "Return True if 'key' points to an existing directory (prefix) in the bucket. NOT a file. False otherwise."
         if s3_key in ("", "/"):
             return True
-
-        client = self.get_client()
-
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
         resource = boto3.resource('s3')
@@ -99,29 +96,21 @@ class S3_Manager:
         objects = bucket.objects.filter(Prefix=s3_key)
 
         i = -1
-        # Try to loop through the first object. If the prefix doesn't exist this will be empty.
+        # Loop through the objects returned. If the prefix doesn't exist this will be empty.
         for i, obj in enumerate(objects):
-            # This "break on the first instance" thing seems stupid, but I don't yet know how to just get the first
-            # object of the filter() method back, besides iterating over it.
-            if i == 0:
-                break
+            # If it's an exact match with the key, then it's a file (not a directory). Return False.
+            if obj.key == s3_key:
+                return False
 
-        # If we didn't enter the loop (i.e. there were no matching objects) then return False.
-        if i == -1:
-            return False
-        # If it's an exact match with the key, then it's a file (not a directory). Return False.
-        if obj.key == s3_key:
-            return False
+            # Otherwise, the key should be the start of the object.
+            assert obj.key.find(s3_key) == 0
 
-        # Otherwise, the key should be the start of the first object there.
-        assert obj.key.find(s3_key) == 0
+            # To make sure we don't just match any substring of the key, make sure that either the key ends in "/" or
+            # the character right after it in the matching prefix is "/".
+            if obj.key[len(s3_key)] == "/":
+                return True
 
-        # To make sure we don't just match any substring of the key, make sure that either the key ends in "/" or
-        # the character right after it in the matching prefix is "/".
-        if (s3_key[-1] == "/") or (obj.key[len(s3_key)] == "/"):
-            return True
-        else:
-            return False
+        return False
 
     def download(self, s3_key, filename, bucket_type="database", delete_original=False, fail_quietly=True):
         """Download a file from the S3 to the local file system."""
