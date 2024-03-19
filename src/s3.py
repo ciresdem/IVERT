@@ -240,7 +240,7 @@ if __name__ == "__main__":
 
     # This optional parameter appears in most
     bucketopt_message = \
-    "\n  --bucket BUCKET, -b BUCKET\n" +
+    "\n  --bucket BUCKET, -b BUCKET\n" + \
     textwrap.fill("Tag for the IVERT bucket type being used. Options are database', 'import_untrusted',"
                   " 'import_trusted', and 'export'. The actual names of the buckets are pulled from"
                   " ivert_config.ini. Default is 'database', so commands will (by default) be referenced to the"
