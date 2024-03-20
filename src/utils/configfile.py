@@ -171,11 +171,20 @@ class config:
         assert hasattr(self, "s3_bucket_database")
         assert hasattr(self, "user_email")
         assert hasattr(self, "username")
+        assert hasattr(self, "aws_profile_ivert_ingest")
+        assert hasattr(self, "aws_profile_ivert_export")
 
         # If we're on the client side (not in an AWS instance), get this from the user configfile.
         #    In this case, only the s3_bucket_import_untrusted and s3_bucket_export are needed.
         # TODO: Fetch the bucket names from the user configfile.
+        # TODO: Also get the user email, username, and aws_profiles from the user configfile.
+        if self.is_aws:
+            pass
 
         # If we're on the server side (in the AWS), get these from the "ivert_setup" repository under /setup/paths.sh.
         #    In this case, only the s3_bucket_import_trusted, s3_bucket_database, and s3_bucket_export are needed.
         # TODO: Fetch the bucket names from the ivert_setup/setup/paths.sh repository file.
+        else:
+            pass
+
+        return
