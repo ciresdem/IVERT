@@ -9,11 +9,6 @@ except ModuleNotFoundError:
 import os
 import re
 import sys
-# import cryptography.fernet
-# import getpass
-# import socket
-# import base64
-
 
 class config:
     """A subclass implementation of configparser.ConfigParser(), expect that config attributes are referenced as object
@@ -40,7 +35,8 @@ class config:
     """
 
     def __init__(self,
-                 configfile=os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "ivert_config.ini"))):
+                 configfile=os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                                         "..", "..", "config", "ivert_config.ini"))):
 
         self._configfile = os.path.abspath(configfile)
         # print(self._configfile)
@@ -117,6 +113,9 @@ class config:
                 # If it's an absolute path or it already exists where it is, just use it as-is
                 if value.strip().find("/") == 0:
                     setattr(self, key, os.path.abspath(value))
+                # If it references the home directory, expand that on the local machine.
+                elif value.find("~") > -1:
+                    setattr(self, key, os.path.abspath(os.path.expanduser(value)))
                 # If it's a relative path, make it relative to the _configfile's local directory.
                 else:
                     setattr(self, key, self._abspath(os.path.join(os.path.dirname(self._configfile), value)))
@@ -127,6 +126,9 @@ class config:
                 # For a base path, look for the "C:\" drive-name pattern at the start (upper- or lower-case).
                 if re.search(r'\A[A-Za-z]\:\\', value.strip()) is not None:
                     setattr(self, key, os.path.abspath(value))
+                # If it references the home directory, expand that on the local machine.
+                elif value.find("~") > -1:
+                    setattr(self, key, os.path.abspath(os.path.expanduser(value)))
                 # If it's a relative path, make it relative to the _configfile directory.
                 else:
                     setattr(self, key, self._abspath(os.path.join(os.path.dirname(self._configfile), value)))
@@ -137,3 +139,4 @@ class config:
         # Otherwise, it's probably just a string value, set it as-is.
         setattr(self, key, value)
         return
+
