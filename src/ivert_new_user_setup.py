@@ -16,6 +16,11 @@ ivert_user_config_template = utils.configfile.config(ivert_config.ivert_user_con
 
 def setup_new_user(args: argparse.Namespace) -> None:
     """Set up a new IVERT user on the local machine."""
+
+    # TODO: Modify code to include s3 buckets in user profile.
+    print("TODO: MODIFY TO INCLUDE S3 BUCKETS IN USER PROFILE.")
+    sys.exit(0)
+
     # First, collect user inputs for any options not provided.
     args = collect_user_inputs(args, only_if_not_provided=True)
 
@@ -356,20 +361,24 @@ def update_local_aws_credentials(aws_credentials_file: str,
 
     return
 
-def update_ivert_user_config(args: argparse.Namespace) -> None:
-    """Create or overwrite the ivert_user_config_[name].ini file."""
-    # First, find all instances of existing user config files in the config/ directory.
+def find_user_config_files() -> list[str]:
+    """Find all user config files in the config/ directory."""
     user_config_files = glob.glob(os.path.join(os.path.dirname(ivert_config.ivert_user_config_template),
-                                               ivert_config.ivert_user_config_wildcard))
+                                  ivert_config.ivert_user_config_wildcard))
 
     # Ignore any files that are the template file.
     user_config_files = [f for f in user_config_files if os.path.basename(f) != os.path.basename(ivert_config.ivert_user_config_template)]
 
+    return user_config_files
+
+def update_ivert_user_config(args: argparse.Namespace) -> None:
+    """Create or overwrite the ivert_user_config_[name].ini file."""
+    # First, find all instances of existing user config files in the config/ directory.
+    user_config_files = find_user_config_files()
+
     # Get the text from the user config template.
     with open(ivert_config.ivert_user_config_template, "r") as f:
         user_config_text = f.read()
-
-    user_config_original_text = user_config_text
 
     # Update the user config text with the new values.
     # Update the email in the user config text.

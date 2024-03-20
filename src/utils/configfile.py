@@ -140,3 +140,21 @@ class config:
         setattr(self, key, value)
         return
 
+    def _fill_bucket_names(self):
+        """Fills in the bucket name entries in the config file.
+
+        We do not store any of these bucket names in the IVERT public Github, so they are filled in at runtime.
+
+        Specifically, we're looking for:
+            - [S3_BUCKET_DATABASE]
+            - [S3_BUCKET_UNTRUSTED]
+            - [S3_BUCKET_TRUSTED]
+            - [S3_BUCKET_EXPORT]
+
+        If we're client-side, we can fill in at most two of these: [S3_BUCKET_UNTRUSTED] and [S3_BUCKET_EXPORT], which
+        are set during IVERT setup and stored in the user config file.
+
+        If we're server-side, we need to fill in [S3_BUCKET_DATABASE], [S3_BUCKET_TRUSTED], and [S3_BUCKET_EXPORT].
+        These can be found in the ivert_setup/setup/paths.sh file from the ivert_setup repository."""
+
+        # TODO: Finish this.
