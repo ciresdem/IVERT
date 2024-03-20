@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """ivert.py -- The front-facing interfact to IVERT code for cloud computing."""
 import argparse
 import os

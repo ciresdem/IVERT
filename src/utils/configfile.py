@@ -158,3 +158,24 @@ class config:
         These can be found in the ivert_setup/setup/paths.sh file from the ivert_setup repository."""
 
         # TODO: Finish this.
+
+    def _add_user_variables_to_config(self):
+        """Add the names of the S3 buckets to the configfile.config object.
+
+        On a client instance, ivert setup needs to be run to flesh out the user configfile, before this will work."""
+        # Make sure all these are defined in here. They may be assigned to None but they should exist. This is
+        # a sanity check in case we changed the bucket variables names in the configfile.
+        assert hasattr(self, "s3_bucket_ipmort_untrusted")
+        assert hasattr(self, "s3_bucket_import_trusted")
+        assert hasattr(self, "s3_bucket_export")
+        assert hasattr(self, "s3_bucket_database")
+        assert hasattr(self, "user_email")
+        assert hasattr(self, "username")
+
+        # If we're on the client side (not in an AWS instance), get this from the user configfile.
+        #    In this case, only the s3_bucket_import_untrusted and s3_bucket_export are needed.
+        # TODO: Fetch the bucket names from the user configfile.
+
+        # If we're on the server side (in the AWS), get these from the "ivert_setup" repository under /setup/paths.sh.
+        #    In this case, only the s3_bucket_import_trusted, s3_bucket_database, and s3_bucket_export are needed.
+        # TODO: Fetch the bucket names from the ivert_setup/setup/paths.sh repository file.

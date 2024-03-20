@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import argparse
 import boto3
 import botocore.exceptions
@@ -21,6 +23,15 @@ class S3_Manager:
                             "import_untrusted": self.config.s3_bucket_import_untrusted,
                             "import_trusted": self.config.s3_bucket_import_trusted,
                             "export": self.config.s3_bucket_export}
+
+        # Different AWS profiles for each bucket. "None" indicates no profile is needed.
+        # TODO: Replace with entries from the user profile created by ivert_new_user_setup.py
+        self.bucket_profile_dict = {"database": None,
+                                    "import_untrusted": "TODO: ENTER HERE FROM USER PROFILE",
+                                    "import_trusted": None,
+                                    "export": "TODO: ENTER HERE FROM USER PROFILE"}
+
+        # The s3 client. Client created on demand when needed by the :get_client() method.
         self.client = None
 
 
@@ -206,6 +217,7 @@ class S3_Manager:
 
 
 def define_and_parse_args():
+    # TODO: Replace this with an argument parser that uses subparsers for various commands.
     parser = argparse.ArgumentParser(description="Quick python utility for interacting with IVERT's S3 buckets.")
     parser.add_argument("command", nargs="+", help=f"The command to run. Options are 'ls', 'rm', 'cp', or 'mv'."
                         " Run each command without arguments to see usage messages for it.")

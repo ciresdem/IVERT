@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """Code for setting up a new IVERT user on the client side (local machine, external to the IVERT cloud)."""
 
 import argparse
