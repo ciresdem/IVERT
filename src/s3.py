@@ -324,24 +324,24 @@ if __name__ == "__main__":
                   )
             sys.exit(0)
 
+        s3m = S3_Manager()
 
         if len(command) != 3:
             raise ValueError(f"'{command[0]}' should be followed by exactly 2 files, one of them preceded by 's3:'")
         c1 = command[1]
         c2 = command[2]
 
-        local_file = [fn for fn in [c1, c2] if fn.lower().find("s3:") == -1]
-        s3_file = [fn for fn in [c1, c2] if fn.lower().find("s3:") == 0]
+        local_file = [fn for fn in [c1, c2] if fn.lower().find("s3:") == -1][0]
+        s3_file = [fn for fn in [c1, c2] if fn.lower().find("s3:") == 0][0]
 
         if len(s3_file) != 1 or len(local_file) != 1:
             raise ValueError(f"'{command[0]}' should be followed by exactly 2 files, one of them preceded by 's3:'")
 
         # Determine if we're uploading or downloading. Which one came first?
         downloading = True
-        if local_file[0] == command[1]:
+        if local_file == command[1]:
             downloading = False
 
-        local_file = local_file[0]
         # Trim off the "s3:" in front of the s3 file.
         s3_file = s3_file.lstrip("s3:").lstrip("S3:").strip()
         if (s3_file == "") and downloading:
