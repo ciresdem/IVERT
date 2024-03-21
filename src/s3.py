@@ -218,8 +218,9 @@ class S3_Manager:
                 subdirs = []
 
             # DEBUG:
-            for result in result.items():
-                print(result)
+            print(type(result))
+            for item in result.items():
+                print(item)
 
             files = [f["Key"] for f in result["Contents"]]
             return subdirs + files
