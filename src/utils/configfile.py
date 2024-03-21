@@ -171,23 +171,23 @@ class config:
 
         try:
             db_line = [line for line in paths_text_lines if line.lower().startswith("s3_bucket_database")][0]
-            self.s3_bucket_database = db_line.split("=")[1].split("#")[0].strip()
+            self.s3_bucket_database = db_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
         except IndexError:
             self.s3_bucket_database = None
 
         try:
             trusted_line = [line for line in paths_text_lines if line.lower().startswith("s3_bucket_import_trusted")][0]
-            self.s3_bucket_import_trusted = trusted_line.split("=")[1].split("#")[0].strip()
+            self.s3_bucket_import_trusted = trusted_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
         except IndexError:
             self.s3_bucket_import_trusted = None
         try:
             untrusted_line = [line for line in paths_text_lines if line.lower().startswith("s3_bucket_import_untrusted")][0]
-            self.s3_bucket_import_untrusted = untrusted_line.split("=")[1].split("#")[0].strip()
+            self.s3_bucket_import_untrusted = untrusted_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
         except IndexError:
             self.s3_bucket_import_untrusted = None
         try:
             export_line = [line for line in paths_text_lines if line.lower().startswith("s3_bucket_export")][0]
-            self.s3_bucket_export = export_line.split("=")[1].split("#")[0].strip()
+            self.s3_bucket_export = export_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
         except IndexError:
             self.s3_bucket_export = None
 
