@@ -198,7 +198,7 @@ class config:
                 continue
 
             while getattr(self, varname).find("$") > -1:
-                varname_from = getattr(self, varname.replace("$", ""))
+                varname_from = getattr(self, varname).replace("$", "")
                 setattr(self, varname, getattr(self, varname_from))
 
         return
