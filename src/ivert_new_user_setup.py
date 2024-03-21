@@ -18,18 +18,14 @@ ivert_user_config_template = utils.configfile.config(ivert_config.ivert_user_con
 def setup_new_user(args: argparse.Namespace) -> None:
     """Set up a new IVERT user on the local machine."""
 
-    # TODO: Modify code to include s3 buckets in user profile.
-    print("TODO: MODIFY TO INCLUDE S3 BUCKETS IN USER PROFILE.")
-    sys.exit(0)
-
     # First, collect user inputs for any options not provided.
-    args = collect_user_inputs(args, only_if_not_provided=True)
+    args = collect_inputs(args, only_if_not_provided=True)
 
     # Validate all the inputs for basic correctness.
     validate_inputs(args)
 
     # Confirm the inputs with the user.
-    confirm_inputs_with_user(args)
+    # confirm_inputs_with_user(args)
 
     # Update the AWS profiles on the local machine.
     update_local_aws_profiles(args)
@@ -41,9 +37,19 @@ def setup_new_user(args: argparse.Namespace) -> None:
     print(f"\nYou may now run '{bcolors.BOLD}python ivert.py test{bcolors.ENDC}' to test the IVERT system.")
 
 
-def collect_user_inputs(args: argparse.Namespace, only_if_not_provided: bool = True) -> argparse.Namespace:
+def read_ivert_s3_credentials(error_if_not_found: bool = True):
+    """Read the IVERT S3 credentials file."""
+    if os.path.exists(ivert_config.ivert_s3_credentials_file):
+        return utils.configfile.config(ivert_config.ivert_s3_credentials_file)
+    else:
+        if error_if_not_found:
+            raise FileNotFoundError(f"IVERT S3 credentials file '{ivert_config.ivert_s3_credentials_file}' not found.")
+        else:
+            return None
+
+def collect_inputs(args: argparse.Namespace, only_if_not_provided: bool = True) -> argparse.Namespace:
     """Collect user inputs and return them as a dictionary."""
-    print("Please enter the following credentials to set up your IVERT account.")
+
     # Check to make sure all the args are present here.
     assert "email" in args
     assert "untrusted_bucket_name" in args
@@ -55,88 +61,72 @@ def collect_user_inputs(args: argparse.Namespace, only_if_not_provided: bool = T
     assert "ivert_ingest_profile" in args
     assert "ivert_export_profile" in args
 
-    DEBUG = False
+    if not args.email.strip() or not only_if_not_provided:
+        args.email = input("\n" + bcolors.UNDERLINE + "Your email address" + bcolors.ENDC + " (@noaa.gov): ").strip()
 
-    if DEBUG:
-        args.email = "michael.macferrin@noaa.gov"
-        args.untrusted_bucket_name = "nccf-dev-testing-nonsense-us-east-1-12345678910"
-        args.untrusted_access_key_id = "NONSENSE20CHARS00000"
-        args.untrusted_secret_access_key = "Nonsense40CharactersForTesting/foobar+baz"
-        args.export_bucket_name = "nccf-ssbx-testing-nonsense-us-east-1-12345678910"
-        args.export_access_key_id = "ANOTHERSILLY20CHARS0"
-        args.export_secret_access_key = "Nonsense40CharactersForTesting/baz+foobar"
+    # Check for valid AWS profile names (they can basically be anyting except empty strings)
+    # If we weren't provided a profile name or we aren't using the defaults, prompt for them.
+    if not args.ivert_ingest_profile.strip() or not only_if_not_provided:
+        args.ivert_ingest_profile = (
+          input(f"\nAWS profile name to use for ingest [default: {ivert_user_config_template.aws_profile_ivert_ingest}]: ").strip()
+          or ivert_user_config_template.aws_profile_ivert_ingest.strip())
 
-    else:
-        if not args.email.strip() or not only_if_not_provided:
-            args.email = input("\n" + bcolors.UNDERLINE + "Your email address" + bcolors.ENDC + " (@noaa.gov): ").strip()
+    if not args.ivert_export_profile.strip() or not only_if_not_provided:
+        args.ivert_export_profile = (
+          input(f"\nAWS profile name to use for export [default: {ivert_user_config_template.aws_profile_ivert_export}]: ").strip()
+          or ivert_user_config_template.aws_profile_ivert_export.strip())
 
-        # Check for valid AWS profile names (they can basically be anyting except empty strings)
-        if not args.ivert_ingest_profile.strip() or not only_if_not_provided:
-            args.ivert_ingest_profile = (
-              input(f"\nAWS profile name to use for ingest [default: {ivert_user_config_template.aws_profile_ivert_ingest}]: ").strip()
-              or ivert_user_config_template.aws_profile_ivert_ingest.strip())
+    # credentials_msg = "\n".join(textwrap.wrap("Note: The following credentials can be retrieved from the team's"
+    #                   " 'IVERT Bucket IAM Credentials' document. If you don't have access to this document, please"
+    #                   " contact the IVERT team for more information. [Ctrl-C] to exit at any time.",
+    #                                            os.get_terminal_size().columns - 1))
+    # credentials_msg = credentials_msg.replace("Note:", "\n" + bcolors.HEADER + "Note:" + bcolors.ENDC)
+    # credentials_msg += "\n"
+    # already_printed_credentials_msg = False
 
-        if not args.ivert_export_profile.strip() or not only_if_not_provided:
-            args.ivert_export_profile = (
-              input(f"\nAWS profile name to use for export [default: {ivert_user_config_template.aws_profile_ivert_export}]: ").strip()
-              or ivert_user_config_template.aws_profile_ivert_export.strip())
+    # Strip any whitespace
+    args.untrusted_bucket_name = args.untrusted_bucket_name.strip()
+    args.export_bucket_name = args.export_bucket_name.strip()
+    args.untrusted_access_key_id = args.untrusted_access_key_id.strip()
+    args.untrusted_secret_access_key = args.untrusted_secret_access_key.strip()
+    args.export_access_key_id = args.export_access_key_id.strip()
+    args.export_secret_access_key = args.export_secret_access_key.strip()
 
-        credentials_msg = "\n".join(textwrap.wrap("Note: The following credentials can be retrieved from the team's"
-                          " 'IVERT Bucket IAM Credentials' document. If you don't have access to this document, please"
-                          " contact the IVERT team for more information. [Ctrl-C] to exit at any time.",
-                                                   os.get_terminal_size().columns - 1))
-        credentials_msg = credentials_msg.replace("Note:", "\n" + bcolors.HEADER + "Note:" + bcolors.ENDC)
-        credentials_msg += "\n"
-        already_printed_credentials_msg = False
+    if not args.untrusted_bucket_name or not only_if_not_provided:
+        s3_creds_obj = read_ivert_s3_credentials()
+        if s3_creds_obj is not None:
+            args.untrusted_bucket_name = s3_creds_obj.s3_bucket_import_untrusted
 
-        # Strip any whitespace
-        args.untrusted_bucket_name = args.untrusted_bucket_name.strip()
-        args.export_bucket_name = args.export_bucket_name.strip()
-        args.untrusted_access_key_id = args.untrusted_access_key_id.strip()
-        args.untrusted_secret_access_key = args.untrusted_secret_access_key.strip()
-        args.export_access_key_id = args.export_access_key_id.strip()
-        args.export_secret_access_key = args.export_secret_access_key.strip()
+    if not args.export_bucket_name or not only_if_not_provided:
+        s3_creds_obj = read_ivert_s3_credentials()
+        if s3_creds_obj is not None:
+            args.export_bucket_name = s3_creds_obj.s3_bucket_export
 
-        try:
-            if not args.untrusted_bucket_name or not only_if_not_provided:
-                if not already_printed_credentials_msg:
-                    print(credentials_msg)
-                    already_printed_credentials_msg = True
-                args.untrusted_bucket_name = input(bcolors.UNDERLINE + "Untrusted bucket name" + bcolors.ENDC + ": ").strip().lstrip("s3://")
+    if not args.untrusted_access_key_id or not only_if_not_provided:
+        s3_creds_obj = read_ivert_s3_credentials()
+        if s3_creds_obj is not None:
+            args.untrusted_access_key_id = s3_creds_obj.s3_untrusted_access_key_id
 
-            if not args.untrusted_access_key_id or not only_if_not_provided:
-                if not already_printed_credentials_msg:
-                    print(credentials_msg)
-                    already_printed_credentials_msg = True
-                args.untrusted_access_key_id = input(bcolors.UNDERLINE + "Untrusted access key ID" + bcolors.ENDC + ": ").strip()
+    if not args.untrusted_secret_access_key or not only_if_not_provided:
+        s3_creds_obj = read_ivert_s3_credentials()
+        if s3_creds_obj is not None:
+            args.untrusted_secret_access_key = s3_creds_obj.s3_untrusted_secret_access_key
 
-            if not args.untrusted_secret_access_key or not only_if_not_provided:
-                if not already_printed_credentials_msg:
-                    print(credentials_msg)
-                    already_printed_credentials_msg = True
-                args.untrusted_secret_access_key = input(bcolors.UNDERLINE + "Untrusted secret access key" + bcolors.ENDC + ": ").strip()
+    if not args.export_access_key_id or not only_if_not_provided:
+        s3_creds_obj = read_ivert_s3_credentials()
+        if s3_creds_obj is not None:
+            args.export_access_key_id = s3_creds_obj.s3_export_access_key_id
 
-            if not args.export_bucket_name or not only_if_not_provided:
-                if not already_printed_credentials_msg:
-                    print(credentials_msg)
-                    already_printed_credentials_msg = True
-                args.export_bucket_name = input(bcolors.UNDERLINE + "Export bucket name" + bcolors.ENDC + ": ").strip().lstrip("s3://")
+    if not args.export_secret_access_key or not only_if_not_provided:
+        s3_creds_obj = read_ivert_s3_credentials()
+        if s3_creds_obj is not None:
+            args.export_secret_access_key = s3_creds_obj.s3_export_secret_access_key
 
-            if not args.export_access_key_id or not only_if_not_provided:
-                if not already_printed_credentials_msg:
-                    print(credentials_msg)
-                    already_printed_credentials_msg = True
-                args.export_access_key_id = input(bcolors.UNDERLINE + "Export access key ID" + bcolors.ENDC + ": ").strip()
-
-            if not args.export_secret_access_key or not only_if_not_provided:
-                if not already_printed_credentials_msg:
-                    print(credentials_msg)
-                    already_printed_credentials_msg = True
-                args.export_secret_access_key = input(bcolors.UNDERLINE + "Export secret access key" + bcolors.ENDC + ": ").strip()
-
-        except KeyboardInterrupt:
-            print()
-            sys.exit(1)
+    if not (args.untrusted_bucket_name and args.export_bucket_name and args.untrusted_access_key_id and
+            args.untrusted_secret_access_key and args.export_access_key_id and args.export_secret_access_key):
+        raise ValueError("Error in collecting s3 credentials. Please check for the existence of "
+                         f"{ivert_config.ivert_s3_credentials_file} and run setup again. "
+                         "If error persists, contact the IVERT developers.")
 
     # Derive the user name from the email
     args.user = args.email.split("@")[0].strip().lower()
@@ -362,20 +352,10 @@ def update_local_aws_credentials(aws_credentials_file: str,
 
     return
 
-def find_user_config_files() -> list[str]:
-    """Find all user config files in the config/ directory."""
-    user_config_files = glob.glob(os.path.join(os.path.dirname(ivert_config.ivert_user_config_template),
-                                  ivert_config.ivert_user_config_wildcard))
-
-    # Ignore any files that are the template file.
-    user_config_files = [f for f in user_config_files if os.path.basename(f) != os.path.basename(ivert_config.ivert_user_config_template)]
-
-    return user_config_files
-
 def update_ivert_user_config(args: argparse.Namespace) -> None:
     """Create or overwrite the ivert_user_config_[name].ini file."""
     # First, find all instances of existing user config files in the config/ directory.
-    user_config_files = find_user_config_files()
+    user_config_file = ivert_config.user_configfile
 
     # Get the text from the user config template.
     with open(ivert_config.ivert_user_config_template, "r") as f:
@@ -396,19 +376,11 @@ def update_ivert_user_config(args: argparse.Namespace) -> None:
     if args.ivert_export_profile != re.search(r"(?<=aws_profile_ivert_export)(\s*\=\s*\w+)", user_config_text).group(1).lstrip().lstrip("=").lstrip():
         user_config_text = re.sub(r"aws_profile_ivert_export\s*\=\s*\w+", f"aws_profile_ivert_export = {args.ivert_export_profile}", user_config_text)
 
-    # Delete any existing user config files.
-    for user_config_file in user_config_files:
-        print(f"Removing old IVERT/config/{os.path.basename(user_config_file)}.")
-        os.remove(user_config_file)
-
-    # Create the new user config file.
-    user_configfile_name = os.path.join(os.path.dirname(ivert_config.ivert_user_config_template),
-                                        ivert_config.ivert_user_config_wildcard.replace("*", args.user))
-
-    with open(user_configfile_name, "w") as f:
+    # Write the user config file. Overwrite any old one.
+    with open(user_config_file, "w") as f:
         f.write(user_config_text)
 
-    print(f"Created IVERT/config/{os.path.basename(user_configfile_name)}.")
+    print(f"{user_config_file} written.")
 
     return
 
@@ -421,6 +393,7 @@ def get_aws_config_and_credentials_files() -> list:
     config_file = os.environ.get("AWS_CONFIG_FILE")
     credentials_file = os.environ.get("AWS_SHARED_CREDENTIALS_FILE")
 
+    # If they aren't in the user environment variables, then use the default locations.
     if config_file is None:
         config_file = os.path.expanduser("~/.aws/config")
     if credentials_file is None:
@@ -429,13 +402,13 @@ def get_aws_config_and_credentials_files() -> list:
     return [config_file, credentials_file]
 
 def get_region_name_from_bucket_name(bucket_name: str) -> str:
-    """Get the region name from a bucket name."""
+    """Get the region name from a bucket name. The NCCF bucket names include the region name in them."""
     region_names = boto3.Session().get_available_regions("s3")
     for region_name in region_names:
         if region_name in bucket_name:
             return region_name
 
-    raise ValueError(f"Could not find a region name for bucket {bucket_name}.")
+    raise ValueError(f"Could not extract a region name from bucket {bucket_name}.")
 
 
 def define_and_parse_args(just_return_parser: bool=False):

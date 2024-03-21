@@ -10,6 +10,10 @@ import os
 import re
 import sys
 
+ivert_default_configfile = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                                        "..", "..", "config", "ivert_config.ini"))
+
+
 class config:
     """A subclass implementation of configparser.ConfigParser(), expect that config attributes are referenced as object
     attributes rather than in a dictionary.
@@ -35,10 +39,10 @@ class config:
     """
 
     def __init__(self,
-                 configfile=os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                                                         "..", "..", "config", "ivert_config.ini"))):
+                 configfile=ivert_default_configfile):
+        """Initializes a new instance of the config class."""
 
-        self._configfile = os.path.abspath(configfile)
+        self._configfile = os.path.abspath(os.path.realpath(configfile))
         # print(self._configfile)
         self._config = configparser.ConfigParser()
         self.is_aws = is_aws.is_aws()
@@ -50,8 +54,14 @@ class config:
         # if I need to use different sections separately.
         self._parse_config_into_attrs()
 
+        # If we're importing the primary IVERT config file, add the user variables and S3 creds to the config
+        if self._configfile == ivert_default_configfile:
+            self._add_user_variables_and_s3_creds_to_config()
+
     def _abspath(self, path, only_if_actual_path_doesnt_exist=False):
-        """In this project, absolute paths are relative to the location of the
+        """Retreive the absolute path of a file path contained in the configfile.
+
+        In this project, absolute paths are relative to the location of the
         configfile. In this case. join them with the path to the config file and
         return an absolute path rather than a relative path."""
         # If we've specified to do this only if the path doesn't exist in its current location,
@@ -140,51 +150,54 @@ class config:
         setattr(self, key, value)
         return
 
-    def _fill_bucket_names(self):
-        """Fills in the bucket name entries in the config file.
-
-        We do not store any of these bucket names in the IVERT public Github, so they are filled in at runtime.
-
-        Specifically, we're looking for:
-            - [S3_BUCKET_DATABASE]
-            - [S3_BUCKET_UNTRUSTED]
-            - [S3_BUCKET_TRUSTED]
-            - [S3_BUCKET_EXPORT]
-
-        If we're client-side, we can fill in at most two of these: [S3_BUCKET_UNTRUSTED] and [S3_BUCKET_EXPORT], which
-        are set during IVERT setup and stored in the user config file.
+    def _fill_bucket_names_from_ivert_setup(self):
+        """Fills in the bucket name entries in the config object.
 
         If we're server-side, we need to fill in [S3_BUCKET_DATABASE], [S3_BUCKET_TRUSTED], and [S3_BUCKET_EXPORT].
         These can be found in the ivert_setup/setup/paths.sh file from the ivert_setup repository."""
+        if not os.path.exists(self.ivert_setup_paths_file):
+            raise FileNotFoundError(f"ivert_setup_paths_file not found: {self.ivert_setup_paths_file}")
 
-        # TODO: Finish this.
+        with open(self.ivert_setup_paths_file) as f:
 
-    def _add_user_variables_to_config(self):
+
+
+    def _add_user_variables_and_s3_creds_to_config(self):
         """Add the names of the S3 buckets to the configfile.config object.
 
         On a client instance, ivert setup needs to be run to flesh out the user configfile, before this will work."""
         # Make sure all these are defined in here. They may be assigned to None but they should exist. This is
         # a sanity check in case we changed the bucket variables names in the configfile.
-        assert hasattr(self, "s3_bucket_ipmort_untrusted")
-        assert hasattr(self, "s3_bucket_import_trusted")
+        assert hasattr(self, "s3_bucket_import_untrusted")
         assert hasattr(self, "s3_bucket_export")
-        assert hasattr(self, "s3_bucket_database")
         assert hasattr(self, "user_email")
         assert hasattr(self, "username")
         assert hasattr(self, "aws_profile_ivert_ingest")
         assert hasattr(self, "aws_profile_ivert_export")
 
-        # If we're on the client side (not in an AWS instance), get this from the user configfile.
-        #    In this case, only the s3_bucket_import_untrusted and s3_bucket_export are needed.
-        # TODO: Fetch the bucket names from the user configfile.
-        # TODO: Also get the user email, username, and aws_profiles from the user configfile.
+        # If we're on the client side (not in an AWS instance), get these from the user configfile.
         if self.is_aws:
-            pass
+            if not os.path.exists(self.user_configfile):
+                return
+            else:
+                user_config = config(self.user_configfile)
+                self.user_email = user_config.user_email
+                self.username = user_config.username
+                self.aws_profile_ivert_ingest = user_config.aws_profile_ivert_ingest
+                self.aws_profile_ivert_export = user_config.aws_profile_ivert_export
+
+            # Now try to read the s3 credentials file.
+            if not os.path.exists(self.ivert_s3_credentials_file):
+                return
+            else:
+                s3_credentials = config(self.ivert_s3_credentials_file)
+                self.s3_bucket_import_untrusted = s3_credentials.s3_bucket_import_untrusted
+                self.s3_bucket_export = s3_credentials.s3_bucket_export
 
         # If we're on the server side (in the AWS), get these from the "ivert_setup" repository under /setup/paths.sh.
         #    In this case, only the s3_bucket_import_trusted, s3_bucket_database, and s3_bucket_export are needed.
-        # TODO: Fetch the bucket names from the ivert_setup/setup/paths.sh repository file.
         else:
             pass
+
 
         return
