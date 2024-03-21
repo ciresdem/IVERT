@@ -217,12 +217,9 @@ class S3_Manager:
             else:
                 subdirs = []
 
-            # DEBUG:
-            print(type(result))
-            for item in result.items():
-                print(item)
+            if "Contents" in result.keys():
+                files = files + [f["Key"] for f in result["Contents"]]
 
-            files = [f["Key"] for f in result["Contents"]]
             return subdirs + files
 
     def delete(self, s3_key, bucket_type="database"):
