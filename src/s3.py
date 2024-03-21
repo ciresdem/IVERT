@@ -218,8 +218,8 @@ class S3_Manager:
             s3_key = s3_key + "/"
 
         # First make sure it's actually a directory we're looking at, not just a random matching substring.
-        if not self.is_existing_s3_directory(key, bucket_type=bucket_type):
-            raise FileNotFoundError(f"'{key}' is not a directory in bucket '{bucket_name}'")
+        if not self.is_existing_s3_directory(s3_key, bucket_type=bucket_type):
+            raise FileNotFoundError(f"'{s3_key}' is not a directory in bucket '{bucket_name}'")
 
         resource = boto3.resource("s3")
         bucket = resource.Bucket(bucket_name)
