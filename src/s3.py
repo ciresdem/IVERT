@@ -55,6 +55,14 @@ class S3_Manager:
 
     def get_bucketname(self, bucket_type="database"):
         bucket_type = bucket_type.strip().lower()
+        if bucket_type == 'd':
+            bucket_type = 'database'
+        elif bucket_type == 't':
+            bucket_type = 'import_trusted'
+        elif bucket_type == 'u':
+            bucket_type = 'import_untrusted'
+        elif bucket_type in ('e', 'x'):
+            bucket_type = 'export'
 
         if bucket_type.lower() not in self.bucket_dict.keys():
             # Try to see if it's a valid bucket name already, rather than a bucket_type.
@@ -239,10 +247,10 @@ def define_and_parse_args():
                         " Run each command without arguments to see usage messages for it.")
     parser.add_argument("--bucket", "-b", default="database", help=
                         "The shorthand for which ivert S3 bucket we're pulling from, or the explicit name of a bucket."
-                        " Shorthand options are 'database' (s3 bucket of the IVERT database & other core data),"
-                        " 'import_trusted' (the S3 bucket for input files that just passed secure ingest),"
-                        " 'import_untrusted' (s3 bucket for pushing files into IVERT),"
-                        " and 'export' (where IVERT puts output files to disseminate). These are abstractions."
+                        " Shorthand options are 'database' or 'd' (s3 bucket of the IVERT database & other core data),"
+                        " 'import_trusted' or 't' (the S3 bucket for input files that just passed secure ingest),"
+                        " 'import_untrusted' or 'u' (s3 bucket for pushing files into IVERT),"
+                        " and 'export' or 'e' or 'x' (where IVERT puts output files to disseminate). These are abstractions."
                         " The actual S3 bucket names for each category are defined in ivert_config.ini."
                         " Default: 'database'")
     parser.add_argument("--recursive", "-r", default=False, action="store_true", help=
