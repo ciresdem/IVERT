@@ -218,7 +218,9 @@ class S3_Manager:
                 subdirs = []
 
             if "Contents" in result.keys():
-                files = files + [f["Key"] for f in result["Contents"]]
+                files = [f["Key"] for f in result["Contents"]]
+            else:
+                files = []
 
             return subdirs + files
 
