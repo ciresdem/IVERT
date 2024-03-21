@@ -17,7 +17,7 @@ class S3_Manager:
 
     def __init__(self):
         self.config = utils.configfile.config()
-        assert self.config.is_aws
+
         # Different buckets for each type.
         self.bucket_dict = {"database": self.config.s3_bucket_database,
                             "import_untrusted": self.config.s3_bucket_import_untrusted,
@@ -27,20 +27,31 @@ class S3_Manager:
         # Different AWS profiles for each bucket. "None" indicates no profile is needed.
         # TODO: Replace with entries from the user profile created by ivert_new_user_setup.py
         self.bucket_profile_dict = {"database": None,
-                                    "import_untrusted": "TODO: ENTER HERE FROM USER PROFILE",
+                                    "import_untrusted": self.config.aws_profile_ivert_ingest,
                                     "import_trusted": None,
-                                    "export": "TODO: ENTER HERE FROM USER PROFILE"}
+                                    "export": self.config.aws_profile_ivert_export}
+
+        self.session_dict = {"database": None,
+                             "import_untrusted": None,
+                             "import_trusted": None,
+                             "export": None}
 
         # The s3 client. Client created on demand when needed by the :get_client() method.
-        self.client = None
+        self.client_dict = {"database": None,
+                            "import_untrusted": None,
+                            "import_trusted": None,
+                            "export": None}
 
+    def get_client(self, bucket_type="database"):
+        """Return the open client.
 
-    def get_client(self):
-        "Return the open client. If it doesn't exist yet, open one."
-        if self.client is not None:
-            return self.client
-        self.client = boto3.client("s3")
-        return self.client
+        If it doesn't exist yet, open one."""
+        if self.client_dict[bucket_type] is None:
+            if self.session_dict[bucket_type] is None:
+                self.session_dict[bucket_type] = boto3.Session(profile_name=self.bucket_profile_dict[bucket_type])
+            self.client_dict[bucket_type] = self.session_dict[bucket_type].client("s3")
+
+        return self.client_dict[bucket_type]
 
     def get_bucketname(self, bucket_type="database"):
         bucket_type = bucket_type.strip().lower()
@@ -68,7 +79,7 @@ class S3_Manager:
 
     def exists(self, s3_key, bucket_type="database", return_head=False):
         """Look in the appropriate bucket, and see if a file or directory exists there."""
-        client = self.get_client()
+        client = self.get_client(bucket_type=bucket_type)
 
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
@@ -124,7 +135,7 @@ class S3_Manager:
 
     def download(self, s3_key, filename, bucket_type="database", delete_original=False, fail_quietly=True):
         """Download a file from the S3 to the local file system."""
-        client = self.get_client()
+        client = self.get_client(bucket_type=bucket_type)
 
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
@@ -153,7 +164,7 @@ class S3_Manager:
                fail_quietly=True,
                include_md5=False):
         """Upload a file from the local file system to the S3."""
-        client = self.get_client()
+        client = self.get_client(bucket_type=bucket_type)
 
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
@@ -200,17 +211,22 @@ class S3_Manager:
             return [obj.key for obj in files]
         else:
             # Get the full string that occurs after the directory listed, for each subset.
-            result = self.get_client().list_objects(Bucket=bucket_name, Prefix=s3_key, Delimiter="/")
+            result = self.get_client(bucket_type=bucket_type).list_objects(Bucket=bucket_name, Prefix=s3_key, Delimiter="/")
             if "CommonPrefixes" in result.keys():
                 subdirs = [subdir["Prefix"] for subdir in result["CommonPrefixes"]]
             else:
                 subdirs = []
+
+            # DEBUG:
+            for result in result.items():
+                print(result)
+
             files = [f["Key"] for f in result["Contents"]]
             return subdirs + files
 
     def delete(self, s3_key, bucket_type="database"):
         """Delete a key (file) from the S3."""
-        client = self.get_client()
+        client = self.get_client(bucket_type=bucket_type)
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
         return client.delete_object(Bucket=bucket_name, Key=s3_key)
