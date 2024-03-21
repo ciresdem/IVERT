@@ -126,7 +126,7 @@ class S3_Manager:
 
     def is_existing_s3_directory(self, s3_key, bucket_type="database"):
         "Return True if 'key' points to an existing directory (prefix) in the bucket. NOT a file. False otherwise."
-        if s3_key in ("", "/"):
+        if s3_key in (".", "", "/"):
             return True
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
@@ -146,7 +146,7 @@ class S3_Manager:
 
             # If we match with an object and the character immediately after the prefix is a '/', then it's a directory.
             # If some other character is there, then we're not sure yet, move along to the next object.
-            if obj.key[len(s3_key)] == "/":
+            if s3_key[-1] == "/" or obj.key[len(s3_key)] == "/":
                 return True
 
         return False
