@@ -46,6 +46,8 @@ class S3_Manager:
         """Return the open client.
 
         If it doesn't exist yet, open one."""
+        bucket_type = self.convert_btype(bucket_type)
+
         if self.client_dict[bucket_type] is None:
             if self.session_dict[bucket_type] is None:
                 self.session_dict[bucket_type] = boto3.Session(profile_name=self.bucket_profile_dict[bucket_type])
@@ -53,7 +55,9 @@ class S3_Manager:
 
         return self.client_dict[bucket_type]
 
-    def get_bucketname(self, bucket_type="database"):
+
+    def convert_btype(self, bucket_type):
+        """Convert a user-entered bucket type into a valid value."""
         bucket_type = bucket_type.strip().lower()
         if bucket_type == 'd':
             bucket_type = 'database'
@@ -63,6 +67,12 @@ class S3_Manager:
             bucket_type = 'import_untrusted'
         elif bucket_type in ('e', 'x'):
             bucket_type = 'export'
+
+        return bucket_type
+
+
+    def get_bucketname(self, bucket_type="database"):
+        bucket_type = self.convert_btype(bucket_type)
 
         if bucket_type.lower() not in self.bucket_dict.keys():
             # Try to see if it's a valid bucket name already, rather than a bucket_type.
