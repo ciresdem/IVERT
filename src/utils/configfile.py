@@ -54,9 +54,9 @@ class config:
         # if I need to use different sections separately.
         self._parse_config_into_attrs()
 
-        # If we're importing the primary IVERT config file, add the user variables and S3 creds to the config
+        # If we're importing the primary IVERT config file, add the user variables and S3 creds to the config as well.
         if self._configfile == ivert_default_configfile:
-            self._add_user_variables_and_s3_creds_to_config()
+            self._add_user_variables_and_s3_creds_to_config_obj()
 
     def _abspath(self, path, only_if_actual_path_doesnt_exist=False):
         """Retreive the absolute path of a file path contained in the configfile.
@@ -204,7 +204,7 @@ class config:
         return
 
 
-    def _add_user_variables_and_s3_creds_to_config(self):
+    def _add_user_variables_and_s3_creds_to_config_obj(self):
         """Add the names of the S3 buckets to the configfile.config object.
 
         On a client instance, ivert setup needs to be run to flesh out the user configfile, before this will work."""
