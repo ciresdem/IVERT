@@ -160,8 +160,5 @@ cython_debug/
 .idea/
 data/*
 !data/icesat2/
-config/
-!config/ivert_config.ini
-!config/*TEMPLATE.ini
 scratch_data/*
 src/tests_old
