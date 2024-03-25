@@ -507,7 +507,7 @@ def validate_dem_parallel(dem_name,
         output_dir = os.path.dirname(dem_name)
 
     # Get the results dataframe filename
-    results_dataframe_file = os.path.join(output_dir,(os.path.splitext(dem_name)[0] + "_results.h5"))
+    results_dataframe_file = os.path.join(output_dir, (os.path.splitext(dem_name)[0] + "_results.h5"))
 
     # Get the interim data directory (if not already set)
     if interim_data_dir is None:
@@ -1320,42 +1320,23 @@ def read_and_parse_args():
 if __name__ == "__main__":
     args = read_and_parse_args()
 
-    # Create photon .h5 filename if not provided.
-    if args.datadir == "":
-        args.datadir = os.path.split(args.output_h5)[0]
+    # The output directory defaults to the input directory.
+    if not args.output_dir:
+        args.output_dir = os.path.dirname(args.input_dem)
 
-    # if args.photon_h5 == "":
-    #     base = os.path.splitext(os.path.split(args.output_h5)[1])[0]
-    #     args.photon_h5 = os.path.join(args.datadir, base + "_photons.h5")
-
-    # if (args.date_range == "") or (args.date_range == None):
-    #     icesat2_date_range = ["2021-01-01", "2021-12-31"]
-    # else:
-    #     assert type(args.date_range) == str
-    #     icesat2_date_range = args.date_range.split(",")
-
-    if (args.output_dir == "") or (args.output_dir is None):
-        args.putput_dir = os.path.dirname(args.input_dem)
-
-    if (args.datadir == "") or (args.datadir is None):
+    # The data directory defaults to the output directory.
+    if not args.datadir:
         args.datadir = args.output_dir
 
     output_h5 = os.path.join(args.output_dir, os.path.splitext(os.path.basename(args.input_dem))[0] + "_results.h5")
 
     validate_dem_parallel(args.input_dem,
-                          # args.photon_h5,
-                          # use_icesat2_photon_database = args.use_icesat2_photon_database,
-                          # use_icesat2_photon_database = True,
                           dem_vertical_datum = args.input_vdatum,
                           output_vertical_datum = args.output_vdatum,
-                          results_dataframe_file = output_h5,
-                          # icesat2_date_range = icesat2_date_range,
-                          interim_data_dir = (None if (args.datadir=="") else args.datadir),
+                          interim_data_dir = (None if not args.datadir else args.datadir),
                           overwrite=args.overwrite,
                           delete_datafiles=args.delete_datafiles,
                           write_result_tifs = args.write_result_tifs,
-                          # skip_icesat2_download = args.skip_icesat2_download,
-                          # skip_icesat2_download=True,
                           plot_results = args.plot_results,
                           location_name = args.place_name,
                           outliers_sd_threshold=ast.literal_eval(args.outlier_sd_threshold),
@@ -1363,9 +1344,4 @@ if __name__ == "__main__":
                           mask_out_urban=args.use_urban_mask,
                           numprocs=args.numprocs,
                           quiet=args.quiet)
-    # # fname = '/home/mmacferrin/Research/DATA/CopernicusDEM/data/30m/COP30_hh/Copernicus_DSM_COG_10_N26_00_W079_00_DEM.tif'
-    # # output_file = "../data/freeport_coastline"
-    # # fname = '/home/mmacferrin/Research/DATA/WorldView Images/Bahamas_Freeport/WV01_20080108_10200100014B9500_10200100015DC600/WV01_20080108_10200100014B9500_10200100015DC600_2m_lsf_seg1_dem.tif'
-    # # output_file = "../data/freeport_WV01"
-    # # create_coastline_mask(fname, output_file)
-    # subprocess.call(["python","freeport_bahamas_code.py"])
+
