@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS ivert_jobs (
     command         VARCHAR(64)     NOT NULL,
     -- command will be the primary command being run, such as 'validate', '
     configfile      VARCHAR(128)    NOT NULL,
+    processing_dir  VARCHAR(512),
+    job_pid         INTEGER         NOT NULL,
     status          VARCHAR(16)     NOT NULL    DEFAULT 'initiated',
         -- Possible values for status are: "initiated", "started", "running", "complete", "error"
     PRIMARY KEY (job_id, username)
@@ -40,5 +42,6 @@ CREATE TABLE IF NOT EXISTS files (
     md5                 VARCHAR(32)             CHECK (length (md5) == 32),
     FOREIGN KEY(job_id, username)
         REFERENCES ivert_jobs(job_id, username)
-        ON DELETE CASCADE
+        ON DELETE CASCADE -- NOTE: In order to enforce this foreign, we must run "PRAGMA foreign_keys = ON;" whenever
+                          -- we connect to the database. Foreign key constraints are disabled by default.
 );
