@@ -36,6 +36,7 @@ import argparse
 import numpy
 import pandas
 import multiprocessing as mp
+import re
 import time
 import numexpr
 import pyproj
@@ -472,14 +473,10 @@ def kick_off_new_child_process(height_array,
 
 
 def validate_dem_parallel(dem_name,
-                          # photon_dataframe_name=None,
-                          # use_icesat2_photon_database=True,
-                          icesat2_photon_database_obj=None,
+                          output_dir=None,
+                          icesat2_photon_database_obj=None, # Used only if we've already created this, for efficiency.
                           dem_vertical_datum="egm2008",
                           output_vertical_datum="egm2008",
-                          # granule_ids=None,
-                          results_dataframe_file=None,
-                          # icesat2_date_range=["2021-01-01", "2021-12-31"],
                           interim_data_dir=None,
                           overwrite=False,
                           delete_datafiles=False,
@@ -490,7 +487,6 @@ def validate_dem_parallel(dem_name,
                           include_gmrt_mask=False,
                           write_result_tifs=True,
                           write_summary_stats=True,
-                          # skip_icesat2_download=True,
                           outliers_sd_threshold=2.5,
                           include_photon_level_validation=False,
                           plot_results=True,
@@ -507,26 +503,32 @@ def validate_dem_parallel(dem_name,
     # Just get this variable defined so all the code-branches can use it.
     dem_ds = None
 
-    # Get the results dataframe filename (if not already set)
-    if (results_dataframe_file is None) or (results_dataframe_file == ""):
-        results_dataframe_file = os.path.splitext(dem_name)[0] + "_results.h5"
+    if not output_dir:
+        output_dir = os.path.dirname(dem_name)
+
+    # Get the results dataframe filename
+    results_dataframe_file = os.path.join(output_dir,(os.path.splitext(dem_name)[0] + "_results.h5"))
 
     # Get the interim data directory (if not already set)
     if interim_data_dir is None:
-        interim_data_dir = os.path.split(results_dataframe_file)[0]
+        interim_data_dir = output_dir
 
+    empty_results_filename = ""
     if mark_empty_results:
         base, ext = os.path.splitext(results_dataframe_file)
         empty_results_filename = base + "_EMPTY.txt"
 
+    summary_stats_filename = ""
     if write_summary_stats:
-        summary_stats_filename = os.path.splitext(results_dataframe_file)[0] + "_summary_stats.txt"
+        summary_stats_filename = re.sub(r"_results\.h5\Z", "_summary_stats.txt", results_dataframe_file)
 
+    result_tif_filename = ""
     if write_result_tifs:
-        result_tif_filename = os.path.splitext(results_dataframe_file)[0] + "_ICESat2_error_map.tif"
+        result_tif_filename = re.sub(r"_results\.h5\Z", "_ICESat2_error_map.tif", results_dataframe_file)
 
+    plot_filename = ""
     if plot_results:
-        plot_filename = os.path.splitext(results_dataframe_file)[0] + "_plot.png"
+        plot_filename = re.sub(r"_results\.h5\Z", "_plot.png", results_dataframe_file)
 
 
     # If the output file already exists and we aren't overwriting, create any un-created datasets
@@ -534,8 +536,6 @@ def validate_dem_parallel(dem_name,
     if not overwrite:
 
         if os.path.exists(results_dataframe_file):
-            print(results_dataframe_file)
-
             results_dataframe = None
 
             if write_summary_stats and not os.path.exists(summary_stats_filename):
@@ -559,7 +559,7 @@ def validate_dem_parallel(dem_name,
                     if not quiet:
                         print("done.")
 
-                generate_result_geotiffs(results_dataframe, dem_ds, results_dataframe_file, verbose=not quiet)
+                generate_result_geotiff(results_dataframe, dem_ds, results_dataframe_file, verbose=not quiet)
 
             if plot_results and not os.path.exists(plot_filename):
                 if location_name is None:
@@ -635,22 +635,10 @@ def validate_dem_parallel(dem_name,
                                                    input_vertical_datum=dem_vertical_datum,
                                                    output_vertical_datum=output_vertical_datum,
                                                    verbose=not quiet)
-            # This is the old convert_vdatum code.
-            # subprocess.run([os.path.join(os.path.split(__file__)[0], "convert_vdatum.py"),
-            #                 dem_name,
-            #                 "-output_dem", converted_dem_name,
-            #                 "-input_vdatum", dem_vertical_datum,
-            #                 "-output_vdatum", output_vertical_datum,
-            #                 "-tempdir", os.path.split(dem_base)[0],
-            #                 "-interp_method", "cubic",
-            #                 "" if delete_datafiles else "--keep_grids",
-            #                 "--quiet" if quiet else "",
-            #                 ])
             if (retval != 0) or (not os.path.exists(converted_dem_name)):
                 raise FileNotFoundError(f"{dem_name} not converted correctly to {converted_dem_name}. Aborting.")
 
         # Get the dem array from the new dataset.
-        dem_ds = None
         dem_ds = gdal.Open(converted_dem_name, gdal.GA_ReadOnly)
         dem_array = dem_ds.GetRasterBand(1).ReadAsArray()
     else:
@@ -679,71 +667,6 @@ def validate_dem_parallel(dem_name,
 
         return None
 
-
-    # If the photon dataframe file containing all the photons in this tile already exists, just use it.
-    # elif skip_icesat2_download and os.path.exists(photon_dataframe_name) and overwrite==False:
-    #     if not quiet:
-    #         print("Reading", photon_dataframe_name + "...", end="")
-    #     photon_df = pandas.read_hdf(photon_dataframe_name)
-    #     if not quiet:
-    #         print("Done.")
-
-    # elif granule_ids is None:
-    #     # If the granules already exist in the directory and we've planned to skip
-    #     # re-downloading them, then skip them!
-    #     granules_existing_in_directory = [os.path.join(interim_data_dir, fname) for fname in os.listdir(interim_data_dir) if (os.path.splitext(fname)[1].lower() == ".h5" and fname.upper().find("ATL") >= 0)]
-    #     if skip_icesat2_download and (len(granules_existing_in_directory) > 0):
-    #         atl03_granules_list = [fname for fname in granules_existing_in_directory if fname.upper().find("ATL03") >= 0]
-    #         atl08_granules_list = [fname for fname in granules_existing_in_directory if fname.upper().find("ATL08") >= 0]
-    #
-    #     else:
-    #         # If the DEM is in a projection other than WGS84, get the bbox coordinates and convert to WGS84
-    #         # NOTE: This will break in polar stereo projections, and perhaps others.
-    #         # TODO: Find a more elegant way of doing this that doesn't fuck up polar projections.
-    #         if dem_epsg != 4326:
-    #             icesat2_srs = osr.SpatialReference()
-    #             icesat2_srs.SetWellKnownGeogCS("EPSG:4326")
-    #             dem_srs = osr.SpatialReference(wkt=dem_ds.GetProjection())
-    #             # Convert bbox points from DEM projection into
-    #             proj_to_wgs84 = osr.CoordinateTransformation(dem_srs, icesat2_srs)
-    #
-    #             # Create a list of bbox points in counter-clockwise order.
-    #             xmin, ymin, xmax, ymax = dem_bbox
-    #             points = [(xmin, ymin), (xmin, ymax), (xmax, ymax), (xmax, ymin), (xmin, ymin)]
-    #             output_points = proj_to_wgs84.TransformPoints(points)
-    #             bbox_wgs84 = [(p[0], p[1]) for p in output_points]
-    #         else:
-    #             bbox_wgs84 = dem_bbox
-    #
-    #         granules_list = nsidc_download.main(short_name=["ATL03","ATL08"],
-    #                                             region=bbox_wgs84,
-    #                                             local_dir=interim_data_dir,
-    #                                             version=etopo_config.nsidc_atl_version,
-    #                                             dates = icesat2_date_range,
-    #                                             fname_python_regex="\.h5\Z",
-    #                                             force=overwrite,
-    #                                             quiet=quiet)
-    #         # Just get the .h5 files from the query (skip the .xml's)
-    #         atl03_granules_list = [fn for fn in granules_list if os.path.split(fn)[1].find("ATL03") > -1]
-    #         atl08_granules_list = [fn for fn in granules_list if os.path.split(fn)[1].find("ATL08") > -1]
-    #
-    #     common_granule_ids = []
-    #     for atl03_gid in atl03_granules_list:
-    #         fpath, fname = os.path.split(atl03_gid)
-    #         if os.path.exists(os.path.join(fpath, fname.replace("ATL03","ATL08"))):
-    #             common_granule_ids.append(atl03_gid)
-    #
-    #     if len(common_granule_ids) < 0.5*len(atl03_granules_list):
-    #         raise UserWarning("ICESat-2 ATL03 granules IDs are less than 50% in common with ATL08 granule ids over " + \
-    #                           "bounding box {0}, {1} of {2} matching.".format(dem_bbox,
-    #                                                                           len(common_granule_ids),
-    #                                                                           len(atl03_granules_list)))
-    #
-    #     photon_df = None
-    # else:
-    #     common_granule_ids = granule_ids
-    #     photon_df = None
-
     # If the DEM is not in WGS84 coordaintes, create a conversion funtion to pass to sub-functions.
     if dem_epsg != 4326:
         dem_proj_wkt = dem_ds.GetProjection()
@@ -754,15 +677,6 @@ def validate_dem_parallel(dem_name,
         is2_to_dem = osr.CoordinateTransformation(icesat2_srs, dem_srs)
     else:
         is2_to_dem = None
-
-    # if photon_df is None:
-    #     # Get the photon data from the dataframe.
-    #     photon_df = collect_raw_photon_data(dem_bbox,
-    #                                         photon_dataframe_name,
-    #                                         granule_ids=common_granule_ids,
-    #                                         overwrite=overwrite,
-    #                                         dem_bbox_converter=is2_to_dem,
-    #                                         verbose=not quiet)
 
     if not quiet:
         print("{0:,}".format(len(photon_df)), "ICESat-2 photons present in photon dataframe.")
@@ -775,15 +689,15 @@ def validate_dem_parallel(dem_name,
 
     if len(photon_df) == 0:
         if mark_empty_results:
-            # Just create an empty file to makre this dataset as done.
+            # Just create an empty file to mark this dataset as done.
             with open(empty_results_filename, 'w') as f:
                 f.close()
             if not quiet:
                 print("Created", empty_results_filename, "to indicate no data was returned here.")
         return None
 
-    # If the DEM coordinate system isn't WGS84 lat/lon, convert the icesat-2
-    # lat/lon data coordinates into the same CRS as the DEM
+    # If the DEM horizontal coordinate system isn't WGS84 lat/lon, convert the icesat-2
+    # lat/lon data coordinates into the same horizontal CRS as the DEM
     if dem_epsg != 4326:
         lon_x = photon_df["longitude"]
         lat_y = photon_df["latitude"]
@@ -803,8 +717,10 @@ def validate_dem_parallel(dem_name,
     else:
         ph_xcoords = photon_df["longitude"]
         ph_ycoords = photon_df["latitude"]
+        # If we're measuring the coverage, we'll just use the "dem_x" and "dem_y" values.
+        # We don't need this extra field if we're not measuring the coverage, since the photons are just taken
+        # from the ph_xcoords and ph_ycoords variables assigned above.
         if measure_coverage:
-            # If we're measuring the coverage, we'll just use the "dem_x" and "dem_y" values.
             photon_df["dem_x"] = ph_xcoords
             photon_df["dem_y"] = ph_ycoords
 
@@ -834,7 +750,9 @@ def validate_dem_parallel(dem_name,
         #            (photon_df["class_code"] >= 1)
 
     # Subset the dataframe to only provide pixels in-bounds for our DEM
-    photon_df = photon_df[ph_bbox_mask].copy() # Create a copy so as not to be assinging to a slice of the full dataframe.
+    # Create a copy() so as not to be assinging to a slice of the full dataframe.
+    # The original photon_df gets dereferenced and destroyed.
+    photon_df = photon_df[ph_bbox_mask].copy()
     ph_xcoords = ph_xcoords[ph_bbox_mask]
     ph_ycoords = ph_ycoords[ph_bbox_mask]
 
@@ -865,6 +783,7 @@ def validate_dem_parallel(dem_name,
                 ph_ycoords = ph_ycoords[n_ph_bad_granules_mask]
 
 
+    # Assign a dem (i,j) index location for each photon. We use this for computing.
     photon_df["i"] = numpy.floor((ph_ycoords - ystart) / ystep).astype(int)
     photon_df["j"] = numpy.floor((ph_xcoords - xstart) / xstep).astype(int)
 
@@ -881,14 +800,9 @@ def validate_dem_parallel(dem_name,
 
     # Make sure that we only look at cells that have at least 1 ground photon in them.
     ph_mask_ground_only = (photon_df["class_code"] == 1)
-    # ph_in_bounds = (photon_df.i >= 0) & (photon_df.i < dem_array.shape[0]) & \
-    #                (photon_df.j >= 0) & (photon_df.j < dem_array.shape[1])
-
     dem_mask_w_ground_photons = numpy.zeros(dem_array.shape, dtype=bool)
     dem_mask_w_ground_photons[photon_df.i[ph_mask_ground_only],
                               photon_df.j[ph_mask_ground_only]] = 1
-    # dem_mask_w_ground_photons[photon_df.i[ph_mask_ground_only & ph_in_bounds],
-    #                           photon_df.j[ph_mask_ground_only & ph_in_bounds]] = 1
 
     dem_overlap_mask = dem_goodpixel_mask & dem_mask_w_ground_photons
 
@@ -1132,10 +1046,6 @@ def validate_dem_parallel(dem_name,
                         results_dataframes_list.append(chunk_result_df)
                         if not quiet:
                             progress_bar.ProgressBar(counter_finished, N, suffix=("{0:>" +str(len(str(N))) + "d}/{1:d}").format(counter_finished, N))
-                            # DEBUG statements
-                            # print()
-                            # print("chunk_results_df", chunk_result_df)
-                            # print("num_chunks_finished", num_chunks_finished, "num_chunks_started", num_chunks_started)
 
                         # If we still have more data to process, send another chunk along.
                         if counter_started < N:
@@ -1171,10 +1081,6 @@ def validate_dem_parallel(dem_name,
                             open_pipes_parent[i] = None
                             open_pipes_child[i] = None
 
-                    # else:
-                        # DEBUG print statement
-                        # print("Waiting on proc #", i)
-
         except Exception as e:
             if not quiet:
                 print("\nException encountered in ICESat-2 processing loop. Exiting.")
@@ -1185,14 +1091,14 @@ def validate_dem_parallel(dem_name,
     t_end = time.perf_counter()
     if not quiet:
         total_time_s = t_end - t_start
-        total_time_m = 0
         # If there's 100 or more seconds, state the time with minutes.
         if total_time_s >= 100:
             total_time_m = int(total_time_s / 60)
             partial_time_s = total_time_s % 60
             print("{0:d} minute".format(total_time_m) + ("s" if total_time_m > 1 else "") + " {0:0.1f} seconds total, ({1:0.4f} s/iteration)".format(partial_time_s, ( (total_time_s/N) if N>0 else 0)))
         else:
-            print("{0:0.1f} seconds total, ({1:0.4f} s/iteration)".format(total_time_s, ( (total_time_s/N) if N>0 else 0)))
+            print("{0:0.1f} seconds total, ({1:0.4f} s/iteration)".format(total_time_s,
+                                                                          ((total_time_s / N) if N > 0 else 0)))
 
     clean_procs_and_pipes(running_procs, open_pipes_parent, open_pipes_child)
     # Concatenate all the results dataframes
@@ -1372,8 +1278,8 @@ def read_and_parse_args():
     parser = argparse.ArgumentParser(description='Use ICESat-2 photon data to validate a DEM and generate statistics.')
     parser.add_argument('input_dem', type=str,
                         help='The input DEM.')
-    parser.add_argument('output_h5', type=str, nargs="?", default="",
-                        help='A .h5 file to put the output summary results. Default: Will put in the same directory & filename as the input_dem, just with .h5 instead of .tif.')
+    parser.add_argument('output_dir', type=str, nargs="?", default="",
+                        help='Directory to write output results. Default: Will put in the same directory as input filename')
     parser.add_argument('--input_vdatum','-ivd', type=str, default="wgs84",
                         help="Input DEM vertical datum. (Default: 'wgs84')" + \
                         " Currently supported datum arguments, not case-sensitive: ({})".format(",".join([str(vd) for vd in convert_vdatum.SUPPORTED_VDATUMS])))
@@ -1381,7 +1287,7 @@ def read_and_parse_args():
                         help="Output vertical datum. (Default: 'wgs84')" + \
                         " Supports same datum list as input_vdatum, except for egm96 and equivalent.")
     parser.add_argument('--datadir', type=str, default="",
-                        help="A scratch directory to write interim data files. Useful if user would like to save temp files elsewhere. Defaults to the output_h5 directory.")
+                        help="A scratch directory to write interim data files. Useful if user would like to save temp files elsewhere. Defaults to the output_dir directory.")
     parser.add_argument('--band_num', type=int, default=1,
                         help="The band number (1-indexed) of the input_dem. (Default: 1)")
     parser.add_argument('--place_name', '-name', type=str, default=None,
@@ -1428,14 +1334,13 @@ if __name__ == "__main__":
     #     assert type(args.date_range) == str
     #     icesat2_date_range = args.date_range.split(",")
 
-    if ((args.output_h5 == "") or (args.output_h5 == None)):
-        if ((args.datadir != "") and (args.datadir != None)):
-            base, fname = os.path.split(args.input_dem)
-            output_h5 = os.path.join(args.datadir, os.path.splitext(fname)[0] + "_results.h5")
-        else:
-            output_h5 = os.path.splitext(args.input_dem)[0] + "_results.h5"
-    else:
-        output_h5 = args.output_h5
+    if (args.output_dir == "") or (args.output_dir is None):
+        args.putput_dir = os.path.dirname(args.input_dem)
+
+    if (args.datadir == "") or (args.datadir is None):
+        args.datadir = args.output_dir
+
+    output_h5 = os.path.join(args.output_dir, os.path.splitext(os.path.basename(args.input_dem))[0] + "_results.h5")
 
     validate_dem_parallel(args.input_dem,
                           # args.photon_h5,
