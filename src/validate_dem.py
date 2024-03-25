@@ -644,13 +644,6 @@ def validate_dem_parallel(dem_name,
     else:
         converted_dem_name = None
 
-    # If we've been provided an open dataframe rather than just the name of the file, simply use it.
-    # if photon_dataframe_name is None and use_icesat2_photon_database == False:
-    #     raise ValueError("Input error: must specify either use_icesat2_photon_database or provide a photon dataframe name.")
-
-    # elif isinstance(photon_dataframe_name, pandas.DataFrame):
-    #     photon_df = photon_dataframe_name
-
     # elif use_icesat2_photon_database:
     if icesat2_photon_database_obj is None:
         icesat2_photon_database_obj = icesat2_photon_database.ICESat2_Database()

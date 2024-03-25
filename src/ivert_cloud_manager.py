@@ -1,6 +1,31 @@
 """ivert_cloud_manager.py -- Code for managing cloud files and IVERT instances within the EC2 instance."""
 
+import utils.configfile
+import s3
+
+ivert_config = None
+
 # TODO: Code for identifying new jobs coming in and copying the files into the local directory
+
+def import_ivert_input_data(s3_bucket_key, local_dir, s3_bucket_type="trusted"):
+    """Copies files from an S3 bucket to a local directory.
+
+    For a list of s3 IVERT bucket types, see s3.py."""
+    global ivert_config
+    if ivert_config is None:
+        ivert_config = utils.configfile.config()
+
+    
+    # TODO: Code
+
+def export_ivert_output_data(local_dir, s3_bucket_key, s3_bucket_type="export"):
+    """Copies files from a local directory to an S3 bucket.
+
+    For a list of s3 IVERT bucket types, see s3.py."""
+    global ivert_config
+    if ivert_config is None:
+        ivert_config = utils.configfile.config()
+    # TODO: Code
 
 # TODO: Code for notifying users of:
 #    - A job successfully submitted and in-progress
