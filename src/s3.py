@@ -20,26 +20,26 @@ class S3_Manager:
 
         # Different buckets for each type.
         self.bucket_dict = {"database": self.config.s3_bucket_database,
-                            "import_untrusted": self.config.s3_bucket_import_untrusted,
-                            "import_trusted": self.config.s3_bucket_import_trusted,
+                            "untrusted": self.config.s3_bucket_import_untrusted,
+                            "trusted": self.config.s3_bucket_import_trusted,
                             "export": self.config.s3_bucket_export}
 
         # Different AWS profiles for each bucket. "None" indicates no profile is needed.
         # TODO: Replace with entries from the user profile created by ivert_new_user_setup.py
         self.bucket_profile_dict = {"database": None,
-                                    "import_untrusted": self.config.aws_profile_ivert_ingest,
-                                    "import_trusted": None,
+                                    "untrusted": self.config.aws_profile_ivert_ingest,
+                                    "trusted": None,
                                     "export": self.config.aws_profile_ivert_export}
 
         self.session_dict = {"database": None,
-                             "import_untrusted": None,
-                             "import_trusted": None,
+                             "untrusted": None,
+                             "trusted": None,
                              "export": None}
 
         # The s3 client. Client created on demand when needed by the :get_client() method.
         self.client_dict = {"database": None,
-                            "import_untrusted": None,
-                            "import_trusted": None,
+                            "untrusted": None,
+                            "trusted": None,
                             "export": None}
 
     def get_client(self, bucket_type="database"):
@@ -62,9 +62,9 @@ class S3_Manager:
         if bucket_type == 'd':
             bucket_type = 'database'
         elif bucket_type == 't':
-            bucket_type = 'import_trusted'
+            bucket_type = 'trusted'
         elif bucket_type == 'u':
-            bucket_type = 'import_untrusted'
+            bucket_type = 'untrusted'
         elif bucket_type in ('e', 'x'):
             bucket_type = 'export'
 
@@ -258,8 +258,8 @@ def define_and_parse_args():
     parser.add_argument("--bucket", "-b", default="database", help=
                         "The shorthand for which ivert S3 bucket we're pulling from, or the explicit name of a bucket."
                         " Shorthand options are 'database' or 'd' (s3 bucket of the IVERT database & other core data),"
-                        " 'import_trusted' or 't' (the S3 bucket for input files that just passed secure ingest),"
-                        " 'import_untrusted' or 'u' (s3 bucket for pushing files into IVERT),"
+                        " 'trusted' or 't' (the S3 bucket for input files that just passed secure ingest),"
+                        " 'untrusted' or 'u' (s3 bucket for pushing files into IVERT),"
                         " and 'export' or 'e' or 'x' (where IVERT puts output files to disseminate). These are abstractions."
                         " The actual S3 bucket names for each category are defined in ivert_config.ini."
                         " Default: 'database'")
@@ -275,8 +275,8 @@ if __name__ == "__main__":
     # This optional parameter appears in most
     bucketopt_message = \
     "\n  --bucket BUCKET, -b BUCKET\n" + \
-    textwrap.fill("Tag for the IVERT bucket type being used. Options are database', 'import_untrusted',"
-                  " 'import_trusted', and 'export'. The actual names of the buckets are pulled from"
+    textwrap.fill("Tag for the IVERT bucket type being used. Options are database', 'untrusted',"
+                  " 'trusted', and 'export'. The actual names of the buckets are pulled from"
                   " ivert_config.ini. Default is 'database', so commands will (by default) be referenced to the"
                   " s3 bucket where the IVERT database resides.",
                   width=os.get_terminal_size().columns,
