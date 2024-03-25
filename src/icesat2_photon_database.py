@@ -424,7 +424,6 @@ class ICESat2_Database:
         for i, (idx, df_row) in enumerate(df_tiles_subset.iterrows()):
             fname = df_row['filename']
             if verbose:
-                print("FOOBAR: {0}".format(fname))
                 print("\t{0}/{1} Reading".format(i + 1,
                                                  len(df_tiles_subset)),
                                                  os.path.splitext(os.path.basename(fname))[0],
@@ -850,7 +849,6 @@ class ICESat2_Database:
             assert gdf_record['ymin'].tolist()[0] == csv_gdf['ymin'].tolist()[0]
             assert gdf_record['ymax'].tolist()[0] == csv_gdf['ymax'].tolist()[0]
             assert csv_gdf['is_populated'].tolist()[0] == True
-            # foobar
             # Update the photon counts.
             gdf.loc[idx,'numphotons'] = csv_gdf['numphotons'].tolist()[0]
             gdf.loc[idx,'numphotons_canopy'] = csv_gdf['numphotons_canopy'].tolist()[0]
