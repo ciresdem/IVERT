@@ -424,9 +424,10 @@ class ICESat2_Database:
         for i, (idx, df_row) in enumerate(df_tiles_subset.iterrows()):
             fname = df_row['filename']
             if verbose:
+                print("FOOBAR: {0}".format(fname))
                 print("\t{0}/{1} Reading".format(i + 1,
                                                  len(df_tiles_subset)),
-                                                 os.path.splitext(os.path.basename(fname)[0]),
+                                                 os.path.splitext(os.path.basename(fname))[0],
                                                  "...", end="")
             tile_df = self.read_photon_tile(fname)
             dataframes_list[i] = tile_df

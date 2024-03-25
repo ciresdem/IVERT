@@ -1144,7 +1144,7 @@ def validate_dem_parallel(dem_name,
         if ext in (".txt", ".csv"):
             results_dataframe.to_csv(results_dataframe_file)
         else:
-            results_dataframe.to_hdf(results_dataframe_file, "icesat2", complib="zlib", mode='w')
+            results_dataframe.to_hdf(results_dataframe_file, key="icesat2", complib="zlib", mode='w')
 
         if not quiet:
             print(results_dataframe_file, "written.")
