@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""ivert.py -- The front-facing interfact to IVERT code for cloud computing."""
+"""ivert_client.py -- The front-facing interfact to IVERT code for cloud computing."""
 import argparse
 import os
 
@@ -37,8 +37,8 @@ def define_and_parse_args():
                                  " Other options are: [TODO: FILL IN SOON]")
     parser_validate.add_argument("-w", "--wait", default=False, action="store_true",
                                  help="Wait to exit until the results are finished and downloaded. Default:"
-                                      " just upload the data and exit. You can then run 'ivert.py check <job_id>' to check the status"
-                                      " of the job and 'ivert.py download <job_id> --local_dir <dirname>' to download results."
+                                      " just upload the data and exit. You can then run 'ivert_client.py check <job_id>' to check the status"
+                                      " of the job and 'ivert_client.py download <job_id> --local_dir <dirname>' to download results."
                                       " Default: False")
     parser_validate.add_argument("-d", "--dry_run", default=False, action="store_true",
                                  help="Print out the complete config options that will be used for this job and then"
@@ -61,8 +61,8 @@ def define_and_parse_args():
     parser_help = subparsers.add_parser("test", help=test_help_msg, description=test_help_msg)
     parser_help.add_argument("-w", "--wait", dest="wait", default=False, action="store_true",
                              help="Wait to exit until the results are finished and downloaded. If False,"
-                                  " just upload the data and exit. You can run 'ivert.py check <job_id>' to check the status"
-                                  " of the job and 'ivert.py download <job_id> --local_dir <dirname>' to download results."
+                                  " just upload the data and exit. You can run 'ivert_client.py check <job_id>' to check the status"
+                                  " of the job and 'ivert_client.py download <job_id> --local_dir <dirname>' to download results."
                                   " Default: False")
 
     # Create the "check" subparser
