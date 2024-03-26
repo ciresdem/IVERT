@@ -521,7 +521,7 @@ def validate_dem_parallel(dem_name,
         interim_data_dir = output_dir
     if not os.path.exists(interim_data_dir):
         if not quiet:
-        print("Creating interim data directory", interim_data_dir)
+            print("Creating interim data directory", interim_data_dir)
         os.makedirs(interim_data_dir)
 
     empty_results_filename = ""
