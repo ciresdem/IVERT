@@ -1299,7 +1299,7 @@ class ICESat2_Database:
 
 if __name__ == "__main__":
 
-    is2db = Icesat2PhotonDatabase()
+    is2db = ICESat2_Database()
     if not os.path.exists(is2db.gpkg_fname_compressed):
         gdf = is2db.get_gdf()
         utils.pickle_blosc.write(gdf, is2db.gpkg_fname_compessed)
