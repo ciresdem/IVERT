@@ -597,6 +597,8 @@ def validate_dem_parallel(dem_name,
                                                              s3_output_dir,
                                                              s3_bucket_type=s3_output_bucket_type,
                                                              verbose=not quiet)
+                if not quiet:
+                    print("Done.")
 
             # If we didn't have to open the dataframe or export anything, it was all already done.
             elif results_dataframe is None and not quiet:
