@@ -65,7 +65,7 @@ class ICESat2_Database:
             if not os.path.exists(self.gpkg_fname) and not os.path.exists(self.gpkg_fname_compressed):
                 if self.ivert_config.is_aws:
                     s3_manager = self.get_s3_manager()
-                    s3_geopackage = self.ivert_config.s3_photon_geopackage
+                    s3_geopackage = self.ivert_config.s3_photon_geopackage_key
                     s3_geopackage_compressed = os.path.splitext(s3_geopackage)[0] + ".blosc2"
                     if s3_manager.exists(s3_geopackage_compressed, bucket_type="database"):
                         is_compressed = True
