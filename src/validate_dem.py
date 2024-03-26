@@ -1141,6 +1141,8 @@ def validate_dem_parallel(dem_name,
         if not quiet:
             print("{0:,} DEM cells after removing outliers.".format(len(results_dataframe)))
 
+    files_to_export = []
+
     if len(results_dataframe) == 0:
         if not quiet:
             print("No valid results in results dataframe. No outputs computed.")
@@ -1156,6 +1158,7 @@ def validate_dem_parallel(dem_name,
         # Write out the results dataframe. Method depends upon the file type. Can be .csv, .txt, .h5 (assumed default of not one of the text files.)
         base, ext = os.path.splitext(results_dataframe_file)
         ext = ext.lower().strip()
+
         if ext in (".txt", ".csv"):
             results_dataframe.to_csv(results_dataframe_file)
         else:
@@ -1163,11 +1166,13 @@ def validate_dem_parallel(dem_name,
 
         if not quiet:
             print(results_dataframe_file, "written.")
+        files_to_export.append(results_dataframe_file)
 
     if write_summary_stats:
         write_summary_stats_file(results_dataframe,
                                  summary_stats_filename,
                                  verbose=not quiet)
+        files_to_export.append(summary_stats_filename)
 
     if write_result_tifs:
         if dem_ds is None:
@@ -1176,6 +1181,7 @@ def validate_dem_parallel(dem_name,
                                 dem_ds,
                                 result_tif_filename,
                                 verbose=not quiet)
+        files_to_export.append(result_tif_filename)
 
     if plot_results:
         if location_name is None:
@@ -1185,24 +1191,31 @@ def validate_dem_parallel(dem_name,
                                                                         plot_filename,
                                                                         place_name=location_name,
                                                                         verbose=not quiet)
+        files_to_export.append(plot_filename)
+
+    if len(files_to_export) > 0 and ivert_config.is_aws and s3_output_dir:
+        if not quiet:
+            print("Exporting results to S3...", end="")
+
+        ivert_cloud_manager.export_ivert_output_data(files_to_export,
+                                                     s3_output_dir,
+                                                     s3_bucket_type=s3_output_bucket_type,
+                                                     verbose=not quiet)
+        if not quiet:
+            print("Done.")
 
     if delete_datafiles:
         del dem_ds
         if not quiet:
             print("Cleaning up...", end="")
+
         if os.path.exists(coastline_mask_filename):
             os.remove(coastline_mask_filename)
         if (converted_dem_name is not None) and os.path.exists(converted_dem_name):
             os.remove(converted_dem_name)
-        # for granule_fname in atl03_granules_list:
-        #     if os.path.exists(granule_fname): os.remove(granule_fname)
-        # for granule_fname in atl08_granules_list:
-        #     if os.path.exists(granule_fname): os.remove(granule_fname)
-        # if os.path.exists(photon_dataframe_name):
-        #     os.remove(photon_dataframe_name)
 
         if not quiet:
-            print("done.")
+            print("Done.")
 
     return
 
