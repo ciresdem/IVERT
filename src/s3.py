@@ -125,7 +125,7 @@ class S3_Manager:
 
         except botocore.exceptions.ClientError as e:
             try:
-                if self.is_existing_s3_directory(key, bucket_type=bucket_type):
+                if self.is_existing_s3_directory(s3_key, bucket_type=bucket_type):
                     return True
             except botocore.exceptions.ClientError:
                 pass
