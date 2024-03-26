@@ -7,7 +7,6 @@ Code for isolating land photons from ATL08, 06, and 03 datasets, for land-elevat
 Author: Mike MacFerrin
 Created: 2021-06-10
 """
-import argparse
 import geopandas
 import numpy
 import pandas
@@ -19,34 +18,7 @@ import atl_granules
 import utils.configfile
 my_config = utils.configfile.config()
 
-
-# LISTS OF VARIABLES NEEDED FROM EACH ATL DATASET FOR THE "get_photon_data" routine.
-# ATL03_variables_needed = ["lat_ph", "lon_ph", "h_ph", "segment_ph_cnt", "segment_id",
-#                           "delta_time", "dist_ph_along", "segment_dist_x",
-#                           "geoid", "geoid_free2mean", "signal_conf_ph", "quality_ph"]
-# ATL08_variables_needed = ["classed_pc_flag", "ph_segment_id", "classed_pc_indx"]
-
-# def get_photon_data_in_bounding_box(return_type=numpy.ndarray,
-#                                     bounding_box = None,
-#                                     date_start = None,
-#                                     date_end = None,
-#                                     surface = "ellipsoid"):
-#     """Return the land photon data for all granules within a given bounding box.
-
-#     If bounding_box is None: return data from all the granules we have.
-#     If date_start: Return data only after the date/time listed. In format "YYYY/MM/DD HH:MM:SS.SSSS"
-#     If date_end  : Return date only before the date/time listed. In format "YYYY/MM/DD HH:MM:SS.SSSS"
-#         If date_end <= date_start, no data will be returned (all filtered out). A warning will be issued.
-
-#     surface: The vertical reference for the photon data to be returned. See 'get_photon_data' documentation of options.
-#     """
-
-# def get_photon_data_multiple_granules_parallel(gid_list,
-#                                                beam=None,
-#                                                return_type=numpy.ndarray,
-#                                                bounding_box = None):
-#     # TODO: Implement this in parallel.
-#     pass
+# TODO: Implement this in parallel.
 
 def classify_photon_data_multiple_granules(gid_list,
                                            beam=None,
