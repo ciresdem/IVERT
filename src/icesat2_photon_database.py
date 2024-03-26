@@ -70,11 +70,17 @@ class ICESat2_Database:
                     if s3_manager.exists(s3_geopackage_compressed, bucket_type="database"):
                         is_compressed = True
                         s3_file_to_fetch = s3_geopackage_compressed
+
                     elif s3_manager.exists(self.ivert_config.s3_photon_geopackage, bucket_type="database"):
                         is_compressed = False
                         s3_file_to_fetch = s3_geopackage
                     else:
                         raise FileNotFoundError(os.path.basename(self.gpkg_fname) + " not found on disk nor in S3 bucket '{0}'".format(s3.get_bucketname()))
+
+                    # If the local directory doesn't exist, create it.
+                    # This may happen when on a brand-new S3 instance.
+                    if not os.path.exists(os.path.dirname(self.gpkg_fname)):
+                        os.makedirs(os.path.dirname(self.gpkg_fname))
 
                     s3_manager.download(s3_file_to_fetch,
                                         self.gpkg_fname_compressed if is_compressed else self.gpkg_fname,
@@ -343,7 +349,7 @@ class ICESat2_Database:
                         utils.pickle_blosc.write(gdf, tempfile_name)
                     else:
                         raise NotImplementedError(
-                            "Uknown file format for photon_tile_geopackage: {0}. Can accept .gpkg or .gz.".format(
+                            "Uknown file format for photon_tile_geopackage: {0}. Can accept .gpkg or .blosc2.".format(
                                 os.path.basename(file_to_write)))
                     os.remove(file_to_write)
                     shutil.move(tempfile_name, file_to_write)
@@ -362,7 +368,7 @@ class ICESat2_Database:
             elif ext == ".blosc2":
                 utils.pickle_blosc.write(gdf, file_to_write)
             else:
-                raise NotImplementedError("Uknown file format for photon_tile_geopackage: {0}. Can accept .gpkg or .gz.".format(os.path.basename(file_to_write)))
+                raise NotImplementedError("Uknown file format for photon_tile_geopackage: {0}. Can accept .gpkg or .blosc2.".format(os.path.basename(file_to_write)))
 
         if verbose:
             print(os.path.basename(file_to_write), "written with", len(gdf), "entries.")
@@ -897,6 +903,12 @@ class ICESat2_Database:
         if not os.path.exists(feather_name) and not os.path.exists(h5_name) and self.ivert_config.is_aws:
             s3_manager = self.get_s3_manager()
             s3_photon_tiles_dir = self.ivert_config.s3_photon_tiles_directory
+
+            # If the local directory doesn't exist, create it.
+            # This may happen when on a new S3 instance.
+            if not os.path.exists(self.ivert_config.icesat2_photon_tiles_directory):
+                os.makedirs(self.ivert_config.icesat2_photon_tiles_directory)
+
             assert s3_photon_tiles_dir is not None
             s3_feather_key = s3_photon_tiles_dir.rstrip("/") + "/" + os.path.basename(feather_name)
             s3_h5_key = s3_photon_tiles_dir.rstrip("/") + "/" + os.path.basename(h5_name)
