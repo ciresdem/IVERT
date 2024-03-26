@@ -20,6 +20,7 @@ import atl_granules
 import utils.configfile
 import utils.traverse_directory
 import utils.parallel_funcs
+import s3
 # import datasets.etopo_source_dataset
 
 my_config = utils.configfile.config()
@@ -679,12 +680,13 @@ def create_master_list_of_bad_granules(dirname,
         return new_bad_granules_df
 
 def get_list_of_granules_to_reject(bad_granule_csv = my_config._abspath(my_config.icesat2_bad_granules_csv),
-                                   refind_bad_granules = False,
-                                   regenerate_bad_granule_csv = False,
-                                   append_if_regenerating_bad_granule_csv = True,
-                                   dirname_if_regenerating = "CUDEM_CONUS", # TODO: Change this to Copernicus when ready to do the whole world.
-                                   files_identified_threshold = 2,
-                                   min_photons_threshold = 1000,
+                                   get_from_s3_if_not_present=True,
+                                   refind_bad_granules=False,
+                                   regenerate_bad_granule_csv=False,
+                                   append_if_regenerating_bad_granule_csv=True,
+                                   dirname_if_regenerating="CUDEM_CONUS", # TODO: Change this to Copernicus when ready to do the whole world.
+                                   files_identified_threshold=2,
+                                   min_photons_threshold=1000,
                                    return_as_gid_numbers=False,
                                    verbose = True):
     """Reading the 'bad_granules_list.csv' file, return a list of granules that
@@ -698,16 +700,24 @@ def get_list_of_granules_to_reject(bad_granule_csv = my_config._abspath(my_confi
         find_bad_granules_in_a_dataset(dirname_if_regenerating)
 
     if regenerate_bad_granule_csv:
-        create_master_list_of_bad_granules(dataset_name_if_regenerating,
+        create_master_list_of_bad_granules(dirname_if_regenerating,
                                            master_bad_granule_csv = bad_granule_csv,
                                            append = append_if_regenerating_bad_granule_csv,
                                            verbose = verbose)
 
     if not os.path.exists(bad_granule_csv):
+        # If the bad_granule_list.csv does not exist locally, and we're in the cloud, and we've set
+        # get_from_s3_if_not_present, download it.
+        if get_from_s3_if_not_present and my_config.is_aws:
+            s3m = s3.S3_Manager()
+            s3m.download(my_config.s3_bad_granules_csv_key, bad_granule_csv, bucket_type="database", fail_quietly=not verbose)
+
         if verbose:
             print("Error: No bad_granule_list.csv file found. Not filtering out bad granules.")
         return []
 
+
+    # Read the 'bad_granule_list.csv' file
     bad_granule_df = pandas.read_csv(bad_granule_csv, index_col=False)
     unique_granule_names = bad_granule_df['granule_name'].unique()
 
