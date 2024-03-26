@@ -1298,7 +1298,12 @@ if __name__ == "__main__":
 
 
 if __name__ == "__main__":
-    pass
+
+    is2db = Icesat2PhotonDatabase()
+    if not os.path.exists(is2db.gpkg_fname_compressed):
+        gdf = is2db.get_gdf()
+        utils.pickle_blosc.write(gdf, is2db.gpkg_fname_compessed)
+        print(is2db.gpkg_fname_compressed, "written.")
 
     # is2db.update_and_fix_photon_database()
 
