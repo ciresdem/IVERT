@@ -508,6 +508,10 @@ def validate_dem_parallel(dem_name,
 
     if not output_dir:
         output_dir = os.path.dirname(dem_name)
+    if not os.path.exists(output_dir):
+        if not quiet:
+            print("Creating output directory", output_dir)
+        os.makedirs(output_dir)
 
     # Get the results dataframe filename
     results_dataframe_file = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_results.h5")
@@ -515,6 +519,10 @@ def validate_dem_parallel(dem_name,
     # Get the interim data directory (if not already set)
     if interim_data_dir is None:
         interim_data_dir = output_dir
+    if not os.path.exists(interim_data_dir):
+        if not quiet:
+        print("Creating interim data directory", interim_data_dir)
+        os.makedirs(interim_data_dir)
 
     empty_results_filename = ""
     if mark_empty_results:
