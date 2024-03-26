@@ -27,6 +27,7 @@ import plot_validation_results
 import classify_icesat2_photons
 import icesat2_photon_database
 import find_bad_icesat2_granules
+import ivert_cloud_manager
 
 # import subprocess
 import ast
@@ -45,8 +46,8 @@ import pyproj
 # command will be unnecessary.
 gdal.UseExceptions()
 
-etopo_config = utils.configfile.config()
-EMPTY_VAL = etopo_config.dem_default_ndv
+ivert_config = utils.configfile.config()
+EMPTY_VAL = ivert_config.dem_default_ndv
 
 # 1: DEM Preprocessing:
     # a) For Worldview, apply the bitmask and matchtag filters to get rid of noise
@@ -477,6 +478,8 @@ def validate_dem_parallel(dem_name,
                           icesat2_photon_database_obj=None, # Used only if we've already created this, for efficiency.
                           dem_vertical_datum="egm2008",
                           output_vertical_datum="egm2008",
+                          s3_output_dir=None,
+                          s3_output_bucket_type="export",
                           interim_data_dir=None,
                           overwrite=False,
                           delete_datafiles=False,
@@ -507,7 +510,7 @@ def validate_dem_parallel(dem_name,
         output_dir = os.path.dirname(dem_name)
 
     # Get the results dataframe filename
-    results_dataframe_file = os.path.join(output_dir, (os.path.splitext(dem_name)[0] + "_results.h5"))
+    results_dataframe_file = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_results.h5")
 
     # Get the interim data directory (if not already set)
     if interim_data_dir is None:
@@ -530,55 +533,74 @@ def validate_dem_parallel(dem_name,
     if plot_results:
         plot_filename = re.sub(r"_results\.h5\Z", "_plot.png", results_dataframe_file)
 
-
     # If the output file already exists and we aren't overwriting, create any un-created datasets
     # if they're requested, and then just return.
     if not overwrite:
 
         if os.path.exists(results_dataframe_file):
             results_dataframe = None
+            files_to_export = [results_dataframe_file]
 
-            if write_summary_stats and not os.path.exists(summary_stats_filename):
-                if results_dataframe is None:
-                    if not quiet:
-                        print("Reading", results_dataframe_file, '...', end="")
-                    results_dataframe = read_dataframe_file(results_dataframe_file)
-                    if not quiet:
-                        print("done.")
+            if write_summary_stats:
+                if not os.path.exists(summary_stats_filename):
+                    if results_dataframe is None:
+                        if not quiet:
+                            print("Reading", results_dataframe_file, '...', end="")
+                        results_dataframe = read_dataframe_file(results_dataframe_file)
+                        if not quiet:
+                            print("done.")
 
-                write_summary_stats_file(results_dataframe, summary_stats_filename, verbose=not quiet)
+                    write_summary_stats_file(results_dataframe, summary_stats_filename, verbose=not quiet)
+                files_to_export.append(summary_stats_filename)
 
-            if write_result_tifs and not os.path.exists(result_tif_filename):
-                if dem_ds is None:
-                    dem_ds = gdal.Open(dem_name, gdal.GA_ReadOnly)
+            if write_result_tifs:
+                if not os.path.exists(result_tif_filename):
+                    if dem_ds is None:
+                        dem_ds = gdal.Open(dem_name, gdal.GA_ReadOnly)
 
-                if results_dataframe is None:
-                    if not quiet:
-                        print("Reading", results_dataframe_file, '...', end="")
-                    results_dataframe = read_dataframe_file(results_dataframe_file)
-                    if not quiet:
-                        print("done.")
+                    if results_dataframe is None:
+                        if not quiet:
+                            print("Reading", results_dataframe_file, '...', end="")
+                        results_dataframe = read_dataframe_file(results_dataframe_file)
+                        if not quiet:
+                            print("done.")
 
-                generate_result_geotiff(results_dataframe, dem_ds, results_dataframe_file, verbose=not quiet)
+                    generate_result_geotiff(results_dataframe, dem_ds, result_tif_filename, verbose=not quiet)
 
-            if plot_results and not os.path.exists(plot_filename):
-                if location_name is None:
-                    location_name = os.path.split(dem_name)[1]
+                files_to_export.append(result_tif_filename)
 
-                if results_dataframe is None:
-                    if not quiet:
-                        print("Reading", results_dataframe_file, '...', end="")
-                    results_dataframe = read_dataframe_file(results_dataframe_file)
-                    if not quiet:
-                        print("done.")
+            if plot_results:
+                if not os.path.exists(plot_filename):
+                    if location_name is None:
+                        location_name = os.path.split(dem_name)[1]
 
-                plot_validation_results.plot_histogram_and_error_stats_4_panels(results_dataframe,
-                                                                            plot_filename,
-                                                                            place_name=location_name,
-                                                                            verbose=not quiet)
+                    if results_dataframe is None:
+                        if not quiet:
+                            print("Reading", results_dataframe_file, '...', end="")
+                        results_dataframe = read_dataframe_file(results_dataframe_file)
+                        if not quiet:
+                            print("done.")
 
-            if (results_dataframe is None) and not quiet:
-                print("Everything seems already done here. Moving on...")
+                    plot_validation_results.plot_histogram_and_error_stats_4_panels(results_dataframe,
+                                                                                plot_filename,
+                                                                                place_name=location_name,
+                                                                                verbose=not quiet)
+
+                files_to_export.append(plot_filename)
+
+            # If we've asked to output this data to S3, do that now.
+            if ivert_config.is_aws and s3_output_dir and len(files_to_export) > 0:
+                if not quiet:
+                    print("Writing outputs to S3...", end="")
+                files_to_export = []
+                ivert_cloud_manager.export_ivert_output_data(files_to_export,
+                                                             s3_output_dir,
+                                                             s3_bucket_type=s3_output_bucket_type,
+                                                             verbose=not quiet)
+
+            # If we didn't have to open the dataframe or export anything, it was all already done.
+            elif results_dataframe is None and not quiet:
+                print("Work already done here. Moving on.")
 
             return
 
@@ -1281,6 +1303,10 @@ def read_and_parse_args():
                         " Supports same datum list as input_vdatum, except for egm96 and equivalent.")
     parser.add_argument('--datadir', type=str, default="",
                         help="A scratch directory to write interim data files. Useful if user would like to save temp files elsewhere. Defaults to the output_dir directory.")
+    parser.add_argument("--s3_output_dir", "-s3", type=str, default="",
+                        help="S3 directory to write output results. (Default: Will put in the same directory as input filename)")
+    parser.add_argument("--s3_bucket_type", "-s3b", type=str, default="export",
+                        help="The category of S3 bucket. Choices: 'database', 'trusted', 'untrusted', 'export' (Default: 'export')")
     parser.add_argument('--band_num', type=int, default=1,
                         help="The band number (1-indexed) of the input_dem. (Default: 1)")
     parser.add_argument('--place_name', '-name', type=str, default=None,
@@ -1335,6 +1361,8 @@ if __name__ == "__main__":
                           outliers_sd_threshold=ast.literal_eval(args.outlier_sd_threshold),
                           mask_out_buildings=not args.use_urban_mask,
                           mask_out_urban=args.use_urban_mask,
+                          s3_output_dir=(None if not args.s3_output_dir else args.s3_output_dir),
+                          s3_output_bucket_type=args.s3_bucket_type,
                           numprocs=args.numprocs,
                           quiet=args.quiet)
 

@@ -42,6 +42,18 @@ class S3_Manager:
                             "trusted": None,
                             "export": None}
 
+
+    def get_resource_bucket(self, bucket_type="database"):
+        """Return the open resource.BAD_FILE_TO_TEST_QUARANTINE.foobar
+
+        If it doesn't exist yet, open one."""
+        bucket_type = self.convert_btype(bucket_type)
+
+        if self.session_dict[bucket_type] is None:
+            self.session_dict[bucket_type] = boto3.Session(profile_name=self.bucket_profile_dict[bucket_type])
+
+        return self.session_dict[bucket_type].resource("s3").Bucket(self.bucket_dict[bucket_type])
+
     def get_client(self, bucket_type="database"):
         """Return the open client.
 
@@ -126,16 +138,16 @@ class S3_Manager:
 
     def is_existing_s3_directory(self, s3_key, bucket_type="database"):
         "Return True if 'key' points to an existing directory (prefix) in the bucket. NOT a file. False otherwise."
-        if s3_key in (".", "", "/"):
+
+        bucket_obj = self.get_resource_bucket(bucket_type=bucket_type)
+
+        if bucket_obj and s3_key in (".", "", "/"):
             return True
-        bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
-        resource = boto3.resource('s3')
-        bucket = resource.Bucket(bucket_name)
+        # Filter the list of objects by the prefix. If the prefix doesn't exist, this will be empty.
+        objects = bucket_obj.objects.filter(Prefix=s3_key)
 
-        objects = bucket.objects.filter(Prefix=s3_key)
-
-        # Loop through the objects returned. If the prefix doesn't exist this will be empty.
+        # Loop through the objects returned.
         for i, obj in enumerate(objects):
             # If it's an exact match with the key, then it's a file (not a directory). Return False.
             if obj.key == s3_key:
@@ -211,25 +223,25 @@ class S3_Manager:
 
         NOTE: This lists all objects recursively, even in sub-directories, so it doesn't behave exactly like os.listdir.
         """
-        bucket_name = self.get_bucketname(bucket_type=bucket_type)
-
         # Directories must end in '/' for an S3 bucket.
         if len(s3_key) > 0 and s3_key[-1] != "/":
             s3_key = s3_key + "/"
 
         # First make sure it's actually a directory we're looking at, not just a random matching substring.
         if not self.is_existing_s3_directory(s3_key, bucket_type=bucket_type):
-            raise FileNotFoundError(f"'{s3_key}' is not a directory in bucket '{bucket_name}'")
+            raise FileNotFoundError(f"'{s3_key}' is not a directory in bucket '{self.get_bucketname(bucket_type=bucket_type)}'.")
 
-        resource = boto3.resource("s3")
-        bucket = resource.Bucket(bucket_name)
+        bucket_obj = self.get_resource_bucket(bucket_type=bucket_type)
         # If we're recursing, just return everything that is in that Prefix.
         if recursive:
-            files = bucket.objects.filter(Prefix=s3_key).all()
+            files = bucket_obj.objects.filter(Prefix=s3_key).all()
             return [obj.key for obj in files]
         else:
             # Get the full string that occurs after the directory listed, for each subset.
-            result = self.get_client(bucket_type=bucket_type).list_objects(Bucket=bucket_name, Prefix=s3_key, Delimiter="/")
+            result = self.get_client(bucket_type=bucket_type).list_objects(Bucket=self.get_bucketname(bucket_type=bucket_type),
+                                                                           Prefix=s3_key,
+                                                                           Delimiter="/")
+
             if "CommonPrefixes" in result.keys():
                 subdirs = [subdir["Prefix"] for subdir in result["CommonPrefixes"]]
             else:
@@ -360,16 +372,19 @@ if __name__ == "__main__":
 
         s3m = S3_Manager()
 
-        if len(command) != 3:
+        if len(command) < 3:
             raise ValueError(f"'{command[0]}' should be followed by exactly 2 files, one of them preceded by 's3:'")
         c1 = command[1]
         c2 = command[2]
 
-        local_file = [fn for fn in [c1, c2] if fn.lower().find("s3:") == -1][0]
-        s3_file = [fn for fn in [c1, c2] if fn.lower().find("s3:") == 0][0]
+        local_files = [fn for fn in [c1, c2] if fn.lower().find("s3:") == -1]
+        s3_files = [fn for fn in [c1, c2] if fn.lower().find("s3:") == 0]
 
-        if len(s3_file) != 1 or len(local_file) != 1:
+        if len(s3_files) != 1 or len(local_files) != 1:
             raise ValueError(f"'{command[0]}' should be followed by exactly 2 files, one of them preceded by 's3:'")
+
+        s3_file = s3_files[0]
+        local_file = local_files[0]
 
         # Determine if we're uploading or downloading. Which one came first?
         downloading = True
@@ -379,7 +394,8 @@ if __name__ == "__main__":
         # Trim off the "s3:" in front of the s3 file.
         s3_file = s3_file.lstrip("s3:").lstrip("S3:").strip()
         if (s3_file == "") and downloading:
-                raise ValueError(f"Cannot {move_or_copy} the base directory (s3:) of the s3 bucket.")
+            move_or_copy = "copy" if (command[0] == "cp") else "move"
+            raise ValueError(f"Cannot {move_or_copy} the base directory (s3:) of the s3 bucket.")
 
         if downloading:
             s3m.download(s3_file,

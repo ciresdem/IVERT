@@ -1,31 +1,126 @@
 """ivert_cloud_manager.py -- Code for managing cloud files and IVERT instances within the EC2 instance."""
 
-import utils.configfile
+import glob
+import os
 import s3
+import sys
+
+import utils.configfile
 
 ivert_config = None
 
 # TODO: Code for identifying new jobs coming in and copying the files into the local directory
 
-def import_ivert_input_data(s3_bucket_key, local_dir, s3_bucket_type="trusted"):
+def import_ivert_input_data(s3_key: str,
+                            local_dir: str,
+                            s3_bucket_type: str="trusted",
+                            create_local_dir: bool=True,
+                            verbose: bool=True) -> list:
     """Copies files from an S3 bucket to a local directory.
 
-    For a list of s3 IVERT bucket types, see s3.py."""
-    global ivert_config
-    if ivert_config is None:
-        ivert_config = utils.configfile.config()
+    For a list of s3 IVERT bucket types, see s3.py.
 
-    
-    # TODO: Code
+    Args:
+        s3_key (str): The key of the file or directory in the S3 bucket.
+        local_dir (str): The local directory to copy the file to.
+        s3_bucket_type (str, optional): The type of S3 bucket. Defaults to "trusted".
+        create_local_dir (bool, optional): Whether to create the local directory if it doesn't exist. Defaults to True.
+        verbose (bool, optional): Whether to print verbose output. Defaults to True.
 
-def export_ivert_output_data(local_dir, s3_bucket_key, s3_bucket_type="export"):
-    """Copies files from a local directory to an S3 bucket.
+    Returns:
+        A list of the files copied. If no files were copied, an empty list is returned.
+    """
+    # Create the local directory if it doesn't exist.
+    if not os.path.exists(local_dir):
+        if create_local_dir:
+            os.makedirs(local_dir)
+        else:
+            if verbose:
+                print("Error: Local directory does not exist and create_local_dir is False. No files imported.",
+                      file=sys.stderr)
+            return []
+    elif not os.path.isdir(local_dir):
+        if verbose:
+            print(f"Error: local_diretory '{local_dir}' already exists and is not a directory.", file=sys.stderr)
+        return []
 
-    For a list of s3 IVERT bucket types, see s3.py."""
-    global ivert_config
-    if ivert_config is None:
-        ivert_config = utils.configfile.config()
-    # TODO: Code
+    # At this point it should be both exist and be a directory.
+    assert os.path.exists(local_dir) and os.path.isdir(local_dir)
+
+    # Get a list of the files in the S3 bucket
+    s3m = s3.S3_Manager()
+    if s3m.exists(s3_key, bucket_type=s3_bucket_type):
+        if s3m.is_existing_s3_directory(s3_key, bucket_type=s3_bucket_type):
+            file_list = s3m.listdir(s3_key, bucket_type=s3_bucket_type)
+        else:
+            file_list = [s3_key]
+    else:
+        if verbose:
+            print(f"Error: S3 key '{s3_key}' does not exist on bucket '{s3m.get_bucketname(bucket_type=s3_bucket_type)}'.",
+                  "No files imported.",
+                  file=sys.stderr)
+        return []
+
+    # Copy the files
+    local_files = []
+    for s3_file in file_list:
+        local_fname = os.path.join(local_dir, s3_file.split("/")[-1])
+        s3m.download(s3_file, local_fname, bucket_type=s3_bucket_type, fail_quietly=not verbose)
+        if os.path.exists(local_fname):
+            local_files.append(local_fname)
+
+    return local_files
+
+
+def export_ivert_output_data(local_dir_file_or_list, s3_dir, s3_bucket_type="export", file_pattern="*", verbose=True):
+    """Copies files from a local directory in the EC2 to an S3 bucket.
+
+    For a list of s3 IVERT bucket types, see s3.py.
+
+    Args:
+        local_dir (str): Local directory path where the files are located.
+        s3_dir (str): Key to identify the destination prefix in the S3 bucket.
+        s3_bucket_type (str, optional): Type of S3 bucket. Defaults to "export".
+        file_pattern (str, optional): Pattern to match files. Defaults to "*".
+        verbose (bool, optional): Verbosity flag. Defaults to True.
+
+    Returns:
+        list: A list of the files keys copied. If no files were copied, an empty list is returned.
+    """
+    if type(local_dir_file_or_list) in (list, tuple):
+        local_files = local_dir_file_or_list
+
+    else:
+        local_files = [local_dir_file_or_list]
+
+    files_uploaded = []
+
+    for local_file in local_files:
+        # Check if the local directory exists
+        if not os.path.exists(local_file):
+            if verbose:
+                print(f"Error: '{local_file}' does not exist. No files exported.", file=sys.stderr)
+            return []
+
+        # List files based on if local_dir is a directory or a single file
+        if os.path.isdir(local_file):
+            file_list = glob.glob(os.path.join(local_dir, file_pattern))
+        else:
+            file_list = [local_file]
+
+        s3m = s3.S3_Manager()
+
+        # Upload the files to S3
+        for local_fname in file_list:
+            s3_file = "/".join([s3_dir, os.path.basename(local_fname)])
+            s3m.upload(local_fname, s3_file, bucket_type=s3_bucket_type, delete_original=False, fail_quietly=not verbose)
+            if s3m.exists(s3_file, bucket_type=s3_bucket_type):
+                files_uploaded.append(s3_file)
+            elif verbose:
+                print(f"Error: File '{s3_file}' not uploaded to '{s3m.get_bucketname(bucket_type=s3_bucket_type)}'.",
+                      file=sys.stderr)
+
+    return files_uploaded
 
 # TODO: Code for notifying users of:
 #    - A job successfully submitted and in-progress
