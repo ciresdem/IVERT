@@ -1348,7 +1348,7 @@ def read_and_parse_args():
                         " Supports same datum list as input_vdatum, except for egm96 and equivalent.")
     parser.add_argument('--datadir', type=str, default="",
                         help="A scratch directory to write interim data files. Useful if user would like to save temp files elsewhere. Defaults to the output_dir directory.")
-    parser.add_argument("--s3_input_dir", "s3i", type=str, default="",
+    parser.add_argument("--s3_input_dir", "-s3i", type=str, default="",
                         help="S3 directory to read input data. (Default: do not read from S3.)")
     parser.add_argument("--s3_input_bucket_type", "-s3ib", type=str, default="trusted",
                         help="The category of S3 bucket. Choices: 'database', 'trusted', 'untrusted', 'export' (Default: 'trusted')")
