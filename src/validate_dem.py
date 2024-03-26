@@ -28,6 +28,7 @@ import classify_icesat2_photons
 import icesat2_photon_database
 import find_bad_icesat2_granules
 import ivert_cloud_manager
+import s3
 
 # import subprocess
 import ast
@@ -478,6 +479,8 @@ def validate_dem_parallel(dem_name,
                           icesat2_photon_database_obj=None, # Used only if we've already created this, for efficiency.
                           dem_vertical_datum="egm2008",
                           output_vertical_datum="egm2008",
+                          s3_input_dir=None,
+                          s3_input_bucket_type="trusted",
                           s3_output_dir=None,
                           s3_output_bucket_type="export",
                           interim_data_dir=None,
@@ -503,6 +506,30 @@ def validate_dem_parallel(dem_name,
     """The main function. Do it all here. But do it on more than one processor.
     TODO: Document all these method parameters. There are a bunch and they need better explanation.
     """
+    # If an S3 directory is specified to grab the input file *and* the file doesn't exist locally, grab it from the S3
+    # and put it in the local directory.
+    if not os.path.exists(dem_name):
+        s3_key = "/".join([s3_input_dir, os.path.basename(dem_name)]).replace("//", "/")
+        if s3_input_dir is not None:
+            local_file_list = ivert_cloud_manager.import_ivert_input_data(s3_key,
+                                                                          os.path.dirname(dem_name),
+                                                                          s3_bucket_type=s3_input_bucket_type,
+                                                                          create_local_dir=True,
+                                                                          verbose=not quiet)
+            assert len(local_file_list) <= 1
+
+    # If we still don't have the input dem, raise an error.
+    if not os.path.exists(dem_name):
+        if s3_input_dir:
+            file_not_found_msg = "Could not find file {0} locally nor in s3://{1}/{2}'.".format(
+                os.path.basename(dem_name),
+                s3.S3_Manager().get_bucketname(s3_input_bucket_type),
+                s3_input_dir
+            )
+        else:
+            file_not_found_msg = f"Could not find file {dem_name}."
+        raise FileNotFoundError(file_not_found_msg)
+
     # Just get this variable defined so all the code-branches can use it.
     dem_ds = None
 
@@ -768,11 +795,6 @@ def validate_dem_parallel(dem_name,
                                     "(ph_ycoords > miny) & " + \
                                     "(ph_ycoords <= maxy) & " + \
                                     "(df_class_code >= 1)")
-        #            (ph_xcoords >= min(xstart, xend)) & \
-        #            (ph_xcoords < max(xstart, xend)) & \
-        #            (ph_ycoords > min(ystart, yend)) & \
-        #            (ph_ycoords <= max(ystart, yend)) & \
-        #            (photon_df["class_code"] >= 1)
 
     # Subset the dataframe to only provide pixels in-bounds for our DEM
     # Create a copy() so as not to be assinging to a slice of the full dataframe.
@@ -1326,9 +1348,13 @@ def read_and_parse_args():
                         " Supports same datum list as input_vdatum, except for egm96 and equivalent.")
     parser.add_argument('--datadir', type=str, default="",
                         help="A scratch directory to write interim data files. Useful if user would like to save temp files elsewhere. Defaults to the output_dir directory.")
-    parser.add_argument("--s3_output_dir", "-s3", type=str, default="",
-                        help="S3 directory to write output results. (Default: Will put in the same directory as input filename)")
-    parser.add_argument("--s3_bucket_type", "-s3b", type=str, default="export",
+    parser.add_argument("--s3_input_dir", "s3i", type=str, default="",
+                        help="S3 directory to read input data. (Default: do not read from S3.)")
+    parser.add_argument("--s3_input_bucket_type", "-s3b", type=str, default="trusted",
+                        help="The category of S3 bucket. Choices: 'database', 'trusted', 'untrusted', 'export' (Default: 'trusted')")
+    parser.add_argument("--s3_output_dir", "-s3o", "-s3x", type=str, default="",
+                        help="S3 directory to write output results. (Default: do not export to S3.)")
+    parser.add_argument("--s3_output_bucket_type", "-s3b", type=str, default="export",
                         help="The category of S3 bucket. Choices: 'database', 'trusted', 'untrusted', 'export' (Default: 'export')")
     parser.add_argument('--band_num', type=int, default=1,
                         help="The band number (1-indexed) of the input_dem. (Default: 1)")
@@ -1385,8 +1411,10 @@ if __name__ == "__main__":
                           outliers_sd_threshold=ast.literal_eval(args.outlier_sd_threshold),
                           mask_out_buildings=not args.use_urban_mask,
                           mask_out_urban=args.use_urban_mask,
+                          s3_input_dir=(None if not args.s3_input_dir else args.s3_input_dir),
+                          s3_input_bucket_type=args.s3_input_bucket_type,
                           s3_output_dir=(None if not args.s3_output_dir else args.s3_output_dir),
-                          s3_output_bucket_type=args.s3_bucket_type,
+                          s3_output_bucket_type=args.s3_output_bucket_type,
                           numprocs=args.numprocs,
                           quiet=args.quiet)
 

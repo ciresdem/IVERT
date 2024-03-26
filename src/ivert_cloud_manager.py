@@ -16,12 +16,12 @@ def import_ivert_input_data(s3_key: str,
                             s3_bucket_type: str="trusted",
                             create_local_dir: bool=True,
                             verbose: bool=True) -> list:
-    """Copies files from an S3 bucket to a local directory.
+    """Copies files from an S3 bucket directory to a local directory.
 
     For a list of s3 IVERT bucket types, see s3.py.
 
     Args:
-        s3_key (str): The key of the file or directory in the S3 bucket.
+        s3_key (str): The key of a directory/prefix, or file, in the S3 bucket.
         local_dir (str): The local directory to copy the file to.
         s3_bucket_type (str, optional): The type of S3 bucket. Defaults to "trusted".
         create_local_dir (bool, optional): Whether to create the local directory if it doesn't exist. Defaults to True.
@@ -41,7 +41,7 @@ def import_ivert_input_data(s3_key: str,
             return []
     elif not os.path.isdir(local_dir):
         if verbose:
-            print(f"Error: local_diretory '{local_dir}' already exists and is not a directory.", file=sys.stderr)
+            print(f"Error: '{local_dir}' already exists and is not a directory.", file=sys.stderr)
         return []
 
     # At this point it should be both exist and be a directory.
@@ -112,7 +112,7 @@ def export_ivert_output_data(local_dir_file_or_list, s3_dir, s3_bucket_type="exp
 
         # Upload the files to S3
         for local_fname in file_list:
-            s3_file = "/".join([s3_dir, os.path.basename(local_fname)])
+            s3_file = "/".join([s3_dir, os.path.basename(local_fname)]).replace("//", "/")
             s3m.upload(local_fname, s3_file, bucket_type=s3_bucket_type, delete_original=False, fail_quietly=not verbose)
             if s3m.exists(s3_file, bucket_type=s3_bucket_type):
                 files_uploaded.append(s3_file)
