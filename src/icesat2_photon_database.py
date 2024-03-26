@@ -902,7 +902,7 @@ class ICESat2_Database:
         # If the file doesn't exist locally but we're in the AWS cloud, see if we can download it from an S3 bucket.
         if not os.path.exists(feather_name) and not os.path.exists(h5_name) and self.ivert_config.is_aws:
             s3_manager = self.get_s3_manager()
-            s3_photon_tiles_dir = self.ivert_config.s3_photon_tiles_directory
+            s3_photon_tiles_dir = self.ivert_config.s3_photon_tiles_directory_prefix
 
             # If the local directory doesn't exist, create it.
             # This may happen when on a new S3 instance.
