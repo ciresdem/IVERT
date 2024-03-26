@@ -71,7 +71,7 @@ class ICESat2_Database:
                         is_compressed = True
                         s3_file_to_fetch = s3_geopackage_compressed
 
-                    elif s3_manager.exists(self.ivert_config.s3_photon_geopackage, bucket_type="database"):
+                    elif s3_manager.exists(s3_geopackage, bucket_type="database"):
                         is_compressed = False
                         s3_file_to_fetch = s3_geopackage
                     else:
