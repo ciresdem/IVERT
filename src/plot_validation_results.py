@@ -92,6 +92,11 @@ def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
 
     If 'place_name' is provided, use it in the title of the plot.
     """
+    # If we're writing a PNG file, use the "Agg" backend (no display).
+    # This helps avoid
+    if os.path.splitext(output_figure_name)[1].lower() == ".png":
+        matplotlib.use("Agg")
+
     if type(results_h5_or_list_or_df) == pandas.DataFrame:
         data = results_h5_or_list_or_df
     else:
