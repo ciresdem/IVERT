@@ -1350,11 +1350,11 @@ def read_and_parse_args():
                         help="A scratch directory to write interim data files. Useful if user would like to save temp files elsewhere. Defaults to the output_dir directory.")
     parser.add_argument("--s3_input_dir", "s3i", type=str, default="",
                         help="S3 directory to read input data. (Default: do not read from S3.)")
-    parser.add_argument("--s3_input_bucket_type", "-s3b", type=str, default="trusted",
+    parser.add_argument("--s3_input_bucket_type", "-s3ib", type=str, default="trusted",
                         help="The category of S3 bucket. Choices: 'database', 'trusted', 'untrusted', 'export' (Default: 'trusted')")
     parser.add_argument("--s3_output_dir", "-s3o", "-s3x", type=str, default="",
                         help="S3 directory to write output results. (Default: do not export to S3.)")
-    parser.add_argument("--s3_output_bucket_type", "-s3b", type=str, default="export",
+    parser.add_argument("--s3_output_bucket_type", "-s3ob", "-s3xb", type=str, default="export",
                         help="The category of S3 bucket. Choices: 'database', 'trusted', 'untrusted', 'export' (Default: 'export')")
     parser.add_argument('--band_num', type=int, default=1,
                         help="The band number (1-indexed) of the input_dem. (Default: 1)")
