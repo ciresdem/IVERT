@@ -3,6 +3,8 @@
 import argparse
 import boto3
 import botocore.exceptions
+import fnmatch
+import glob
 import os
 import sys
 import textwrap
@@ -169,22 +171,40 @@ class S3_Manager:
 
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
-        # If the 'filename' given is a directory, use the same filename as the key, put the file in that directory.
-        if os.path.isdir(filename):
-            filename = os.path.join(filename, s3_key.split("/")[-1])
+        assert not self.contains_glob_flags(filename)
 
-        response = client.download_file(bucket_name, s3_key, filename)
+        if self.contains_glob_flags(s3_key):
+            base_key = self.get_base_directory_before_glob(s3_key)
+            all_s3_keys = self.listdir(base_key, bucket_type=bucket_type, recursive=True)
+            matching_s3_keys = fnmatch.filter(all_s3_keys, s3_key)
+            s3_keys_to_download = matching_s3_keys
+        else:
+            s3_keys_to_download = [s3_key]
 
-        if not self.verify_same_size(filename, s3_key, bucket_type=bucket_type):
-            if fail_quietly:
-                return False
+        files_downloaded = []
+        for s3k in s3_keys_to_download:
+            # If the 'filename' given is a directory, use the same filename as the key, put the file in that directory.
+            if os.path.isdir(filename):
+                filename_to_download = os.path.join(filename, s3k.split("/")[-1])
+            elif len(s3_keys_to_download) == 1:
+                filename_to_download = filename
             else:
-                raise RuntimeError("Error: S3_Manager.download() failed to download file correctly.")
+                raise ValueError(f"'{filename}' must be an existing directory if there are multiple keys to download.")
 
-        if delete_original:
-            client.delete_object(Bucket=bucket_name, Key=s3_key)
+            client.download_file(bucket_name, s3k, filename_to_download)
 
-        return response
+            if not self.verify_same_size(filename_to_download, s3k, bucket_type=bucket_type):
+                if fail_quietly:
+                    continue
+                else:
+                    raise RuntimeError(f"Error: S3_Manager.download() failed to download file {s3k.split('/')[-1]} correctly.")
+
+            files_downloaded.append(filename_to_download)
+
+            if delete_original:
+                client.delete_object(Bucket=bucket_name, Key=s3k)
+
+        return files_downloaded
 
     def upload(self,
                filename,
@@ -198,38 +218,61 @@ class S3_Manager:
 
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
-        # If the key is pointing to an S3 directory (prefix), then use the same filename as filename, and put it in that
-        # directory.
-        if self.is_existing_s3_directory(s3_key, bucket_type=bucket_type):
-            s3_key = s3_key + "/" + os.path.basename(filename)
+        assert not self.contains_glob_flags(s3_key)
 
-        response = client.upload_file(filename, bucket_name, s3_key)
+        if self.contains_glob_flags(filename):
+            matching_filenames = glob.glob(filename)
+        else:
+            matching_filenames = [filename]
 
-        if not self.verify_same_size(filename, s3_key, bucket_type=bucket_type):
-            if fail_quietly:
-                return False
-            else:
-                raise RuntimeError("Error: S3_Manager.upload() failed to upload file correctly.")
+        if len(matching_filenames) == 0:
+            return []
 
-        if delete_original:
-            os.remove(filename)
+        files_uploaded = []
+        for fname in matching_filenames:
+            # If the key is pointing to an S3 directory (prefix), then use the same filename as filename, and put it in that
+            # directory.
+            if self.is_existing_s3_directory(s3_key, bucket_type=bucket_type) or s3_key[-1] == "/":
+                s3_key = (s3_key + "/" + os.path.basename(fname)).replace("//", "/")
 
-        return response
+            client.upload_file(fname, bucket_name, s3_key)
+
+            if not self.verify_same_size(fname, s3_key, bucket_type=bucket_type):
+                if fail_quietly:
+                    return False
+                else:
+                    raise RuntimeError("Error: S3_Manager.upload() failed to upload file correctly.")
+
+            files_uploaded.append(s3_key)
+
+            if delete_original:
+                os.remove(fname)
+
+        return files_uploaded
 
     def listdir(self, s3_key, bucket_type="database", recursive=False):
         """List all the files within a given directory.
 
         Returns the full key path, since that's how S3's operate. But this make it a bit different than os.listdir().
-
-        NOTE: This lists all objects recursively, even in sub-directories, so it doesn't behave exactly like os.listdir.
         """
-        # Directories must end in '/' for an S3 bucket.
-        if len(s3_key) > 0 and s3_key[-1] != "/":
-            s3_key = s3_key + "/"
+        # Directories should not start with '/'
+        if len(s3_key) > 0 and s3_key[0] == "/":
+            s3_key = s3_key[1:]
 
-        # First make sure it's actually a directory we're looking at, not just a random matching substring.
+        # If we're using glob flags, return all the matching keys
+        if self.contains_glob_flags(s3_key):
+            s3_base_key = self.get_base_directory_before_glob(s3_key)
+            s3_matches_all = self.listdir(s3_base_key, bucket_type=bucket_type, recursive=True)
+            s3_matches = fnmatch.filter(s3_matches_all, s3_key)
+            return s3_matches
+
+        # If no glob flags, make sure it's actually a directory we're looking at, not just a random matching substring.
         if not self.is_existing_s3_directory(s3_key, bucket_type=bucket_type):
             raise FileNotFoundError(f"'{s3_key}' is not a directory in bucket '{self.get_bucketname(bucket_type=bucket_type)}'.")
+
+        # Make sure the directory ends with a '/'.
+        if not s3_key.endswith("/"):
+            s3_key = s3_key + "/"
 
         bucket_obj = self.get_resource_bucket(bucket_type=bucket_type)
         # If we're recursing, just return everything that is in that Prefix.
@@ -259,7 +302,31 @@ class S3_Manager:
         client = self.get_client(bucket_type=bucket_type)
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
-        return client.delete_object(Bucket=bucket_name, Key=s3_key)
+        if self.contains_glob_flags(s3_key):
+            matching_keys = self.listdir(s3_key, bucket_type=bucket_type, recursive=True)
+            for k in matching_keys:
+                client.delete_object(Bucket=bucket_name, Key=k)
+        else:
+            client.delete_object(Bucket=bucket_name, Key=s3_key)
+
+        return
+
+    @staticmethod
+    def contains_glob_flags(s3_key):
+        """Return True if a string contains any glob-style wildcard flags."""
+        return ("*" in s3_key) or ("?" in s3_key) or ("[" in s3_key)
+
+    @staticmethod
+    def get_base_directory_before_glob(s3_key):
+        """Return the base directory before any glob-style wildcard flags in an S3 key."""
+        dirs = s3_key.split("/")
+        basedirs = []
+        for dname in dirs:
+            if "*" in dname or "?" in dname or "[" in dname:
+                break
+            basedirs.append(dname)
+
+        return "/".join(basedirs)
 
 
 def define_and_parse_args():
@@ -374,41 +441,49 @@ if __name__ == "__main__":
 
         if len(command) < 3:
             raise ValueError(f"'{command[0]}' should be followed by exactly 2 files, one of them preceded by 's3:'")
+
         c1 = command[1]
-        c2 = command[2]
+        c2 = command[-1]
 
-        local_files = [fn for fn in [c1, c2] if fn.lower().find("s3:") == -1]
-        s3_files = [fn for fn in [c1, c2] if fn.lower().find("s3:") == 0]
+        local_files = [fn for fn in command[1:] if fn.lower().find("s3:") == -1]
+        s3_files = [fn for fn in command[1:] if fn.lower().find("s3:") == 0]
 
-        if len(s3_files) != 1 or len(local_files) != 1:
-            raise ValueError(f"'{command[0]}' should be followed by exactly 2 files, one of them preceded by 's3:'")
+        move_or_copy = "copy" if (command[0] == "cp") else "move"
+
+        # In the case of local wildcards, the shell will expand the list of files before sending it to python.
+        # This is only valid if the local files came first (with wildcards) followed by the s3 file. Handle this case.
+
+        if len(s3_files) != 1:
+            raise ValueError(f"'{command[0]}' should be followed by 2 files, exactly one of them preceded by 's3:'")
+        if len(local_files) > 1 and s3_files[0] == c1:
+            raise ValueError(f"Cannot {move_or_copy} to more than 1 local file or directory.")
 
         s3_file = s3_files[0]
-        local_file = local_files[0]
 
         # Determine if we're uploading or downloading. Which one came first?
-        downloading = True
-        if local_file == command[1]:
+        if s3_file == c1:
+            downloading = True
+        else:
             downloading = False
 
         # Trim off the "s3:" in front of the s3 file.
         s3_file = s3_file.lstrip("s3:").lstrip("S3:").strip()
         if (s3_file == "") and downloading:
-            move_or_copy = "copy" if (command[0] == "cp") else "move"
-            raise ValueError(f"Cannot {move_or_copy} the base directory (s3:) of the s3 bucket.")
+            raise ValueError(f"Cannot {move_or_copy} the base directory (s3:) of the s3 bucket. Try using a wildcard (*).")
 
-        if downloading:
-            s3m.download(s3_file,
-                         local_file,
-                         bucket_type=args.bucket,
-                         delete_original=(command[0] == "mv"),
-                         fail_quietly=False)
-        else:
-            s3m.upload(local_file,
-                       s3_file,
-                       bucket_type=args.bucket,
-                       delete_original=(command[0] == "mv"),
-                       fail_quietly=False)
+        for local_file in local_files:
+            if downloading:
+                s3m.download(s3_file,
+                             local_file,
+                             bucket_type=args.bucket,
+                             delete_original=(command[0] == "mv"),
+                             fail_quietly=False)
+            else:
+                s3m.upload(local_file,
+                           s3_file,
+                           bucket_type=args.bucket,
+                           delete_original=(command[0] == "mv"),
+                           fail_quietly=False)
 
     else:
         raise ValueError(f"Unhandled command '{command[0]}'")
