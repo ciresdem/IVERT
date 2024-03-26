@@ -511,6 +511,8 @@ def validate_dem_parallel(dem_name,
     if not os.path.exists(dem_name):
         s3_key = "/".join([s3_input_dir, os.path.basename(dem_name)]).replace("//", "/")
         if s3_input_dir is not None:
+            if not quiet:
+                print(f"Importing '{os.path.basename(dem_name)}' from S3.")
             local_file_list = ivert_cloud_manager.import_ivert_input_data(s3_key,
                                                                           os.path.dirname(dem_name),
                                                                           s3_bucket_type=s3_input_bucket_type,
@@ -524,7 +526,7 @@ def validate_dem_parallel(dem_name,
             file_not_found_msg = "Could not find file {0} locally nor in s3://{1}/{2}'.".format(
                 os.path.basename(dem_name),
                 s3.S3_Manager().get_bucketname(s3_input_bucket_type),
-                s3_input_dir
+                s3_input_dir.strip("/")
             )
         else:
             file_not_found_msg = f"Could not find file {dem_name}."
