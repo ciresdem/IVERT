@@ -131,12 +131,12 @@ def clean_up_finished_jobs(verbose=True):
             print("Not in AWS. Not cleaning up finished jobs.")
         return
 
-    rm_inputs_cmd = ["rm", "-rf", f"{ivert_config.ivert_inputs_directory_local}/*"]
+    rm_inputs_cmd = f"rm -rf {ivert_config.ivert_inputs_directory_local}/*"
     if verbose:
         print(rm_inputs_cmd)
     subprocess.run(rm_inputs_cmd, shell=True)
 
-    rm_outputs_cmd = ["rm", "-rf", f"{ivert_config.ivert_outputs_directory_local}/*"]
+    rm_outputs_cmd = f"rm -rf {ivert_config.ivert_outputs_directory_local}/*"
     if verbose:
         print(rm_outputs_cmd)
     subprocess.run(rm_outputs_cmd, shell=True)
