@@ -228,7 +228,7 @@ def create_coastline_mask(input_dem,
                    "-M","coastline:polygonize=False" + \
                        (":want_gmrt=True" if include_gmrt else "") + \
                        (":want_lakes=True" if mask_out_lakes else "") + \
-                       (":want_nhd=" + str(mask_out_nhd)) + \
+                       (":want_nhd_plus=" + str(mask_out_nhd)) + \
                        (":want_buildings=True" if mask_out_buildings else "") + \
                        (":want_osm_planet=True" if use_osm_planet else "") + \
                        (":want_wsf=True" if mask_out_urban else ""),
@@ -298,7 +298,7 @@ def create_coastal_mask_filename(dem_name, target_dir=None):
 
 
 def get_coastline_mask_and_other_dem_data(dem_name,
-                                          mask_out_lakes = True,
+                                          mask_out_lakes=True,
                                           mask_out_buildings=False,
                                           mask_out_urban=False,
                                           use_osm_planet=True,
