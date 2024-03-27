@@ -1,5 +1,6 @@
 """ivert_cloud_manager.py -- Code for managing cloud files and IVERT instances within the EC2 instance."""
 
+import argparse
 import glob
 import os
 import s3
@@ -157,3 +158,19 @@ def clean_up_finished_jobs(verbose=True):
 # TODO: Code for cleaning up local dirctories, from both IMPORT and EXPORT directories.
 
 # TODO: Code for jobs database
+
+
+def define_and_parse_args():
+    """Define and parse command line arguments."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("command", help="The command to execute. Options: 'import', 'export', 'clean'. (Only 'clean' is implemented so far.)")
+    parser.add_argument("--quiet", "-q", default=False, action="store_true",
+                        help="Run silently.")
+    args = parser.parse_args()
+    return args
+
+
+if __name__ == "__main__":
+    args = define_and_parse_args()
+    if args.command.lower() == "clean":
+        clean_up_finished_jobs(verbose=not args.quiet)
