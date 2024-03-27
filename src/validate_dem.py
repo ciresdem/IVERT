@@ -22,7 +22,6 @@ import utils.configfile
 import utils.pickle_blosc
 import convert_vdatum
 import coastline_mask
-# import nsidc_download
 import plot_validation_results
 import classify_icesat2_photons
 import icesat2_photon_database
@@ -30,18 +29,17 @@ import find_bad_icesat2_granules
 import ivert_cloud_manager
 import s3
 
-# import subprocess
+import argparse
 import ast
+import multiprocessing as mp
+import numexpr
+import numpy
 from osgeo import gdal, osr
 import os
-import argparse
-import numpy
 import pandas
-import multiprocessing as mp
+import pyproj
 import re
 import time
-import numexpr
-import pyproj
 
 # NOTE: This eliminates a Deprecation error in GDAL v3.x. In GDAL 4.0, they will use Exceptions by default and this
 # command will be unnecessary.
@@ -493,6 +491,7 @@ def validate_dem_parallel(dem_name,
                           include_gmrt_mask=False,
                           write_result_tifs=True,
                           write_summary_stats=True,
+                          export_coastline_mask=True,
                           outliers_sd_threshold=2.5,
                           include_photon_level_validation=False,
                           plot_results=True,
@@ -508,17 +507,16 @@ def validate_dem_parallel(dem_name,
     """
     # If an S3 directory is specified to grab the input file *and* the file doesn't exist locally, grab it from the S3
     # and put it in the local directory.
-    if not os.path.exists(dem_name):
+    if not os.path.exists(dem_name) and s3_input_dir:
         s3_key = "/".join([s3_input_dir, os.path.basename(dem_name)]).replace("//", "/")
-        if s3_input_dir is not None:
-            if not quiet:
-                print(f"Importing '{os.path.basename(dem_name)}' from S3.")
-            local_file_list = ivert_cloud_manager.import_ivert_input_data(s3_key,
-                                                                          os.path.dirname(dem_name),
-                                                                          s3_bucket_type=s3_input_bucket_type,
-                                                                          create_local_dir=True,
-                                                                          verbose=not quiet)
-            assert len(local_file_list) <= 1
+        if not quiet:
+            print(f"Importing '{os.path.basename(dem_name)}' from S3.")
+        local_file_list = ivert_cloud_manager.import_ivert_input_data(s3_key,
+                                                                      os.path.dirname(dem_name),
+                                                                      s3_bucket_type=s3_input_bucket_type,
+                                                                      create_local_dir=True,
+                                                                      verbose=not quiet)
+        assert len(local_file_list) <= 1
 
     # If we still don't have the input dem, raise an error.
     if not os.path.exists(dem_name):
@@ -570,95 +568,130 @@ def validate_dem_parallel(dem_name,
     if plot_results:
         plot_filename = re.sub(r"_results\.h5\Z", "_plot.png", results_dataframe_file)
 
-    # If the output file already exists and we aren't overwriting, create any un-created datasets
-    # if they're requested, and then just return.
-    if not overwrite:
+    coastline_mask_filename = os.path.join(output_dir if export_coastline_mask else interim_data_dir,
+        re.sub(r"_results\.h5\Z", "_coastline_mask.tif", os.path.basename(results_dataframe_file)))
 
+    if overwrite:
         if os.path.exists(results_dataframe_file):
-            results_dataframe = None
-            files_to_export = [results_dataframe_file]
+            os.remove(results_dataframe_file)
 
-            if write_summary_stats:
-                if not os.path.exists(summary_stats_filename):
-                    if results_dataframe is None:
-                        if not quiet:
-                            print("Reading", results_dataframe_file, '...', end="")
-                        results_dataframe = read_dataframe_file(results_dataframe_file)
-                        if not quiet:
-                            print("done.")
+        if os.path.exists(summary_stats_filename):
+            os.remove(summary_stats_filename)
 
-                    write_summary_stats_file(results_dataframe, summary_stats_filename, verbose=not quiet)
-                files_to_export.append(summary_stats_filename)
+        if os.path.exists(result_tif_filename):
+            os.remove(result_tif_filename)
 
-            if write_result_tifs:
-                if not os.path.exists(result_tif_filename):
-                    if dem_ds is None:
-                        dem_ds = gdal.Open(dem_name, gdal.GA_ReadOnly)
+        if os.path.exists(plot_filename):
+            os.remove(plot_filename)
 
-                    if results_dataframe is None:
-                        if not quiet:
-                            print("Reading", results_dataframe_file, '...', end="")
-                        results_dataframe = read_dataframe_file(results_dataframe_file)
-                        if not quiet:
-                            print("done.")
+        if os.path.exists(coastline_mask_filename):
+            os.remove(coastline_mask_filename)
 
-                    generate_result_geotiff(results_dataframe, dem_ds, result_tif_filename, verbose=not quiet)
+    elif os.path.exists(results_dataframe_file):
+        results_dataframe = None
+        files_to_export = [results_dataframe_file]
 
-                files_to_export.append(result_tif_filename)
+        if write_summary_stats:
+            if not os.path.exists(summary_stats_filename):
+                if results_dataframe is None:
+                    if not quiet:
+                        print("Reading", results_dataframe_file, '...', end="")
+                    results_dataframe = read_dataframe_file(results_dataframe_file)
+                    if not quiet:
+                        print("done.")
 
-            if plot_results:
-                if not os.path.exists(plot_filename):
-                    if location_name is None:
-                        location_name = os.path.split(dem_name)[1]
+                write_summary_stats_file(results_dataframe, summary_stats_filename, verbose=not quiet)
+            files_to_export.append(summary_stats_filename)
 
-                    if results_dataframe is None:
-                        if not quiet:
-                            print("Reading", results_dataframe_file, '...', end="")
-                        results_dataframe = read_dataframe_file(results_dataframe_file)
-                        if not quiet:
-                            print("done.")
+        if write_result_tifs:
+            if not os.path.exists(result_tif_filename):
+                if dem_ds is None:
+                    dem_ds = gdal.Open(dem_name, gdal.GA_ReadOnly)
 
-                    plot_validation_results.plot_histogram_and_error_stats_4_panels(results_dataframe,
+                if results_dataframe is None:
+                    if not quiet:
+                        print("Reading", results_dataframe_file, '...', end="")
+                    results_dataframe = read_dataframe_file(results_dataframe_file)
+                    if not quiet:
+                        print("done.")
+
+                generate_result_geotiff(results_dataframe, dem_ds, result_tif_filename, verbose=not quiet)
+
+            files_to_export.append(result_tif_filename)
+
+        if plot_results:
+            if not os.path.exists(plot_filename):
+                if location_name is None:
+                    location_name = os.path.split(dem_name)[1]
+
+                if results_dataframe is None:
+                    if not quiet:
+                        print("Reading", results_dataframe_file, '...', end="")
+                    results_dataframe = read_dataframe_file(results_dataframe_file)
+                    if not quiet:
+                        print("done.")
+
+                plot_validation_results.plot_histogram_and_error_stats_4_panels(results_dataframe,
                                                                                 plot_filename,
                                                                                 place_name=location_name,
                                                                                 verbose=not quiet)
 
-                files_to_export.append(plot_filename)
+            files_to_export.append(plot_filename)
 
-            # If we've asked to output this data to S3, do that now.
-            if ivert_config.is_aws and s3_output_dir and len(files_to_export) > 0:
-                if not quiet:
-                    print("Writing outputs to S3...", end="")
-                files_to_export = []
-                ivert_cloud_manager.export_ivert_output_data(files_to_export,
-                                                             s3_output_dir,
-                                                             s3_bucket_type=s3_output_bucket_type,
-                                                             verbose=not quiet)
-                if not quiet:
-                    print("Done.")
+        if export_coastline_mask:
+            if not os.path.exists(coastline_mask_filename):
+                if results_dataframe is None:
+                    if not quiet:
+                        print("Reading", results_dataframe_file, '...', end="")
+                    results_dataframe = read_dataframe_file(results_dataframe_file)
+                    if not quiet:
+                        print("done.")
 
-            # If we didn't have to open the dataframe or export anything, it was all already done.
-            elif results_dataframe is None and not quiet:
-                print("Work already done here. Moving on.")
+                coastline_mask.create_coastline_mask(dem_name,
+                                                     mask_out_lakes = mask_out_lakes,
+                                                     mask_out_buildings = mask_out_buildings,
+                                                     mask_out_urban = mask_out_urban,
+                                                     use_osm_planet = use_osm_planet,
+                                                     include_gmrt = include_gmrt_mask,
+                                                     output_file = coastline_mask_filename,
+                                                     verbose=not quiet)
 
-            return
+            files_to_export.append(coastline_mask_filename)
 
-        elif mark_empty_results and os.path.exists(empty_results_filename):
+        # If we've asked to output this data to S3, do that now.
+        if ivert_config.is_aws and s3_output_dir and len(files_to_export) > 0:
             if not quiet:
-                print("No valid data produced during previous ICESat-2 analysis of", dem_name + ". Returning.")
-            return
+                print("Writing outputs to S3...", end="")
+            files_to_export = []
+            ivert_cloud_manager.export_ivert_output_data(files_to_export,
+                                                         s3_output_dir,
+                                                         s3_bucket_type=s3_output_bucket_type,
+                                                         verbose=not quiet)
+            if not quiet:
+                print("Done.")
+
+        # If we didn't have to open the dataframe or export anything, it was all already done.
+        elif results_dataframe is None and not quiet:
+            print("Work already done here. Moving on.")
+
+        return
+
+    elif mark_empty_results and os.path.exists(empty_results_filename):
+        if not quiet:
+            print("No valid data produced during previous ICESat-2 analysis of", dem_name + ". Returning.")
+        return
 
     # Collect the metadata from the DEM.
     dem_ds, dem_array, dem_bbox, dem_epsg, dem_step_xy, \
         coastline_mask_filename, coastline_mask_array = \
         coastline_mask.get_coastline_mask_and_other_dem_data(dem_name,
-                                                             mask_out_lakes = mask_out_lakes,
-                                                             mask_out_buildings = mask_out_buildings,
-                                                             mask_out_urban = mask_out_urban,
-                                                             use_osm_planet = use_osm_planet,
-                                                             include_gmrt = include_gmrt_mask,
-                                                             target_fname_or_dir = interim_data_dir)
-
+                                                             mask_out_lakes=mask_out_lakes,
+                                                             mask_out_buildings=mask_out_buildings,
+                                                             mask_out_urban=mask_out_urban,
+                                                             use_osm_planet=use_osm_planet,
+                                                             include_gmrt=include_gmrt_mask,
+                                                             target_fname_or_dir=coastline_mask_filename,
+                                                             verbose=not quiet)
 
     # Test for compound CRSs. If it's that, just get the horizontal crs from it.
     dem_crs_obj = pyproj.CRS.from_epsg(dem_epsg)
@@ -678,10 +711,10 @@ def validate_dem_parallel(dem_name,
         print("WARNING: Coastline mask file", coastline_mask_filename, "contains all 1's.")
 
     # Assert that the both the dem vertical datum and the output vertical datum are valid values.
-    if type(dem_vertical_datum) == str:
+    if isinstance(dem_vertical_datum, str):
         dem_vertical_datum = dem_vertical_datum.strip().lower()
     # assert dem_vertical_datum in convert_vdatum.SUPPORTED_VDATUMS
-    if type(output_vertical_datum) == str:
+    if isinstance(output_vertical_datum, str):
         output_vertical_datum = output_vertical_datum.strip().lower()
     assert output_vertical_datum in convert_vdatum.SUPPORTED_VDATUMS
 
@@ -1177,6 +1210,9 @@ def validate_dem_parallel(dem_name,
 
     files_to_export = []
 
+    if export_coastline_mask:
+        files_to_export.append(coastline_mask_filename)
+
     if len(results_dataframe) == 0:
         if not quiet:
             print("No valid results in results dataframe. No outputs computed.")
@@ -1360,6 +1396,8 @@ def read_and_parse_args():
                         help="The category of S3 bucket. Choices: 'database', 'trusted', 'untrusted', 'export' (Default: 'export')")
     parser.add_argument('--band_num', type=int, default=1,
                         help="The band number (1-indexed) of the input_dem. (Default: 1)")
+    parser.add_argument("--export_coastline_mask", "--coast", "-c", action='store_true', default=False,
+                        help="Export a geotiff of the coastline mask.")
     parser.add_argument('--place_name', '-name', type=str, default=None,
                         help='A text name of the location, to put in the title of the plot (if --plot_results is selected)')
     parser.add_argument("--numprocs", '-np', type=int, default=parallel_funcs.physical_cpu_count(),

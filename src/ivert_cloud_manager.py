@@ -104,7 +104,7 @@ def export_ivert_output_data(local_dir_file_or_list, s3_dir, s3_bucket_type="exp
 
         # List files based on if local_dir is a directory or a single file
         if os.path.isdir(local_file):
-            file_list = glob.glob(os.path.join(local_dir, file_pattern))
+            file_list = glob.glob(os.path.join(local_file, file_pattern))
         else:
             file_list = [local_file]
 
