@@ -3,13 +3,10 @@
 import glob
 import os
 import s3
+import subprocess
 import sys
 
 import utils.configfile
-
-ivert_config = None
-
-# TODO: Code for identifying new jobs coming in and copying the files into the local directory
 
 def import_ivert_input_data(s3_key: str,
                             local_dir: str,
@@ -121,6 +118,31 @@ def export_ivert_output_data(local_dir_file_or_list, s3_dir, s3_bucket_type="exp
                       file=sys.stderr)
 
     return files_uploaded
+
+
+def clean_up_finished_jobs(verbose=True):
+    """Clean up local data files from completed jobs."""
+    # TODO: Have this query the database and see what jobs might be still running (vs completed).
+    # For now, just clear out the "inputs" and "outputs" directories.
+    ivert_config = utils.configfile.config()
+    if not ivert_config.is_aws:
+        if verbose:
+            print("Not in AWS. Not cleaning up finished jobs.")
+        return
+
+    rm_inputs_cmd = f"rm -rf {ivert_config.ivert_inputs_directory_local}/*"
+    if verbose:
+        print(rm_inputs_cmd)
+    subprocess.run(rm_inputs_cmd)
+
+    rm_outputs_cmd = f"rm -rf {ivert_config.ivert_outputs_directory_local}/*"
+    if verbose:
+        print(rm_outputs_cmd)
+    subprocess.run(rm_outputs_cmd)
+
+    return
+
+# TODO: Code for identifying new jobs coming in and copying the files into the local directory
 
 # TODO: Code for notifying users of:
 #    - A job successfully submitted and in-progress
