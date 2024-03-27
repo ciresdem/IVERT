@@ -282,7 +282,6 @@ def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
              transform=ax3.transAxes)
     # lbltxt.set_bbox(dict(facecolor="white", alpha=0.7, edgecolor="white", boxstyle="square,pad=0"))
 
-
     # 4) Plot Histogram of canopy cover.
     #############################################################################
     # Plot 3, percent canopy cover
@@ -324,7 +323,7 @@ def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
     # Figure title
     if place_name is None:
         place_name = "DEM"
-    fig.suptitle("{0} Errors and Distributions\n(N = {1:,} cells)".format(place_name, len(meandiff)))
+    fig.suptitle("{0}: Errors and Distributions\n(N = {1:,} cells)".format(place_name, len(meandiff)))
     fig.tight_layout()
 
     # Save the figure to disk.
