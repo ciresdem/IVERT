@@ -705,13 +705,13 @@ def get_list_of_granules_to_reject(bad_granule_csv = my_config._abspath(my_confi
                                            append = append_if_regenerating_bad_granule_csv,
                                            verbose = verbose)
 
-    if not os.path.exists(bad_granule_csv):
+    if not os.path.exists(bad_granule_csv) and get_from_s3_if_not_present and my_config.is_aws:
         # If the bad_granule_list.csv does not exist locally, and we're in the cloud, and we've set
         # get_from_s3_if_not_present, download it.
-        if get_from_s3_if_not_present and my_config.is_aws:
-            s3m = s3.S3_Manager()
-            s3m.download(my_config.s3_bad_granules_csv_key, bad_granule_csv, bucket_type="database", fail_quietly=not verbose)
+        s3m = s3.S3_Manager()
+        s3m.download(my_config.s3_bad_granules_csv_key, bad_granule_csv, bucket_type="database", fail_quietly=not verbose)
 
+    if not os.path.exists(bad_granule_csv):
         if verbose:
             print("Error: No bad_granule_list.csv file found. Not filtering out bad granules.")
         return []
