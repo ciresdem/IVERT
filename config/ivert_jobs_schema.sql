@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS ivert_jobs (
     PRIMARY KEY (job_id, username)
 );
 
-CREATE TABLE IF NOT EXISTS files (
+CREATE TABLE IF NOT EXISTS ivert_files (
     job_id              INTEGER     NOT NULL,
     username            VARCHAR(128)    NOT NULL,
     filename            VARCHAR(256)    NOT NULL,
