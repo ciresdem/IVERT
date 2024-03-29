@@ -98,7 +98,7 @@ class ICESat2_Database:
 
     def get_s3_manager(self):
         if self.s3_manager is None:
-            self.s3_manager = s3.S3_Manager()
+            self.s3_manager = s3.S3Manager()
 
         return self.s3_manager
 

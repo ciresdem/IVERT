@@ -5,61 +5,72 @@ import boto3
 import botocore.exceptions
 import fnmatch
 import glob
+import hashlib
 import os
+import re
 import sys
-import textwrap
+import types
+# import textwrap
 import warnings
 
 import utils.configfile
 
-class S3_Manager:
+ivert_config = utils.configfile.config()
+
+
+class S3Manager:
     """Class for copying files into and out-of the IVERT AWS S3 buckets, as needed."""
 
-    available_bucket_types = ("database", "input", "output")
+    available_bucket_types = ("database", "untrusted", "trusted", "export")
+    default_bucket_type = "detabase" if ivert_config.is_aws else "untrusted"
 
     def __init__(self):
-        self.config = utils.configfile.config()
+        self.config = ivert_config
 
         # Different buckets for each type.
+        # These are read in by the ivert_config initizliation, set at runtime.
         self.bucket_dict = {"database": self.config.s3_bucket_database,
                             "untrusted": self.config.s3_bucket_import_untrusted,
                             "trusted": self.config.s3_bucket_import_trusted,
                             "export": self.config.s3_bucket_export}
 
         # Different AWS profiles for each bucket. "None" indicates no profile is needed.
-        # TODO: Replace with entries from the user profile created by ivert_new_user_setup.py
-        self.bucket_profile_dict = {"database": None,
-                                    "untrusted": self.config.aws_profile_ivert_ingest,
-                                    "trusted": None,
-                                    "export": self.config.aws_profile_ivert_export}
+        # Profiles are usually needed on the user machine to use credentials for bucket access.
+        self.bucket_profile_dict = dict([(dbtype, None) for dbtype in self.available_bucket_types])
+        # Only the 'untrusted' bucket and 'export' bucket need AWS profiles, and only on the client side, from the config.
+        self.bucket_profile_dict["untrusted"] = None if self.config.is_aws else self.config.aws_profile_ivert_ingest
+        self.bucket_profile_dict["export"] = None if self.config.is_aws else self.config.aws_profile_ivert_export
 
-        self.session_dict = {"database": None,
-                             "untrusted": None,
-                             "trusted": None,
-                             "export": None}
+        # The s3 session. Session created on demand when needed by the :get_resource_bucket() and :get_client() methods.
+        self.session_dict = dict([(dbtype, None) for dbtype in self.available_bucket_types])
 
         # The s3 client. Client created on demand when needed by the :get_client() method.
-        self.client_dict = {"database": None,
-                            "untrusted": None,
-                            "trusted": None,
-                            "export": None}
+        self.client_dict = dict([(dbtype, None) for dbtype in self.available_bucket_types])
 
-
-    def get_resource_bucket(self, bucket_type="database"):
+    def get_resource_bucket(self, bucket_type=None) -> boto3.resource:
         """Return the open resource.BAD_FILE_TO_TEST_QUARANTINE.foobar
 
         If it doesn't exist yet, open one."""
+        if bucket_type is None:
+            bucket_type = self.default_bucket_type
         bucket_type = self.convert_btype(bucket_type)
 
         if self.session_dict[bucket_type] is None:
-            self.session_dict[bucket_type] = boto3.Session(profile_name=self.bucket_profile_dict[bucket_type])
+            session = boto3.Session(profile_name=self.bucket_profile_dict[bucket_type])
+            self.session_dict[bucket_type] = session
+        else:
+            session = self.session_dict[bucket_type]
 
-        return self.session_dict[bucket_type].resource("s3").Bucket(self.bucket_dict[bucket_type])
+        if self.bucket_dict[bucket_type] is None:
+            raise ValueError(f"No bucket name assigned to '{bucket_type}'.")
+        return session.resource("s3").Bucket(self.bucket_dict[bucket_type])
 
-    def get_client(self, bucket_type="database"):
+    def get_client(self, bucket_type=None) -> boto3.client:
         """Return the open client.
 
         If it doesn't exist yet, open one."""
+        if bucket_type is None:
+            bucket_type = self.default_bucket_type
         bucket_type = self.convert_btype(bucket_type)
 
         if self.client_dict[bucket_type] is None:
@@ -69,9 +80,11 @@ class S3_Manager:
 
         return self.client_dict[bucket_type]
 
-
-    def convert_btype(self, bucket_type):
+    def convert_btype(self, bucket_type) -> str:
         """Convert a user-entered bucket type into a valid value."""
+        if bucket_type is None:
+            bucket_type = self.default_bucket_type
+
         bucket_type = bucket_type.strip().lower()
         if bucket_type == 'd':
             bucket_type = 'database'
@@ -84,8 +97,7 @@ class S3_Manager:
 
         return bucket_type
 
-
-    def get_bucketname(self, bucket_type="database"):
+    def get_bucketname(self, bucket_type=None):
         bucket_type = self.convert_btype(bucket_type)
 
         if bucket_type.lower() not in self.bucket_dict.keys():
@@ -94,8 +106,10 @@ class S3_Manager:
 
         return self.bucket_dict[bucket_type]
 
-    def verify_same_size(self, filename, s3_key, bucket_type="database"):
+    def verify_same_size(self, filename, s3_key, bucket_type=None):
         """Return True if the local file is the exact same size in bytes as the S3 key."""
+        bucket_type = self.convert_btype(bucket_type)
+
         head = self.exists(s3_key, bucket_type=bucket_type, return_head=True)
         if head is False:
             return False
@@ -109,8 +123,10 @@ class S3_Manager:
 
         return s3_size == local_size
 
-    def exists(self, s3_key, bucket_type="database", return_head=False):
+    def exists(self, s3_key, bucket_type=None, return_head: bool=False):
         """Look in the appropriate bucket, and see if a file or directory exists there."""
+        bucket_type = self.convert_btype(bucket_type)
+
         client = self.get_client(bucket_type=bucket_type)
 
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
@@ -138,8 +154,9 @@ class S3_Manager:
                 warnings.warn(f"Warning: Unknown error fetching status of s3://{bucket_name}/{key}")
                 return False
 
-    def is_existing_s3_directory(self, s3_key, bucket_type="database"):
-        "Return True if 'key' points to an existing directory (prefix) in the bucket. NOT a file. False otherwise."
+    def is_existing_s3_directory(self, s3_key, bucket_type=None):
+        """Return True if 'key' points to an existing directory (prefix) in the bucket. NOT a file. False otherwise."""
+        bucket_type = self.convert_btype(bucket_type)
 
         bucket_obj = self.get_resource_bucket(bucket_type=bucket_type)
 
@@ -165,8 +182,10 @@ class S3_Manager:
 
         return False
 
-    def download(self, s3_key, filename, bucket_type="database", delete_original=False, fail_quietly=True):
+    def download(self, s3_key, filename, bucket_type=None, delete_original=False, fail_quietly=True):
         """Download a file from the S3 to the local file system."""
+        bucket_type = self.convert_btype(bucket_type)
+
         client = self.get_client(bucket_type=bucket_type)
 
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
@@ -209,11 +228,23 @@ class S3_Manager:
     def upload(self,
                filename,
                s3_key,
-               bucket_type="database",
+               bucket_type=None,
                delete_original=False,
                fail_quietly=True,
-               include_md5=False):
-        """Upload a file from the local file system to the S3."""
+               include_md5=False,
+               other_metadata={}):
+        """Upload a file from the local file system to the S3.
+
+        Args:
+            filename (str): The local file to upload.
+            s3_key (str): The S3 key to upload to.
+            bucket_type (str): The type of bucket to upload to. Default to 'database'.
+            delete_original (bool): Whether to delete the original file after uploading. This would be like the 'mv' command rather than 'cp'. Default to False.
+            fail_quietly (bool): How to fail if the upload fails. If fail_quietly is True, return False. Else, raise an error. Default to True.
+            include_md5 (bool): Whether to include the md5 hash of the file in the metadata. Default to False.
+            other_metadata (dict): Other metadata to include in the s3 object header. Default to {}."""
+        bucket_type = self.convert_btype(bucket_type)
+
         client = self.get_client(bucket_type=bucket_type)
 
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
@@ -235,7 +266,14 @@ class S3_Manager:
             if self.is_existing_s3_directory(s3_key, bucket_type=bucket_type) or s3_key[-1] == "/":
                 s3_key = (s3_key + "/" + os.path.basename(fname)).replace("//", "/")
 
-            client.upload_file(fname, bucket_name, s3_key)
+            # If we want to include the md5 hash of the file in the metadata, then compute it.
+            if include_md5:
+                md5_hash = self.compute_md5(fname)
+                other_metadata["md5"] = md5_hash
+
+            # Upload the file. Include other metadata if it's not empty.
+            client.upload_file(fname, bucket_name, s3_key,
+                               ExtraArgs=None if len(other_metadata) == 0 else {"Metadata": other_metadata})
 
             if not self.verify_same_size(fname, s3_key, bucket_type=bucket_type):
                 if fail_quietly:
@@ -250,11 +288,14 @@ class S3_Manager:
 
         return files_uploaded
 
-    def listdir(self, s3_key, bucket_type="database", recursive=False):
+    def listdir(self, s3_key, bucket_type=None, recursive=False):
         """List all the files within a given directory.
 
         Returns the full key path, since that's how S3's operate. But this make it a bit different than os.listdir().
         """
+
+        bucket_type = self.convert_btype(bucket_type)
+
         # Directories should not start with '/'
         if len(s3_key) > 0 and s3_key[0] == "/":
             s3_key = s3_key[1:]
@@ -264,11 +305,25 @@ class S3_Manager:
             s3_base_key = self.get_base_directory_before_glob(s3_key)
             s3_matches_all = self.listdir(s3_base_key, bucket_type=bucket_type, recursive=True)
             s3_matches = fnmatch.filter(s3_matches_all, s3_key)
-            return s3_matches
+            if recursive:
+                return s3_matches
+            else:
+                # Get the files that are in that directory (and not in subdirectories)
+                fmatches = [m for m in s3_matches if m[len(s3_base_key):].lstrip("/").find("/") == -1]
+                # Get the directories that are in that directory
+                dirmatches = sorted(
+                    list(
+                        set([m[:len(s3_base_key)].rstrip("/") + "/" + m[len(s3_base_key):].lstrip("/").split("/")[0] + "/"
+                             for m in s3_matches if m[len(s3_base_key):].lstrip("/").find("/") > -1])))
+                return dirmatches + fmatches
 
-        # If no glob flags, make sure it's actually a directory we're looking at, not just a random matching substring.
+        # If no glob flags, make sure it's actually a directory (or existing file) we're looking at, not just a partial substring.
         if not self.is_existing_s3_directory(s3_key, bucket_type=bucket_type):
-            raise FileNotFoundError(f"'{s3_key}' is not a directory in bucket '{self.get_bucketname(bucket_type=bucket_type)}'.")
+            if os.path.exists(s3_key):
+                return s3_key
+            else:
+                raise FileNotFoundError(
+                    f"Error: '{s3_key}' is not a file or directory in bucket '{self.get_bucketname(bucket_type=bucket_type)}'.")
 
         # Make sure the directory ends with a '/'.
         if not s3_key.endswith("/"):
@@ -297,8 +352,11 @@ class S3_Manager:
 
             return subdirs + files
 
-    def delete(self, s3_key, bucket_type="database"):
+    def delete(self, s3_key, bucket_type=None):
         """Delete a key (file) from the S3."""
+
+        bucket_type = self.convert_btype(bucket_type)
+
         client = self.get_client(bucket_type=bucket_type)
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
@@ -314,11 +372,13 @@ class S3_Manager:
     @staticmethod
     def contains_glob_flags(s3_key):
         """Return True if a string contains any glob-style wildcard flags."""
+
         return ("*" in s3_key) or ("?" in s3_key) or ("[" in s3_key)
 
     @staticmethod
     def get_base_directory_before_glob(s3_key):
         """Return the base directory before any glob-style wildcard flags in an S3 key."""
+
         dirs = s3_key.split("/")
         basedirs = []
         for dname in dirs:
@@ -328,27 +388,217 @@ class S3_Manager:
 
         return "/".join(basedirs)
 
+    @staticmethod
+    def compute_md5(filename):
+        """Compute the md5 hash of a file."""
 
+        md5 = hashlib.md5()
+        with open(filename, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                md5.update(chunk)
+        return md5.hexdigest()
+
+    def get_md5(self, s3_key, bucket_type=None):
+        """Return the md5 hash of an S3 key, if it was provided when uploaded.
+
+        NOTE: This is different from the AWS object.content_md5 key, which is computed differently and may not
+        match a locally-computed md5 sum."""
+
+        bucket_type = self.convert_btype(bucket_type)
+
+        client = self.get_client(bucket_type=bucket_type)
+        bname = self.get_bucketname(bucket_type=bucket_type)
+        head = client.head_object(Bucket=bname, Key=s3_key)
+        # TODO: Finish getting the metadata and then the md5 from there.
+        return head
+
+    def compare_md5(self, filename, s3_key, bucket_type=None):
+        """Return True if the local file's md5 matches the md5 in the S3 key.
+
+        If the S3 key does not have an md5 in its metadata, return False."""
+
+        s3_md5 = self.get_md5(s3_key, bucket_type=bucket_type)
+        if s3_md5 is None or s3_md5 == '':
+            return False
+        else:
+            return self.compute_md5(filename) == s3_md5
+
+
+def define_and_parse_args_v2() -> argparse.Namespace:
+    """Parse command-line arguments using sub-parsers in python."""
+
+    #################### MAIN parser ####################
+    parser = argparse.ArgumentParser(description="Quick python utility for interacting with IVERT's S3 buckets.")
+    subparsers = parser.add_subparsers(dest="command",
+                                       help=f"The command to run. "
+                                            "Options: 'ls' 'rm' 'cp' 'mv'. "
+                                            f"Run '{os.path.basename(__file__)} <command> --help' for options of each command.")
+    subparsers.required = True
+
+    parser.add_argument("--bucket", "-b", default=None, choices=list(S3Manager.available_bucket_types) + [None],
+                        help="Shorthand alias of the ivert S3 bucket. "
+                             "Options are: 'database' 'd' (server work bucket, only accessible within the S3); "
+                             "'trusted' 't' (files that passed secure ingest, only accessible within the S3); "
+                             "'untrusted' 'u' (files uploaded to IVERT, only accessible by the client using credentials); "
+                             "'export' 'e' 'x' (exported data. Accessible by the server, read-only access from the client using credentials). "
+                             "These are aliases. Actual bucket-names are specified in ivert_config and populated at runtime. "
+                             "Default: 'database'")
+
+    # Add a helpful output message if we get parsing errors.
+    def custom_error_main(self, default_msg):
+        extra_msg = "For more details type 'python {0} --help' or 'python {0} <command> --help'.".format(os.path.basename(__file__))
+        print(f"{os.path.basename(__file__)} error:", default_msg + "\n" + extra_msg)
+
+    parser.error = types.MethodType(custom_error_main, parser)
+
+    #################### 'ls' parser ####################
+    # The ls (list files) parser
+    parser_ls = subparsers.add_parser("ls",
+                                      help="List files in an S3 bucket.")
+    parser_ls.add_argument("key", default=".",
+                           help="The directory/prefix or file/key to list from the S3. "
+                                "Wildcards (e.g. ./ncei19*.tif) allowed. "
+                                "Use '.' or '/' to quiery the base prefix for the S3 bucket. Default: .")
+    parser_ls.add_argument("-r", "--recursive", dest="recursive", action="store_true", default=False,
+                           help="List files recursively (including all keys in subdirectories).")
+    parser_ls.add_argument("-m", "--meta", "--metadata", dest="metadata", action="store_true",
+                           default=False,
+                           help="List files with all their metadata that was recorded in the s3 metadata during upload. "
+                                "(NOT YET IMPLEMENTED)")
+    parser_ls.add_argument("-md5", "--md5", dest="md5", action="store_true", default=False,
+                           help="List files with their md5 hashes if recorded in the s3 metadata during upload. "
+                                "(NOT YET IMPLEMENTED)")
+
+    def custom_error_ls(self, default_msg):
+        extra_msg = "For more details type 'python {0} ls --help'".format(os.path.basename(__file__))
+        print(f"{os.path.basename(__file__)} ls error:", default_msg + "\n" + extra_msg)
+
+    parser_ls.error = types.MethodType(custom_error_ls, parser_ls)
+
+    #################### 'rm' parser ####################
+    # The rm (remove) parser
+    parser_rm = subparsers.add_parser("rm",
+                                      help="Remove files from an S3 bucket.")
+    parser_rm.add_argument("key", default=".",
+                           help="The directory/prefix or file/key to remove from the S3. "
+                                "Wildcards (e.g. ./ncei19*.tif) allowed. "
+                                "Use '.' or '/' to quiery the base prefix for the S3 bucket. Default: .")
+    parser_rm.add_argument("-r", "--recursive", dest="recursive", action="store_true", default=False,
+                           help="If a direcrory is specified with a wildcard, remove files recursively "
+                                "(including all files in sub-directories). "
+                                "For safetly, if a '*' wildcare is used as the key along with '-r', a confirmation "
+                                "a warning will be issued to the user before removing all contents of the bucket.")
+
+    def custom_error_rm(self, default_msg):
+        extra_msg = "For more details type 'python {0} rm --help'".format(os.path.basename(__file__))
+        print(f"{os.path.basename(__file__)} rm error:", default_msg + "\n" + extra_msg)
+
+    parser_rm.error = types.MethodType(custom_error_rm, parser_rm)
+
+    #################### 'cp'/'mv' parser ####################
+    # The cp (copy) and mv (move) parser
+    # Since 'cp' and 'mv' are both very similar (only difference is whether the original is deleted), we'll use the same parser.
+    parser_cp = subparsers.add_parser("cp", aliases=["mv"],
+                                      help="Copy (move) files to, from, or between S3 buckets. "
+                                           "At least one of 'key1' and 'key2' must contain an s3 prefix 's3:' or 's3://' "
+                                           "(without the bucket name).")
+    parser_cp.add_argument("key1",
+                           help="The source file/key to copy/move from the s3 or the local file system. "
+                                "Wildcards (e.g. ./ncei19*.tif) allowed if the second argument is a directory. "
+                                "To specify an S3 key (i.e. to download), use the 's3:' or 's3://' prefix, case-insensitive. "
+                                "Unlike aws commands, the bucket-name is not provided here "
+                                "(it is specified in the --bucket alias argument).")
+    parser_cp.add_argument("key2",
+                           help="The file/key to copy/move to the s3 or the local file system. "
+                                "If an existing directory is given, the filename will remain the same. "
+                                "To specify an S3 key (i.e. to upload), use the 's3:' or 's3://' prefix. Unlike aws "
+                                "commands, the bucket-name is not provided here (specified in the --bucket alias argument).")
+    parser_cp.add_argument("-r", "--recursive", dest="recursive", action="store_true", default=False,
+                           help="If a direcrory is specified with a wildcard, copy/move files recursively "
+                                "(including all files in sub-directories). "
+                                "For safetly, if a '*' wildcare is used as the key along with '-r', a confirmation "
+                                "a warning will be issued to the user before removing all contents of the bucket.")
+    parser_cp.add_argument("-m", "--meta", "--metadata", dest="metadata", metavar="KEY=VALUE",
+                           nargs='+', default=[],
+                           help="For uploads only: Add one or more metadata values to the S3 metadata for the file(s) in the "
+                                "destination S3 bucket. Args should be listed as key=value pairs. Ignored for downloads.")
+
+    def custom_error_cp(self, default_msg):
+        extra_msg = "For more details type 'python {0} {{cp,mv}} --help'".format(os.path.basename(__file__))
+        print(f"{os.path.basename(__file__)} cp/mv error:", default_msg + "\n" + extra_msg)
+
+    parser_cp.error = types.MethodType(custom_error_cp, parser_cp)
+
+    # Parse args and return namespace
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = define_and_parse_args_v2()
+
+    if args.command == "ls":
+        # TODO: ADD SUPPORT FOR --meta AND/OR --md5 ARGS
+        # If we supply just a . or /, make the key empty.
+        if args.key in ('.', '/'):
+            args.key = ''
+
+        # Remove s3: or s3:// prefix if it exists
+        elif re.match(r'^s3:', args.key, re.IGNORECASE):
+            args.key = args.key[3:].lstrip('/')
+
+        s3m = S3Manager()
+        try:
+            results = s3m.listdir(args.key, bucket_type=args.bucket, recursive=args.recursive)
+        except Exception as e:
+            print(e, file=sys.stderr)
+            sys.exit(1)
+
+        for r in results:
+            print(r)
+
+    elif args.command == "rm":
+        print("rm")
+    elif args.command == "cp":
+        print("cp")
+    elif args.command == "mv":
+        print("mv")
+
+#######################
+## DEPRECATED CODE ##
+#######################
 def define_and_parse_args():
-    # TODO: Replace this with an argument parser that uses subparsers for various commands.
+    # TODO: Replace this with an argument parser that uses subparsers for various commands rather than the janky way I did it manually.
     parser = argparse.ArgumentParser(description="Quick python utility for interacting with IVERT's S3 buckets.")
     parser.add_argument("command", nargs="+", help=f"The command to run. Options are 'ls', 'rm', 'cp', or 'mv'."
                         " Run each command without arguments to see usage messages for it.")
-    parser.add_argument("--bucket", "-b", default="database", help=
+
+    parser.add_argument("--bucket", "-b", default=None, help=
                         "The shorthand for which ivert S3 bucket we're pulling from, or the explicit name of a bucket."
                         " Shorthand options are 'database' or 'd' (s3 bucket of the IVERT database & other core data),"
                         " 'trusted' or 't' (the S3 bucket for input files that just passed secure ingest),"
                         " 'untrusted' or 'u' (s3 bucket for pushing files into IVERT),"
                         " and 'export' or 'e' or 'x' (where IVERT puts output files to disseminate). These are abstractions."
-                        " The actual S3 bucket names for each category are defined in ivert_config.ini."
+                        " The actual S3 bucket names for each category are defined in ivert_config at runtime."
                         " Default: 'database'")
+
     parser.add_argument("--recursive", "-r", default=False, action="store_true", help=
                         "For the 'ls' command, list all the files recursively, including in all sub-directories.")
+
+    parser.add_argument("--metadata", "-meta", "-m", metavar="KEY=VALUE", nargs="+",
+                        help="For upload commnds ('cp' and 'mv'), add metadata to the destination S3 key."
+                             "Follow the --metadata flag by 1 or more key=value pairs, "
+                             "they will be added to the destination S3 key's metadata header.")
+
+    parser.add_argument("--md5", "-md5", default=False, action="store_true",
+                        help="For upload commands ('cp' and 'mv'), add an md5 checksum to the destination S3 key's metadata."
+                             "For 'ls', print the checksum along with each filename for which it has been computed (NOTE: NOT YET IMPLEMENTED).")
 
     return parser.parse_args()
 
 
 if __name__ == "__main__":
+    sys.exit(0)
+
     args = define_and_parse_args()
 
     # This optional parameter appears in most

@@ -523,7 +523,7 @@ def validate_dem_parallel(dem_name,
         if s3_input_dir:
             file_not_found_msg = "Could not find file {0} locally nor in s3://{1}/{2}'.".format(
                 os.path.basename(dem_name),
-                s3.S3_Manager().get_bucketname(s3_input_bucket_type),
+                s3.S3Manager().get_bucketname(s3_input_bucket_type),
                 s3_input_dir.strip("/")
             )
         else:

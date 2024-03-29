@@ -20,7 +20,7 @@ def define_and_parse_args():
 
     # The first argument in the command. The other sub-parsers depend upon which command was used here.
     subparsers = parser.add_subparsers(dest="command",
-                                       help=f"Run '{os.path.basename(__file__)}' <command> --help' for more info about each command.")
+                                       help=f"Run '{os.path.basename(__file__)} <command> --help' for more info about each command.")
     subparsers.required = True
 
     # Create the "validate" subparser
@@ -28,13 +28,13 @@ def define_and_parse_args():
     parser_validate = subparsers.add_parser("validate", help=validate_help_msg, description=validate_help_msg)
     parser_validate.add_argument("files_or_directory", type=str, nargs="+",
                                  help="Enter a file, list of files, or a directory."
-                                      " Can also enter a bash-style wildcard such as ncei*.tif")
+                                      " Can also enter a shell-style wildcard such as ncei*.tif")
     parser_validate.add_argument("-ivd", "--input_vdatum", type=str, default="egm2008",
                                  help="Input DEM vertical datum. (Default: 'egm2008')"
-                                 " Other options are: [TODO: FILL IN SOON]")
+                                      " Other options are: [TODO: FILL IN SOON]")
     parser_validate.add_argument("-ovd", "--output_vdatum", type=str, default="egm2008",
                                  help="Output DEM vertical datum. (Default: 'egm2008')"
-                                 " Other options are: [TODO: FILL IN SOON]")
+                                      " Other options are: [TODO: FILL IN SOON]")
     parser_validate.add_argument("-w", "--wait", default=False, action="store_true",
                                  help="Wait to exit until the results are finished and downloaded. Default:"
                                       " just upload the data and exit. You can then run 'ivert_client.py check <job_id>' to check the status"

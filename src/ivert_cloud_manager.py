@@ -46,7 +46,7 @@ def import_ivert_input_data(s3_key: str,
     assert os.path.exists(local_dir) and os.path.isdir(local_dir)
 
     # Get a list of the files in the S3 bucket
-    s3m = s3.S3_Manager()
+    s3m = s3.S3Manager()
     if s3m.exists(s3_key, bucket_type=s3_bucket_type):
         if s3m.is_existing_s3_directory(s3_key, bucket_type=s3_bucket_type):
             file_list = s3m.listdir(s3_key, bucket_type=s3_bucket_type)
@@ -106,7 +106,7 @@ def export_ivert_output_data(local_dir_file_or_list, s3_dir, s3_bucket_type="exp
         else:
             file_list = [local_file]
 
-        s3m = s3.S3_Manager()
+        s3m = s3.S3Manager()
 
         # Upload the files to S3
         for local_fname in file_list:
