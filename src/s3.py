@@ -299,7 +299,7 @@ class S3Manager:
             # If we want to include the md5 hash of the file in the metadata, then compute it.
             if include_md5:
                 md5_hash = self.compute_md5(fname)
-                other_metadata["md5"] = md5_hash
+                other_metadata[self.md5_metadata_key] = md5_hash
 
             # Upload the file. Include other metadata if it's not empty.
             client.upload_file(fname, bucket_name, s3_key,
