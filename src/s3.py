@@ -9,10 +9,14 @@ import hashlib
 import os
 import re
 import sys
+import tempfile
 import types
+import tabulate
 # import textwrap
 import warnings
 
+import utils.query_yes_no
+import utils.bcolors
 import utils.configfile
 
 ivert_config = utils.configfile.config()
@@ -46,6 +50,9 @@ class S3Manager:
 
         # The s3 client. Client created on demand when needed by the :get_client() method.
         self.client_dict = dict([(dbtype, None) for dbtype in self.available_bucket_types])
+
+        # The metadata key we use for md5 sums.
+        self.md5_metadata_key = self.config.s3_md5_metadata_key
 
     def get_resource_bucket(self, bucket_type=None) -> boto3.resource:
         """Return the open resource.BAD_FILE_TO_TEST_QUARANTINE.foobar
@@ -123,7 +130,7 @@ class S3Manager:
 
         return s3_size == local_size
 
-    def exists(self, s3_key, bucket_type=None, return_head: bool=False):
+    def exists(self, s3_key, bucket_type=None, return_head: bool = False):
         """Look in the appropriate bucket, and see if a file or directory exists there."""
         bucket_type = self.convert_btype(bucket_type)
 
@@ -151,7 +158,7 @@ class S3Manager:
             if e.response["Error"]["Code"] == "404":
                 return False
             else:
-                warnings.warn(f"Warning: Unknown error fetching status of s3://{bucket_name}/{key}")
+                warnings.warn(f"Warning: Unknown error fetching status of s3://{bucket_name}/{s3_key}")
                 return False
 
     def is_existing_s3_directory(self, s3_key, bucket_type=None):
@@ -182,8 +189,24 @@ class S3Manager:
 
         return False
 
-    def download(self, s3_key, filename, bucket_type=None, delete_original=False, fail_quietly=True):
-        """Download a file from the S3 to the local file system."""
+    def download(self,
+                 s3_key: str,
+                 filename: str,
+                 bucket_type: str = None,
+                 delete_original: bool = False,
+                 recursive: bool = False,
+                 fail_quietly: bool = True,
+                 include_metadata: bool = False) -> list:
+        """Download a file from the S3 to the local file system.
+
+        Args:
+            s3_key (str): The S3 key to download.
+            filename (str): The local filename to download to.
+            bucket_type (str): The type of bucket to download from.
+            delete_original (bool): Whether to delete the original file after downloading.
+            recursive (bool): Whether to download recursively.
+            fail_quietly (bool): Whether to fail quietly if the file doesn't exist.
+            include_metadata (bool): Whether to include the metadata in the downloaded file. In this case, the list of files will be a list of (filename, metadata_dict) tuples."""
         bucket_type = self.convert_btype(bucket_type)
 
         client = self.get_client(bucket_type=bucket_type)
@@ -194,7 +217,7 @@ class S3Manager:
 
         if self.contains_glob_flags(s3_key):
             base_key = self.get_base_directory_before_glob(s3_key)
-            all_s3_keys = self.listdir(base_key, bucket_type=bucket_type, recursive=True)
+            all_s3_keys = self.listdir(base_key, bucket_type=bucket_type, recursive=recursive)
             matching_s3_keys = fnmatch.filter(all_s3_keys, s3_key)
             s3_keys_to_download = matching_s3_keys
         else:
@@ -216,7 +239,12 @@ class S3Manager:
                 if fail_quietly:
                     continue
                 else:
-                    raise RuntimeError(f"Error: S3_Manager.download() failed to download file {s3k.split('/')[-1]} correctly.")
+                    raise RuntimeError(
+                        f"Error: S3_Manager.download() failed to download file {s3k.split('/')[-1]} correctly.")
+
+            if include_metadata:
+                metadata = client.head_object(Bucket=bucket_name, Key=s3k)
+                filename_to_download = (filename_to_download, metadata)
 
             files_downloaded.append(filename_to_download)
 
@@ -226,13 +254,14 @@ class S3Manager:
         return files_downloaded
 
     def upload(self,
-               filename,
-               s3_key,
-               bucket_type=None,
-               delete_original=False,
-               fail_quietly=True,
-               include_md5=False,
-               other_metadata={}):
+               filename: str,
+               s3_key: str,
+               bucket_type: str = None,
+               delete_original: bool = False,
+               fail_quietly: bool = True,
+               recursive: bool = False,
+               include_md5: bool = False,
+               other_metadata: dict = None):
         """Upload a file from the local file system to the S3.
 
         Args:
@@ -241,6 +270,7 @@ class S3Manager:
             bucket_type (str): The type of bucket to upload to. Default to 'database'.
             delete_original (bool): Whether to delete the original file after uploading. This would be like the 'mv' command rather than 'cp'. Default to False.
             fail_quietly (bool): How to fail if the upload fails. If fail_quietly is True, return False. Else, raise an error. Default to True.
+            recursive (bool): If using a wildcard to grab multiple files, whether to upload all matching files in the directory including recursively in subdirectories. Default to False (match only the base directory).
             include_md5 (bool): Whether to include the md5 hash of the file in the metadata. Default to False.
             other_metadata (dict): Other metadata to include in the s3 object header. Default to {}."""
         bucket_type = self.convert_btype(bucket_type)
@@ -252,7 +282,7 @@ class S3Manager:
         assert not self.contains_glob_flags(s3_key)
 
         if self.contains_glob_flags(filename):
-            matching_filenames = glob.glob(filename)
+            matching_filenames = glob.glob(filename, recursive=recursive)
         else:
             matching_filenames = [filename]
 
@@ -273,7 +303,9 @@ class S3Manager:
 
             # Upload the file. Include other metadata if it's not empty.
             client.upload_file(fname, bucket_name, s3_key,
-                               ExtraArgs=None if len(other_metadata) == 0 else {"Metadata": other_metadata})
+                               ExtraArgs=None if (other_metadata is None or len(other_metadata) == 0)
+                                              else {"Metadata": other_metadata}
+                               )
 
             if not self.verify_same_size(fname, s3_key, bucket_type=bucket_type):
                 if fail_quietly:
@@ -288,7 +320,112 @@ class S3Manager:
 
         return files_uploaded
 
-    def listdir(self, s3_key, bucket_type=None, recursive=False):
+    def transfer(self,
+                 src_key: str,
+                 dst_key: str,
+                 src_bucket_type: str = None,
+                 dst_bucket_type: str = None,
+                 recursive: bool = False,
+                 delete_original: bool = False,
+                 fail_quietly: bool = True,
+                 include_metadata: bool = True) -> bool:
+        """Move or copy a file or set of files between two S3 buckets.
+
+        Args:
+            src_key (str): The S3 source key.
+            dst_key (str): The S3 destination key. If an existing directory, will transfer to that directory (same filename).
+            dst_bucket_type (str): The destination bucket type.
+            src_bucket_type (str): The source bucket type. Default to 'database' if on the EC2 or 'untrusted' if on a client.
+            recursive (bool): If wildcards are used in s3_key1, whether to match filesname recursively in sub-directories.
+            delete_original (bool): Whether to delete the original file after uploading. This would be like the 'mv' command rather than 'cp'. Default to False.
+            fail_quietly (bool): How to fail if the upload fails. If fail_quietly is True, return False. Else, raise an error. Default to True.
+            include_metadata (bool): Whether to include the source metadata in the transfer.
+
+        Returns:
+            bool: Whether the transfer was successful.
+
+            Caution: This function has not yet been thoroughly tested. It may not work on all cases."""
+
+        dst_bucket_type = self.convert_btype(dst_bucket_type)
+        src_bucket_type = self.convert_btype(src_bucket_type)
+
+        if self.contains_glob_flags(src_key):
+            matching_source_keys = self.listdir(src_key, bucket_type=src_bucket_type, recursive=recursive)
+            # Check to make sure it's a directory.
+            if len(matching_source_keys) > 1 and self.is_existing_s3_directory(dst_key, bucket_type=dst_bucket_type):
+                raise ValueError(
+                    "The destination key must be a directory if the source key refers to more than one file.")
+        else:
+            matching_source_keys = [src_key]
+
+        client = self.get_client(bucket_type=dst_bucket_type)
+
+        for s_key in matching_source_keys:
+            if self.is_existing_s3_directory(dst_key, bucket_type=dst_bucket_type):
+                d_key = dst_key.rstrip("/") + "/" + os.path.basename(s_key)
+            else:
+                d_key = dst_key
+
+            # If we are accessing two different buckets with two different sets of AWS credentials, then we need to transfer
+            # using a temporary file on this machine. Download, then upload. This only applies if the source bucket uses
+            # an AWS profile at all.
+            if (self.bucket_profile_dict[src_bucket_type] is not None
+                    and
+                    self.bucket_profile_dict[src_bucket_type] != self.bucket_profile_dict[dst_bucket_type]):
+                temp_file = tempfile.NamedTemporaryFile()
+                f_downloads = self.download(s_key, temp_file.name, bucket_type=src_bucket_type, delete_original=False,
+                                            fail_quietly=fail_quietly)
+
+                # Fetch the metdata if we're copying it over.
+                if include_metadata:
+                    md_record = self.get_metadata(s_key, bucket_type=src_bucket_type)
+                else:
+                    md_record = None
+
+                if not f_downloads:
+                    if fail_quietly:
+                        return False
+                    else:
+                        raise RuntimeError(f"Error: S3Manager.transfer() failed to transfer file {s_key} correctly.")
+
+                self.upload(temp_file.name, d_key, bucket_type=dst_bucket_type, delete_original=False,
+                            fail_quietly=fail_quietly, other_metadata=md_record)
+
+                # Confirm the file uploaded correctly
+                if self.exists(d_key, bucket_type=dst_bucket_type):
+                    # Delete the original file if needed.
+                    if delete_original:
+                        self.delete(s_key, bucket_type=src_bucket_type)
+                else:
+                    if fail_quietly:
+                        return False
+                    else:
+                        raise RuntimeError(
+                            f"Error: S3Manager.transfer() failed to transfer file {d_key} to the '{dst_bucket_type}' bucket.")
+
+                # Closing a tempfile deletes it.
+                temp_file.close()
+                continue
+
+            # If they don't require credentials, just copy the file without download using S3's CopyObject API
+            try:
+                client.copy_object(Bucket=self.get_bucketname(bucket_type=dst_bucket_type),
+                                   CopySource={"Bucket": self.get_bucketname(bucket_type=src_bucket_type),
+                                               "Key": s_key},
+                                   Key=d_key,
+                                   MetadataDirective="COPY" if include_metadata else "REPLACE")
+            except Exception as e:
+                if fail_quietly:
+                    return False
+                else:
+                    raise e
+
+        return True
+
+    def listdir(self,
+                s3_key: str,
+                bucket_type: str = None,
+                recursive: bool = False) -> list:
         """List all the files within a given directory.
 
         Returns the full key path, since that's how S3's operate. But this make it a bit different than os.listdir().
@@ -303,6 +440,7 @@ class S3Manager:
         # If we're using glob flags, return all the matching keys
         if self.contains_glob_flags(s3_key):
             s3_base_key = self.get_base_directory_before_glob(s3_key)
+            # For this sub-search only, we're not traversing subdirectories and we don't want the metadata.
             s3_matches_all = self.listdir(s3_base_key, bucket_type=bucket_type, recursive=True)
             s3_matches = fnmatch.filter(s3_matches_all, s3_key)
             if recursive:
@@ -310,17 +448,19 @@ class S3Manager:
             else:
                 # Get the files that are in that directory (and not in subdirectories)
                 fmatches = [m for m in s3_matches if m[len(s3_base_key):].lstrip("/").find("/") == -1]
+
                 # Get the directories that are in that directory
                 dirmatches = sorted(
                     list(
-                        set([m[:len(s3_base_key)].rstrip("/") + "/" + m[len(s3_base_key):].lstrip("/").split("/")[0] + "/"
+                        set([m[:len(s3_base_key)].rstrip("/") + "/" + m[len(s3_base_key):].lstrip("/").split("/")[
+                            0] + "/"
                              for m in s3_matches if m[len(s3_base_key):].lstrip("/").find("/") > -1])))
                 return dirmatches + fmatches
 
         # If no glob flags, make sure it's actually a directory (or existing file) we're looking at, not just a partial substring.
         if not self.is_existing_s3_directory(s3_key, bucket_type=bucket_type):
-            if os.path.exists(s3_key):
-                return s3_key
+            if self.exists(s3_key):
+                return [s3_key]
             else:
                 raise FileNotFoundError(
                     f"Error: '{s3_key}' is not a file or directory in bucket '{self.get_bucketname(bucket_type=bucket_type)}'.")
@@ -334,11 +474,13 @@ class S3Manager:
         if recursive:
             files = bucket_obj.objects.filter(Prefix=s3_key).all()
             return [obj.key for obj in files]
+
         else:
             # Get the full string that occurs after the directory listed, for each subset.
-            result = self.get_client(bucket_type=bucket_type).list_objects(Bucket=self.get_bucketname(bucket_type=bucket_type),
-                                                                           Prefix=s3_key,
-                                                                           Delimiter="/")
+            result = self.get_client(bucket_type=bucket_type).list_objects(
+                Bucket=self.get_bucketname(bucket_type=bucket_type),
+                Prefix=s3_key,
+                Delimiter="/")
 
             if "CommonPrefixes" in result.keys():
                 subdirs = [subdir["Prefix"] for subdir in result["CommonPrefixes"]]
@@ -352,7 +494,7 @@ class S3Manager:
 
             return subdirs + files
 
-    def delete(self, s3_key, bucket_type=None):
+    def delete(self, s3_key, bucket_type=None, recursive=False, max_without_warning=100):
         """Delete a key (file) from the S3."""
 
         bucket_type = self.convert_btype(bucket_type)
@@ -361,7 +503,19 @@ class S3Manager:
         bucket_name = self.get_bucketname(bucket_type=bucket_type)
 
         if self.contains_glob_flags(s3_key):
-            matching_keys = self.listdir(s3_key, bucket_type=bucket_type, recursive=True)
+            if recursive and s3_key.strip() == "*":
+                raise ValueError("Error: Can't recursively delete everything in a bucket.")
+
+            matching_keys = self.listdir(s3_key, bucket_type=bucket_type, recursive=recursive)
+
+            # Don't delete more than max_without_warning without user confirmation
+            if max_without_warning is not None and len(matching_keys) > max_without_warning:
+                query_prompt = f"This will delete {len(matching_keys)} files in bucket '{bucket_name}'. Continue?"
+                delete_all_confirmation = utils.query_yes_no.query_yes_no(query_prompt, default="no")
+
+                if not delete_all_confirmation:
+                    return
+
             for k in matching_keys:
                 client.delete_object(Bucket=bucket_name, Key=k)
         else:
@@ -373,7 +527,7 @@ class S3Manager:
     def contains_glob_flags(s3_key):
         """Return True if a string contains any glob-style wildcard flags."""
 
-        return ("*" in s3_key) or ("?" in s3_key) or ("[" in s3_key)
+        return ("*" in s3_key) or ("?" in s3_key) or ("[" in s3_key and "]" in s3_key)
 
     @staticmethod
     def get_base_directory_before_glob(s3_key):
@@ -423,42 +577,135 @@ class S3Manager:
         else:
             return self.compute_md5(filename) == s3_md5
 
+    def get_metadata(self, s3_key, bucket_type=None, recursive=False):
+        """Return the user-defined metadata of an S3 key.
+
+        If wildcards are used, return it as a {key: metadata_dict}" dictionary, even if only one file is matched.
+
+        Args:
+            s3_key (str): The S3 key to get the metadata of.
+            bucket_type (str, optional): The type of bucket to use. Defaults to None.
+            recursive (bool, optional): Whether to recurse into subdirectories. Defaults to False. Only applies if wildcard flags are used."""
+
+        bucket_type = self.convert_btype(bucket_type)
+
+        client = self.get_client(bucket_type=bucket_type)
+
+        if self.contains_glob_flags(s3_key):
+            keyvals = {}
+            key_names = self.listdir(s3_key, bucket_type=bucket_type, recursive=recursive)
+
+            for key in key_names:
+                # If we're not recursing, directories can be returned as well. Ignore those.
+                # Otherwise, add the key to the dictionary by calling this function recursively on the non-globbed match.
+                if not self.is_existing_s3_directory(key):
+                    keyvals[key] = self.get_metadata(key, bucket_type=bucket_type, recursive=False)
+
+            return keyvals
+
+        bname = self.get_bucketname(bucket_type=bucket_type)
+        head = client.head_object(Bucket=bname, Key=s3_key)
+        return head["Metadata"]
+
+
+def pretty_print_bucket_list(use_formatting=True):
+    """Prints a table of the available buckets and the prefixes used.
+
+    This is formatted for printing to a bash command shell.
+    """
+
+    aliases = S3Manager.available_bucket_types
+
+    bname_dict = {"database" : ivert_config.s3_bucket_database,
+                  "trusted"  : ivert_config.s3_bucket_import_trusted,
+                  "untrusted": ivert_config.s3_bucket_import_untrusted,
+                  "export"   : ivert_config.s3_bucket_export}
+
+    prefixes_dict = {"database" : "",
+                     "trusted"  : ivert_config.s3_import_prefix_base if bname_dict["trusted"] else "",
+                     "untrusted": ivert_config.s3_import_prefix_base if bname_dict["untrusted"] else "",
+                     "export"   : ivert_config.s3_export_prefix_base if bname_dict["export"] else ""}
+
+    bc = utils.bcolors.bcolors()
+
+    # A flag to incidate whether we had any "None" values.
+    none_values_found = False
+    none_str = ""
+
+    # Convert None values to italic <None>
+    for key in aliases:
+        if bname_dict[key] is None:
+            none_str = "None"
+            if use_formatting:
+                none_str = bc.ITALIC + none_str + bc.ENDC
+            bname_dict[key] = none_str
+            none_values_found = True
+
+    # Create the table
+    if use_formatting:
+        data = [[bc.OKBLUE + bc.BOLD + key + bc.ENDC + bc.ENDC,
+                 bname_dict[key], prefixes_dict[key]] for key in aliases]
+    else:
+        data = [[key, bname_dict[key], prefixes_dict[key]] for key in aliases]
+    if use_formatting:
+        headers = [bc.HEADER + txt + bc.ENDC for txt in ["Alias", "S3 Bucket", "Prefix"]]
+    else:
+        headers = ["Alias", "S3 Bucket", "Prefix"]
+
+    # Print
+    print()
+    print(tabulate.tabulate(data, headers=headers, colalign=["right", "left", "left"], tablefmt="plain"))
+
+    if none_values_found:
+        print(f"\n{bc.BOLD}Note{bc.ENDC}: '{none_str}' indicates that the bucket is not used by this client and/or is not set in the config file.")
+
+
+def add_bucket_param(subparser):
+    """All the sub-parsers use the same bucket optional argument. Add it here."""
+
+    subparser.add_argument("--bucket", "-b", default=None, choices=list(S3Manager.available_bucket_types) + [None],
+                           help="Shorthand alias of the ivert S3 bucket. "
+                                "Options are: 'database' 'd' (server work bucket, only accessible within the S3); "
+                                "'trusted' 't' (files that passed secure ingest, only accessible within the S3); "
+                                "'untrusted' 'u' (files uploaded to IVERT, only accessible by the client using credentials); "
+                                "'all' 'a' (all of the above).",
+                           type=str)
+
 
 def define_and_parse_args_v2() -> argparse.Namespace:
     """Parse command-line arguments using sub-parsers in python."""
 
+    #####################################################
     #################### MAIN parser ####################
+    #####################################################
     parser = argparse.ArgumentParser(description="Quick python utility for interacting with IVERT's S3 buckets.")
+
     subparsers = parser.add_subparsers(dest="command",
                                        help=f"The command to run. "
-                                            "Options: 'ls' 'rm' 'cp' 'mv'. "
-                                            f"Run '{os.path.basename(__file__)} <command> --help' for options of each command.")
-    subparsers.required = True
-
-    parser.add_argument("--bucket", "-b", default=None, choices=list(S3Manager.available_bucket_types) + [None],
-                        help="Shorthand alias of the ivert S3 bucket. "
-                             "Options are: 'database' 'd' (server work bucket, only accessible within the S3); "
-                             "'trusted' 't' (files that passed secure ingest, only accessible within the S3); "
-                             "'untrusted' 'u' (files uploaded to IVERT, only accessible by the client using credentials); "
-                             "'export' 'e' 'x' (exported data. Accessible by the server, read-only access from the client using credentials). "
-                             "These are aliases. Actual bucket-names are specified in ivert_config and populated at runtime. "
-                             "Default: 'database'")
+                                            f"Run '{os.path.basename(__file__)} <command> --help' for options of each command.",
+                                       required=True)
 
     # Add a helpful output message if we get parsing errors.
     def custom_error_main(self, default_msg):
-        extra_msg = "For more details type 'python {0} --help' or 'python {0} <command> --help'.".format(os.path.basename(__file__))
+        extra_msg = "For more details type 'python {0} --help' or 'python {0} <command> --help'.".format(
+            os.path.basename(__file__))
         print(f"{os.path.basename(__file__)} error:", default_msg + "\n" + extra_msg)
 
     parser.error = types.MethodType(custom_error_main, parser)
 
+    #####################################################
     #################### 'ls' parser ####################
+    #####################################################
     # The ls (list files) parser
     parser_ls = subparsers.add_parser("ls",
-                                      help="List files in an S3 bucket.")
+                                      description="List files in an S3 bucket.",
+                                      help="List files in an S3 bucket.",
+                                      add_help=True)
     parser_ls.add_argument("key", default=".",
                            help="The directory/prefix or file/key to list from the S3. "
                                 "Wildcards (e.g. ./ncei19*.tif) allowed. "
                                 "Use '.' or '/' to quiery the base prefix for the S3 bucket. Default: .")
+    add_bucket_param(parser_ls)
     parser_ls.add_argument("-r", "--recursive", dest="recursive", action="store_true", default=False,
                            help="List files recursively (including all keys in subdirectories).")
     parser_ls.add_argument("-m", "--meta", "--metadata", dest="metadata", action="store_true",
@@ -475,19 +722,26 @@ def define_and_parse_args_v2() -> argparse.Namespace:
 
     parser_ls.error = types.MethodType(custom_error_ls, parser_ls)
 
+    #####################################################
     #################### 'rm' parser ####################
+    #####################################################
     # The rm (remove) parser
     parser_rm = subparsers.add_parser("rm",
-                                      help="Remove files from an S3 bucket.")
+                                      description="Remove files from an S3 bucket.",
+                                      help="Remove files from an S3 bucket.",
+                                      add_help=True)
     parser_rm.add_argument("key", default=".",
                            help="The directory/prefix or file/key to remove from the S3. "
                                 "Wildcards (e.g. ./ncei19*.tif) allowed. "
                                 "Use '.' or '/' to quiery the base prefix for the S3 bucket. Default: .")
+    add_bucket_param(parser_rm)
     parser_rm.add_argument("-r", "--recursive", dest="recursive", action="store_true", default=False,
                            help="If a direcrory is specified with a wildcard, remove files recursively "
                                 "(including all files in sub-directories). "
-                                "For safetly, if a '*' wildcare is used as the key along with '-r', a confirmation "
-                                "a warning will be issued to the user before removing all contents of the bucket.")
+                                "For safety, deleting all files in a bucket with the '*' wildcard and '-r' is not allowed.")
+    parser_rm.add_argument("-y", "--yes", dest="yes", action="store_true", default=False,
+                           help="By default the command will ask for confirmation before deleting more than 100 files. "
+                                "Override this. (Be careful here!)")
 
     def custom_error_rm(self, default_msg):
         extra_msg = "For more details type 'python {0} rm --help'".format(os.path.basename(__file__))
@@ -495,13 +749,18 @@ def define_and_parse_args_v2() -> argparse.Namespace:
 
     parser_rm.error = types.MethodType(custom_error_rm, parser_rm)
 
+    ##########################################################
     #################### 'cp'/'mv' parser ####################
+    ##########################################################
     # The cp (copy) and mv (move) parser
     # Since 'cp' and 'mv' are both very similar (only difference is whether the original is deleted), we'll use the same parser.
     parser_cp = subparsers.add_parser("cp", aliases=["mv"],
-                                      help="Copy (move) files to, from, or between S3 buckets. "
-                                           "At least one of 'key1' and 'key2' must contain an s3 prefix 's3:' or 's3://' "
-                                           "(without the bucket name).")
+                                      description="Copy (or move) files to, from, or between S3 buckets. "
+                                                  "At least one of 'key1' and 'key2' must contain an s3 prefix 's3:[key]' or 's3://[key]'. "
+                                                  "Do not include the bucket name with s3:[key], that is inserted by the --bucket argument "
+                                                  "which can use the default bucket if not specified.",
+                                      help="Copy (or move) files to, from, or between S3 buckets. ",
+                                      add_help=True)
     parser_cp.add_argument("key1",
                            help="The source file/key to copy/move from the s3 or the local file system. "
                                 "Wildcards (e.g. ./ncei19*.tif) allowed if the second argument is a directory. "
@@ -513,6 +772,7 @@ def define_and_parse_args_v2() -> argparse.Namespace:
                                 "If an existing directory is given, the filename will remain the same. "
                                 "To specify an S3 key (i.e. to upload), use the 's3:' or 's3://' prefix. Unlike aws "
                                 "commands, the bucket-name is not provided here (specified in the --bucket alias argument).")
+    add_bucket_param(parser_cp)
     parser_cp.add_argument("-r", "--recursive", dest="recursive", action="store_true", default=False,
                            help="If a direcrory is specified with a wildcard, copy/move files recursively "
                                 "(including all files in sub-directories). "
@@ -522,12 +782,30 @@ def define_and_parse_args_v2() -> argparse.Namespace:
                            nargs='+', default=[],
                            help="For uploads only: Add one or more metadata values to the S3 metadata for the file(s) in the "
                                 "destination S3 bucket. Args should be listed as key=value pairs. Ignored for downloads.")
+    parser_cp.add_argument('-db', "--dest_bucket", dest="dest_bucket", metavar="BUCKET", default=None,
+                           help="If moving between buckets, the name of the S3 bucket to copy/move the file(s) to if "
+                                "different from the original bucket. "
+                                "Default: Same as source bucket.")
 
+    # Custom error function for 'cp' and 'mv'
     def custom_error_cp(self, default_msg):
         extra_msg = "For more details type 'python {0} {{cp,mv}} --help'".format(os.path.basename(__file__))
         print(f"{os.path.basename(__file__)} cp/mv error:", default_msg + "\n" + extra_msg)
 
     parser_cp.error = types.MethodType(custom_error_cp, parser_cp)
+
+    ##########################################################
+    #################### 'list' parser #######################
+    ##########################################################
+
+    parser_buckets = subparsers.add_parser("buckets", aliases=["list_buckets"],
+                                           description="Print a list of the S3 buckets set for this account, mapped "
+                                                       "to each alias. Any buckets that are not used by this account "
+                                                       "in this location are listed as None.",
+                                           help="Print a list of the S3 buckets activated for this account.",
+                                           add_help=True)
+
+
 
     # Parse args and return namespace
     return parser.parse_args()
@@ -536,6 +814,9 @@ def define_and_parse_args_v2() -> argparse.Namespace:
 if __name__ == "__main__":
     args = define_and_parse_args_v2()
 
+    #####################################################
+    #################### 'ls' parser ####################
+    #####################################################
     if args.command == "ls":
         # TODO: ADD SUPPORT FOR --meta AND/OR --md5 ARGS
         # If we supply just a . or /, make the key empty.
@@ -554,186 +835,277 @@ if __name__ == "__main__":
             sys.exit(1)
 
         for r in results:
-            print(r)
+            if args.metadata or args.md5:
+                print(r, s3m.get_metadata(r, bucket_type=args.bucket))
+            else:
+                print(r)
 
+    #####################################################
+    #################### 'rm' parser ####################
+    #####################################################
     elif args.command == "rm":
-        print("rm")
-    elif args.command == "cp":
-        print("cp")
-    elif args.command == "mv":
-        print("mv")
+        # If we supply just a . or /, make the key empty.
+        if args.key in ('.', '/'):
+            args.key = ''
+
+        # Remove s3: or s3:// prefix if it exists
+        elif re.match(r'^s3:', args.key, re.IGNORECASE):
+            args.key = args.key[3:].lstrip('/')
+
+        s3m = S3Manager()
+        try:
+            s3m.delete(args.key,
+                       bucket_type=args.bucket,
+                       recursive=args.recursive,
+                       max_without_warning=None if args.yes else 100)
+        except Exception as e:
+            print(e, file=sys.stderr)
+            sys.exit(1)
+
+
+    ########################################################
+    #################### 'cp/mv' parser ####################
+    ########################################################
+    elif args.command in ("cp", "mv"):
+
+        k1 = args.key1
+        k2 = args.key2
+        if re.match(r'^s3:', k1, re.IGNORECASE):
+            is_key1_s3 = True
+            k1 = k1[3:].lstrip('/')
+        else:
+            is_key1_s3 = False
+
+        if re.match(r'^s3:', k2, re.IGNORECASE):
+            is_key2_s3 = True
+            k2 = k2[3:].lstrip('/')
+        else:
+            is_key2_s3 = False
+
+        s3m = S3Manager()
+
+        # If they're both s3 keys, transfer the files between them.
+        if is_key2_s3 and is_key1_s3:
+            s3m.transfer(k1,
+                         k2,
+                         dst_bucket_type=args.bucket if args.dest_bucket is None else args.dest_bucket,
+                         src_bucket_type=args.bucket,
+                         recursive=args.recursive,
+                         delete_original=(args.command == 'mv'),
+                         fail_quietly=True,
+                         include_metadata=True)
+
+        # If only the first file is an S3 key, we're downloading.
+        elif is_key1_s3 and not is_key2_s3:
+            s3m.download(k1,
+                         k2,
+                         bucket_type=args.bucket,
+                         delete_original=(args.command == 'mv'),
+                         recursive=args.recursive)
+
+        # If only the second key is an S3 key, we're uploading.
+        elif not is_key1_s3 and is_key2_s3:
+            s3m.upload(k1,
+                       k2,
+                       bucket_type=args.bucket,
+                       recursive=args.recursive,
+                       delete_original=(args.command == 'mv'),
+                       other_metadata=args.metadata,
+                       include_md5=args.md5)
+
+        # If neither key is an S3 key, it's asking for a local file transfer.
+        # That can better be done with cp/mv on the os.
+        else:
+            raise ValueError("One or more keys should refer to an S3 bucket prepended by 's3:' or 's3://'. Local"
+                             "file transfers can be handled by os-supported command-line utilitys like cp and mv.")
+
+    elif args.command in ("buckets", "list_buckets"):
+        # Fetch the bucket data from the config file
+        pretty_print_bucket_list()
+
+    else:
+        raise NotImplementedError("Command '{args.command}' not yet implemented.")
+
+
+
 
 #######################
 ## DEPRECATED CODE ##
 #######################
-def define_and_parse_args():
-    # TODO: Replace this with an argument parser that uses subparsers for various commands rather than the janky way I did it manually.
-    parser = argparse.ArgumentParser(description="Quick python utility for interacting with IVERT's S3 buckets.")
-    parser.add_argument("command", nargs="+", help=f"The command to run. Options are 'ls', 'rm', 'cp', or 'mv'."
-                        " Run each command without arguments to see usage messages for it.")
-
-    parser.add_argument("--bucket", "-b", default=None, help=
-                        "The shorthand for which ivert S3 bucket we're pulling from, or the explicit name of a bucket."
-                        " Shorthand options are 'database' or 'd' (s3 bucket of the IVERT database & other core data),"
-                        " 'trusted' or 't' (the S3 bucket for input files that just passed secure ingest),"
-                        " 'untrusted' or 'u' (s3 bucket for pushing files into IVERT),"
-                        " and 'export' or 'e' or 'x' (where IVERT puts output files to disseminate). These are abstractions."
-                        " The actual S3 bucket names for each category are defined in ivert_config at runtime."
-                        " Default: 'database'")
-
-    parser.add_argument("--recursive", "-r", default=False, action="store_true", help=
-                        "For the 'ls' command, list all the files recursively, including in all sub-directories.")
-
-    parser.add_argument("--metadata", "-meta", "-m", metavar="KEY=VALUE", nargs="+",
-                        help="For upload commnds ('cp' and 'mv'), add metadata to the destination S3 key."
-                             "Follow the --metadata flag by 1 or more key=value pairs, "
-                             "they will be added to the destination S3 key's metadata header.")
-
-    parser.add_argument("--md5", "-md5", default=False, action="store_true",
-                        help="For upload commands ('cp' and 'mv'), add an md5 checksum to the destination S3 key's metadata."
-                             "For 'ls', print the checksum along with each filename for which it has been computed (NOTE: NOT YET IMPLEMENTED).")
-
-    return parser.parse_args()
-
-
-if __name__ == "__main__":
-    sys.exit(0)
-
-    args = define_and_parse_args()
-
-    # This optional parameter appears in most
-    bucketopt_message = \
-    "\n  --bucket BUCKET, -b BUCKET\n" + \
-    textwrap.fill("Tag for the IVERT bucket type being used. Options are database', 'untrusted',"
-                  " 'trusted', and 'export'. The actual names of the buckets are pulled from"
-                  " ivert_config.ini. Default is 'database', so commands will (by default) be referenced to the"
-                  " s3 bucket where the IVERT database resides.",
-                  width=os.get_terminal_size().columns,
-                  initial_indent=' ' * 20,
-                  subsequent_indent=' ' * 20)
-
-    command = args.command
-    if command[0] == "ls":
-        if len(command) > 2:
-            raise ValueError("'ls' should have exactly 0 or 1 positional argument after it.")
-        # The "s3:" is not mandatory. Strip it off if it exists.
-
-        if len(command) == 1:
-            print("usage: python {0} ls s3_prefix [--recursive] [--bucket BUCKET]".format(os.path.basename(__file__)) +
-                  "\n\nList all the files in that prefix directory." +
-                  "\n\npositional arguments:" +
-                  textwrap.fill("\n  s3_prefix       The directory (called a 'prefix' in s3) in which to list all files"
-                                " present. Prints the full keyname (with prefix directories). Use an empty prefix"
-                                " ('s3:', '.', or '/') to list files in the root directory of the bucket.",
-                                width=os.get_terminal_size().columns,
-                                subsequent_indent=' ' * 20) +
-                  "\n\noptions:" +
-                  textwrap.fill("  --recursive, -r Recursively list all files in that directory, including within"
-                                "sub-folders.",
-                                width=os.get_terminal_size().columns,
-                                subsequent_indent=' ' * 20) +
-                  bucketopt_message
-                  )
-            sys.exit(0)
-
-        # if len(command) == 1:
-        #     command = command + [""]
-
-        key = command[1].lstrip("s3:").lstrip("S3:").strip()
-        if key == "/" or key == ".":
-            key = ""
-
-        s3m = S3_Manager()
-
-        results = s3m.listdir(key, bucket_type=args.bucket, recursive=args.recursive)
-        for line in results:
-            print(line)
-
-    elif command[0] == "rm":
-        if len(command) == 1:
-            print("usage: python {0} rm s3_key [--bucket BUCKET]".format(os.path.basename(__file__)) +
-                  "\n\nRemove a file from the s3." +
-                  "\n\npositional arguments:" +
-                  "\n  s3_key          The file to remove." +
-                  "\n\noptions:" +
-                  bucketopt_message
-                  )
-            sys.exit(0)
-
-        s3m = S3_Manager()
-
-        for key in command[1:]:
-            # The "s3:" is not mandatory. Strip it off if it exists.
-            key = key.lstrip("s3:").lstrip("S3:")
-            s3m.delete(key, bucket_type=args.bucket)
-
-    elif command[0] in ("cp", "mv"):
-        if len(command) == 1:
-            move_or_copy = "copy" if (command[0] == "cp") else "move"
-            print("usage 1: python {0} {1} s3:s3_key file_or_directory [--bucket BUCKET]".format(os.path.basename(__file__), command[0]) +
-                  f"\n             {move_or_copy.capitalize()} a file from the s3 into the local file system." +
-                  "\n\nusage 2: python {0} {1} file s3:s3_key_or_prefix [--bucket BUCKET]".format(os.path.basename(__file__), command[0]) +
-                  f"\n             {move_or_copy.capitalize()} a local file into the s3." +
-                  "\n\nOne of the positional arguments must start with 's3:' to identify which argument corresponds to the s3 bucket."
-                  "The other is assumed to be a local file."
-                  "\n\npositional arguments (only two are used in any command, one s3: argument and another local):" +
-                  "\n  s3:s3_key            A file in the s3 bucket." +
-                  "\n  s3:s3_key_or_prefix  A file or directory (prefix) in the s3 bucket. Use an empty prefix ('s3:')"
-                  f"\n                       to {move_or_copy} files into the root directory of the bucket." +
-                  "\n  file                 A file on the local file system." +
-                  "\n  file_or_directory    A file or directory on the local file system."
-                  "\n\noptions:" +
-                  bucketopt_message
-                  )
-            sys.exit(0)
-
-        s3m = S3_Manager()
-
-        if len(command) < 3:
-            raise ValueError(f"'{command[0]}' should be followed by exactly 2 files, one of them preceded by 's3:'")
-
-        c1 = command[1]
-        c2 = command[-1]
-
-        local_files = [fn for fn in command[1:] if fn.lower().find("s3:") == -1]
-        s3_files = [fn for fn in command[1:] if fn.lower().find("s3:") == 0]
-
-        move_or_copy = "copy" if (command[0] == "cp") else "move"
-
-        # In the case of local wildcards, the shell will expand the list of files before sending it to python.
-        # This is only valid if the local files came first (with wildcards) followed by the s3 file. Handle this case.
-
-        if len(s3_files) != 1:
-            raise ValueError(f"'{command[0]}' should be followed by 2 files, exactly one of them preceded by 's3:'")
-        if len(local_files) > 1 and s3_files[0] == c1:
-            raise ValueError(f"Cannot {move_or_copy} to more than 1 local file or directory.")
-
-        s3_file = s3_files[0]
-
-        # Determine if we're uploading or downloading. Which one came first?
-        if s3_file == c1:
-            downloading = True
-        else:
-            downloading = False
-
-        # Trim off the "s3:" in front of the s3 file.
-        s3_file = s3_file.lstrip("s3:").lstrip("S3:").strip()
-        if (s3_file == "") and downloading:
-            raise ValueError(f"Cannot {move_or_copy} the base directory (s3:) of the s3 bucket. Try using a wildcard (*).")
-
-        for local_file in local_files:
-            if downloading:
-                s3m.download(s3_file,
-                             local_file,
-                             bucket_type=args.bucket,
-                             delete_original=(command[0] == "mv"),
-                             fail_quietly=False)
-            else:
-                s3m.upload(local_file,
-                           s3_file,
-                           bucket_type=args.bucket,
-                           delete_original=(command[0] == "mv"),
-                           fail_quietly=False)
-
-    else:
-        raise ValueError(f"Unhandled command '{command[0]}'")
+# def define_and_parse_args():
+#     # TODO: Replace this with an argument parser that uses subparsers for various commands rather than the janky way I did it manually.
+#     parser = argparse.ArgumentParser(description="Quick python utility for interacting with IVERT's S3 buckets.")
+#     parser.add_argument("command", nargs="+", help=f"The command to run. Options are 'ls', 'rm', 'cp', or 'mv'."
+#                                                    " Run each command without arguments to see usage messages for it.")
+#
+#     parser.add_argument("--bucket", "-b", default=None, help=
+#     "The shorthand for which ivert S3 bucket we're pulling from, or the explicit name of a bucket."
+#     " Shorthand options are 'database' or 'd' (s3 bucket of the IVERT database & other core data),"
+#     " 'trusted' or 't' (the S3 bucket for input files that just passed secure ingest),"
+#     " 'untrusted' or 'u' (s3 bucket for pushing files into IVERT),"
+#     " and 'export' or 'e' or 'x' (where IVERT puts output files to disseminate). These are abstractions."
+#     " The actual S3 bucket names for each category are defined in ivert_config at runtime."
+#     " Default: 'database'")
+#
+#     parser.add_argument("--recursive", "-r", default=False, action="store_true", help=
+#     "For the 'ls' command, list all the files recursively, including in all sub-directories.")
+#
+#     parser.add_argument("--metadata", "-meta", "-m", metavar="KEY=VALUE", nargs="+",
+#                         help="For upload commnds ('cp' and 'mv'), add metadata to the destination S3 key."
+#                              "Follow the --metadata flag by 1 or more key=value pairs, "
+#                              "they will be added to the destination S3 key's metadata header.")
+#
+#     parser.add_argument("--md5", "-md5", default=False, action="store_true",
+#                         help="For upload commands ('cp' and 'mv'), add an md5 checksum to the destination S3 key's metadata."
+#                              "For 'ls', print the checksum along with each filename for which it has been computed (NOTE: NOT YET IMPLEMENTED).")
+#
+#     return parser.parse_args()
+#
+# #######################
+# ## DEPRECATED CODE ##
+# #######################
+# if __name__ == "__main__":
+#     sys.exit(0)
+#     # This code has been deprecated. Don't run.
+#
+#     args = define_and_parse_args()
+#
+#     # This optional parameter appears in most
+#     bucketopt_message = \
+#         "\n  --bucket BUCKET, -b BUCKET\n" + \
+#         textwrap.fill("Tag for the IVERT bucket type being used. Options are database', 'untrusted',"
+#                       " 'trusted', and 'export'. The actual names of the buckets are pulled from"
+#                       " ivert_config.ini. Default is 'database', so commands will (by default) be referenced to the"
+#                       " s3 bucket where the IVERT database resides.",
+#                       width=os.get_terminal_size().columns,
+#                       initial_indent=' ' * 20,
+#                       subsequent_indent=' ' * 20)
+#
+#     command = args.command
+#     if command[0] == "ls":
+#         if len(command) > 2:
+#             raise ValueError("'ls' should have exactly 0 or 1 positional argument after it.")
+#         # The "s3:" is not mandatory. Strip it off if it exists.
+#
+#         if len(command) == 1:
+#             print("usage: python {0} ls s3_prefix [--recursive] [--bucket BUCKET]".format(os.path.basename(__file__)) +
+#                   "\n\nList all the files in that prefix directory." +
+#                   "\n\npositional arguments:" +
+#                   textwrap.fill("\n  s3_prefix       The directory (called a 'prefix' in s3) in which to list all files"
+#                                 " present. Prints the full keyname (with prefix directories). Use an empty prefix"
+#                                 " ('s3:', '.', or '/') to list files in the root directory of the bucket.",
+#                                 width=os.get_terminal_size().columns,
+#                                 subsequent_indent=' ' * 20) +
+#                   "\n\noptions:" +
+#                   textwrap.fill("  --recursive, -r Recursively list all files in that directory, including within"
+#                                 "sub-folders.",
+#                                 width=os.get_terminal_size().columns,
+#                                 subsequent_indent=' ' * 20) +
+#                   bucketopt_message
+#                   )
+#             sys.exit(0)
+#
+#         # if len(command) == 1:
+#         #     command = command + [""]
+#
+#         key = command[1].lstrip("s3:").lstrip("S3:").strip()
+#         if key == "/" or key == ".":
+#             key = ""
+#
+#         s3m = S3_Manager()
+#
+#         results = s3m.listdir(key, bucket_type=args.bucket, recursive=args.recursive)
+#         for line in results:
+#             print(line)
+#
+#     elif command[0] == "rm":
+#         if len(command) == 1:
+#             print("usage: python {0} rm s3_key [--bucket BUCKET]".format(os.path.basename(__file__)) +
+#                   "\n\nRemove a file from the s3." +
+#                   "\n\npositional arguments:" +
+#                   "\n  s3_key          The file to remove." +
+#                   "\n\noptions:" +
+#                   bucketopt_message
+#                   )
+#             sys.exit(0)
+#
+#         s3m = S3_Manager()
+#
+#         for key in command[1:]:
+#             # The "s3:" is not mandatory. Strip it off if it exists.
+#             key = key.lstrip("s3:").lstrip("S3:")
+#             s3m.delete(key, bucket_type=args.bucket)
+#
+#     elif command[0] in ("cp", "mv"):
+#         if len(command) == 1:
+#             move_or_copy = "copy" if (command[0] == "cp") else "move"
+#             print("usage 1: python {0} {1} s3:s3_key file_or_directory [--bucket BUCKET]".format(
+#                 os.path.basename(__file__), command[0]) +
+#                   f"\n             {move_or_copy.capitalize()} a file from the s3 into the local file system." +
+#                   "\n\nusage 2: python {0} {1} file s3:s3_key_or_prefix [--bucket BUCKET]".format(
+#                       os.path.basename(__file__), command[0]) +
+#                   f"\n             {move_or_copy.capitalize()} a local file into the s3." +
+#                   "\n\nOne of the positional arguments must start with 's3:' to identify which argument corresponds to the s3 bucket."
+#                   "The other is assumed to be a local file."
+#                   "\n\npositional arguments (only two are used in any command, one s3: argument and another local):" +
+#                   "\n  s3:s3_key            A file in the s3 bucket." +
+#                   "\n  s3:s3_key_or_prefix  A file or directory (prefix) in the s3 bucket. Use an empty prefix ('s3:')"
+#                   f"\n                       to {move_or_copy} files into the root directory of the bucket." +
+#                   "\n  file                 A file on the local file system." +
+#                   "\n  file_or_directory    A file or directory on the local file system."
+#                   "\n\noptions:" +
+#                   bucketopt_message
+#                   )
+#             sys.exit(0)
+#
+#         s3m = S3_Manager()
+#
+#         if len(command) < 3:
+#             raise ValueError(f"'{command[0]}' should be followed by exactly 2 files, one of them preceded by 's3:'")
+#
+#         c1 = command[1]
+#         c2 = command[-1]
+#
+#         local_files = [fn for fn in command[1:] if fn.lower().find("s3:") == -1]
+#         s3_files = [fn for fn in command[1:] if fn.lower().find("s3:") == 0]
+#
+#         move_or_copy = "copy" if (command[0] == "cp") else "move"
+#
+#         # In the case of local wildcards, the shell will expand the list of files before sending it to python.
+#         # This is only valid if the local files came first (with wildcards) followed by the s3 file. Handle this case.
+#
+#         if len(s3_files) != 1:
+#             raise ValueError(f"'{command[0]}' should be followed by 2 files, exactly one of them preceded by 's3:'")
+#         if len(local_files) > 1 and s3_files[0] == c1:
+#             raise ValueError(f"Cannot {move_or_copy} to more than 1 local file or directory.")
+#
+#         s3_file = s3_files[0]
+#
+#         # Determine if we're uploading or downloading. Which one came first?
+#         if s3_file == c1:
+#             downloading = True
+#         else:
+#             downloading = False
+#
+#         # Trim off the "s3:" in front of the s3 file.
+#         s3_file = s3_file.lstrip("s3:").lstrip("S3:").strip()
+#         if (s3_file == "") and downloading:
+#             raise ValueError(
+#                 f"Cannot {move_or_copy} the base directory (s3:) of the s3 bucket. Try using a wildcard (*).")
+#
+#         for local_file in local_files:
+#             if downloading:
+#                 s3m.download(s3_file,
+#                              local_file,
+#                              bucket_type=args.bucket,
+#                              delete_original=(command[0] == "mv"),
+#                              fail_quietly=False)
+#             else:
+#                 s3m.upload(local_file,
+#                            s3_file,
+#                            bucket_type=args.bucket,
+#                            delete_original=(command[0] == "mv"),
+#                            fail_quietly=False)
+#
+#     else:
+#         raise ValueError(f"Unhandled command '{command[0]}'")
