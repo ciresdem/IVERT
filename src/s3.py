@@ -280,6 +280,7 @@ class S3Manager:
 
         assert not self.contains_glob_flags(s3_key)
 
+        filename = os.path.expanduser(filename)
         if self.contains_glob_flags(filename):
             matching_filenames = glob.glob(filename, recursive=recursive)
         else:
@@ -413,6 +414,10 @@ class S3Manager:
                                                "Key": s_key},
                                    Key=d_key,
                                    MetadataDirective="COPY" if include_metadata else "REPLACE")
+
+                if delete_original and self.exists(d_key, bucket_type=dst_bucket_type):
+                    self.delete(s_key, bucket_type=src_bucket_type)
+
             except Exception as e:
                 if fail_quietly:
                     return False
