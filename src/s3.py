@@ -788,6 +788,9 @@ def define_and_parse_args_v2() -> argparse.Namespace:
                            nargs='+', default=[],
                            help="For uploads only: Add one or more metadata values to the S3 metadata for the file(s) in the "
                                 "destination S3 bucket. Args should be listed as key=value pairs. Ignored for downloads.")
+    parser_cp.add_argument("-md5", "--md5", dest="md5", action="store_true", default=False,
+                           help="Add the MD5 checksum to the S3 metadata for the file(s) in the destination S3 bucket. "
+                                "Ignored for downloads.")
     parser_cp.add_argument('-db', "--dest_bucket", dest="dest_bucket", metavar="BUCKET", default=None,
                            help="If moving between buckets, the name of the S3 bucket to copy/move the file(s) to if "
                                 "different from the original bucket. "
@@ -916,8 +919,8 @@ if __name__ == "__main__":
                        bucket_type=args.bucket,
                        recursive=args.recursive,
                        delete_original=(args.command == 'mv'),
-                       other_metadata=args.metadata,
-                       include_md5=args.md5)
+                       include_md5=args.md5,
+                       other_metadata=args.metadata)
 
         # If neither key is an S3 key, it's asking for a local file transfer.
         # That can better be done with cp/mv on the os.
