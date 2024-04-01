@@ -465,7 +465,7 @@ class S3Manager:
                     f"Error: '{s3_key}' is not a file or directory in bucket '{self.get_bucketname(bucket_type=bucket_type)}'.")
 
         # Make sure the directory ends with a '/'.
-        if not s3_key.endswith("/"):
+        if len(s3_key) > 0 and not s3_key.endswith("/"):
             s3_key = s3_key + "/"
 
         bucket_obj = self.get_resource_bucket(bucket_type=bucket_type)
