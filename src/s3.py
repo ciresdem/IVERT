@@ -280,9 +280,11 @@ class S3Manager:
 
         assert not self.contains_glob_flags(s3_key)
 
+        # Expand user home directory if needed.
         filename = os.path.expanduser(filename)
+
         if self.contains_glob_flags(filename):
-            matching_filenames = glob.glob(filename, recursive=recursive)
+            matching_filenames = [fn for fn in glob.glob(filename, recursive=recursive) if not os.path.isdir(fn)]
         else:
             matching_filenames = [filename]
 
