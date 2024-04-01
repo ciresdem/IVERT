@@ -9,6 +9,7 @@ class bcolors:
     FAIL = '\033[91m'
     ENDC = '\033[0m'
     BOLD = '\033[1m'
+    ITALIC = '\033[3m'
     UNDERLINE = '\033[4m'
 
     def disable(self):
@@ -20,4 +21,5 @@ class bcolors:
         self.FAIL = ''
         self.ENDC = ''
         self.BOLD = ''
+        self.ITALIC = ''
         self.UNDERLINE = ''
