@@ -26,7 +26,7 @@ class S3Manager:
     """Class for copying files into and out-of the IVERT AWS S3 buckets, as needed."""
 
     available_bucket_types = ("database", "untrusted", "trusted", "export")
-    default_bucket_type = "detabase" if ivert_config.is_aws else "untrusted"
+    default_bucket_type = "database" if ivert_config.is_aws else "untrusted"
 
     def __init__(self):
         self.config = ivert_config
@@ -54,7 +54,7 @@ class S3Manager:
         # The metadata key we use for md5 sums.
         self.md5_metadata_key = self.config.s3_md5_metadata_key
 
-    def get_resource_bucket(self, bucket_type=None) -> boto3.resource:
+    def get_resource_bucket(self, bucket_type: str = None) -> boto3.resource:
         """Return the open resource.BAD_FILE_TO_TEST_QUARANTINE.foobar
 
         If it doesn't exist yet, open one."""
