@@ -351,7 +351,7 @@ class S3Manager:
         if self.contains_glob_flags(src_key):
             matching_source_keys = self.listdir(src_key, bucket_type=src_bucket_type, recursive=recursive)
             # Check to make sure it's a directory.
-            if len(matching_source_keys) > 1 and self.is_existing_s3_directory(dst_key, bucket_type=dst_bucket_type):
+            if len(matching_source_keys) > 1 and not self.is_existing_s3_directory(dst_key, bucket_type=dst_bucket_type):
                 raise ValueError(
                     "The destination key must be a directory if the source key refers to more than one file.")
         else:
