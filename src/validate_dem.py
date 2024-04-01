@@ -26,7 +26,7 @@ import plot_validation_results
 import classify_icesat2_photons
 import icesat2_photon_database
 import find_bad_icesat2_granules
-import ivert_cloud_manager
+import ivert_file_manager
 import s3
 
 import argparse

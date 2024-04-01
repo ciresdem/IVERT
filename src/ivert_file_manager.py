@@ -1,4 +1,4 @@
-"""ivert_cloud_manager.py -- Code for managing cloud files and IVERT instances within the EC2 instance."""
+"""ivert_file_manager.py -- Code for managing cloud files and IVERT instances within the EC2 instance."""
 
 import argparse
 import glob
