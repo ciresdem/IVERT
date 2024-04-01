@@ -12,7 +12,6 @@ import sys
 import tempfile
 import types
 import tabulate
-# import textwrap
 import warnings
 
 import utils.query_yes_no
@@ -632,7 +631,7 @@ def pretty_print_bucket_list(use_formatting=True):
     none_values_found = False
     none_str = ""
 
-    # Convert None values to italic <None>
+    # Convert "None" values in database names to italic <None>
     for key in aliases:
         if bname_dict[key] is None:
             none_str = "None"
@@ -652,12 +651,19 @@ def pretty_print_bucket_list(use_formatting=True):
     else:
         headers = ["Alias", "S3 Bucket", "Prefix"]
 
+    # Add * to the default bucket alias
+    for i, key in enumerate(aliases):
+        if key == S3Manager.default_bucket_type:
+            data[i][0] = bc.BOLD + "*" + bc.ENDC + data[i][0]
+
+
     # Print
     print()
     print(tabulate.tabulate(data, headers=headers, colalign=["right", "left", "left"], tablefmt="plain"))
 
+    print("\n" + bc.BOLD + "*" + bc.ENDC + "default bucket on this machine.")
     if none_values_found:
-        print(f"\n{bc.BOLD}Note{bc.ENDC}: '{none_str}' indicates that the bucket is not used by this client and/or is not set in the config file.")
+        print(f"{bc.BOLD}Note{bc.ENDC}: '{none_str}' indicates that the bucket is not used by this client and/or is not set in the config file.")
 
 
 def add_bucket_param(subparser):
