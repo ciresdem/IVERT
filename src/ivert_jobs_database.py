@@ -9,8 +9,13 @@ import s3
 
 # TODO: Add support for reading/writing to an sqlite3 file.
 
-class IvertJobsDatabase_BaseClass:
-    """Base class for common operations on the IVERT jobs database."""
+class IvertJobsDatabaseBaseClass:
+    """Base class for common operations on the IVERT jobs database.
+
+    Consists of methods used both by the EC2-server and the IVERT client.
+
+    Functionality specific to the EC2-server is implemented in the IvertJobsDatabaseServer class.
+    """
 
     def __init__(self):
         """
@@ -24,8 +29,7 @@ class IvertJobsDatabase_BaseClass:
         # The IVERT configfile object. Get the paths from here.
         self.ivert_config = utils.configfile.config()
         self.ivert_jobs_dir = self.ivert_config.ivert_jobs_directory_local
-        self.db_fname_all = self.ivert_config.ivert_jobs_database_local_fname_all
-        self.db_fname_latest = self.ivert_config.ivert_jobs_database_local_fname_latest
+        self.db_fname = self.ivert_config.ivert_jobs_database_local_fname
 
         # The schema file.
         self.schema_file = self.ivert_config.ivert_jobs_db_schema_file
@@ -33,126 +37,104 @@ class IvertJobsDatabase_BaseClass:
         # Two databases exist: First is the "all" database, containing a record of every job run on the server.
         # The second is the "latest" database, containing the only the latest jobs run on the server.
 
-        # The database connections and cursors
-        self.conn_all = None
-        self.conn_latest = None
-
-        # Get the thresholds for the "latest" jobs database from the config.
-        self.num_latest_jobs = self.ivert_config.num_latest_jobs
-        self.num_latest_days = self.ivert_config.num_latest_days
+        # The database connection
+        self.conn = None
 
         # Where the jobs database sits in the S3 bucket
         self.s3_bucket_type = self.ivert_config.s3_ivert_jobs_database_bucket_type
-        self.s3_database_key_all = self.ivert_config.s3_ivert_jobs_database_key_all
-        self.s3_database_key_latest = self.ivert_config.s3_ivert_jobs_database_key_latest
+        self.s3_database_key = self.ivert_config.s3_ivert_jobs_database_key
 
         self.s3m = s3.S3Manager()
 
         return
 
-    def fetch_from_s3(self, full_or_latest: str = 'full'):
-        """Fetches the IVERT jobs database from the S3 bucket.
+    def download_from_s3(self,
+                         only_if_newer: bool = True) -> None:
+        """
+        Fetches the IVERT jobs database from the S3 bucket.
 
         Args:
-            full_or_latest (str): Whether to fetch the "full" or "latest" database.
+            only_if_newer (bool, optional): Whether to only download if the local copy is older than the one in the S3 bucket. Defaults to True.
 
         Returns:
             None
+
+        Raises:
+            FileNotFoundError: If the specified bucket type in S3 doesn't exist.
         """
+        # Ensure that the S3Manager instance is valid
         assert isinstance(self.s3m, s3.S3Manager)
 
-        full_or_latest = full_or_latest.strip().lower()
-
-        db_key = self.s3_database_key_latest if full_or_latest == 'latest' else self.s3_database_key_all
-        local_db = self.db_fname_latest if full_or_latest == 'latest' else self.db_fname_all
+        # Get the S3 key and local database file name
+        db_key = self.s3_database_key
+        local_db = self.db_fname
         db_btype = self.s3_bucket_type
 
-        if not self.s3m.bucket_exists(db_btype):
-            raise ValueError(f"The {db_btype} bucket doesn't exist in the S3 bucket.")
+        # Check if the database exists in the S3 bucket
+        if not self.s3m.exists(db_key, bucket_type=db_btype):
+            raise FileNotFoundError(f"The {db_key} database doesn't exist in the S3 bucket.")
 
         self.s3m.download(db_key, local_db, bucket_type=db_btype)
         return
 
-    def get_connection(self, full_or_latest: str = 'full'):
-        """Returns the database connection for the specified database type.
-
-        Args:
-            full_or_latest (str): Whether to return the "full" or "latest" database connection.
+    def get_connection(self) -> sqlite3.Connection:
+        """Returns the database connection for the specified database type, and intializes it if necessary.
 
         Returns:
             sqlite3.Connection: The database connection.
         """
-        full_or_latest = full_or_latest.strip().lower()
-
-        if full_or_latest == 'full':
-            db_fname = self.db_fname_all
-            conn = self.conn_all
-        elif full_or_latest == 'latest':
-            db_fname = self.db_fname_latest
-            conn = self.conn_latest
-        else:
-            raise ValueError('full_or_latest must be "full" or "latest"')
-
         # If the connection isn't open yet, open it.
-        if conn is None:
-            conn = sqlite3.connect(db_fname)
+        if self.conn is None:
+            conn = sqlite3.connect(self.db_fname)
             conn.row_factory = sqlite3.Row
             # Enforce foreign key constraints whenever we open the database
             conn.execute("PRAGMA foreign_keys = ON;")
             conn.commit()
+            self.conn = conn
 
-            if full_or_latest == 'full':
-                self.conn_all = conn
-            else:
-                self.conn_latest = conn
-
-        return self.conn_all
+        return self.conn
 
     def exists(self,
-               full_or_latest: str = 'full',
-               local_or_s3: str = 'local'):
+               local_or_s3: str = 'local') -> bool:
         """Checks if the database exists.
 
         Args:
-            full_or_latest (str): Whether to check if the "full" or "latest" database exists.
             local_or_s3 (str): Whether to check if the "local" or "s3" database exists.
 
         Returns:
             bool: True if the database exists, False otherwise.
         """
-        full_or_latest = full_or_latest.strip().lower()
         local_or_s3 = local_or_s3.strip().lower()
 
-        if full_or_latest == 'full':
-            if local_or_s3 == 'local':
-                return os.path.exists(self.db_fname_all)
-            elif local_or_s3 == 's3':
-                return self.s3m.exists(self.s3_database_key_all, bucket_type=self.s3_bucket_type)
-            else:
-                raise ValueError(f'local_or_s3 must be "local" or "s3". "{local_or_s3}" not recognized.')
-
-        elif full_or_latest == 'latest':
-            if local_or_s3 == 'local':
-                return os.path.exists(self.db_fname_latest)
-            elif local_or_s3 == 's3':
-                return self.s3m.exists(self.s3_database_key_latest, bucket_type=self.s3_bucket_type)
-            else:
-                raise ValueError(f'local_or_s3 must be "local" or "s3". "{local_or_s3}" not recognized.')
-
+        if local_or_s3 == 'local':
+            return os.path.exists(self.db_fname)
+        elif local_or_s3 == 's3':
+            return self.s3m.exists(self.s3_database_key, bucket_type=self.s3_bucket_type)
         else:
-            raise ValueError(f'full_or_latest must be "full" or "latest". "{full_or_latest}" not recognized.')
+            raise ValueError(f'local_or_s3 must be "local" or "s3". "{local_or_s3}" not recognized.')
 
     def __del__(self):
-        """Commit any pending transactions and close the database connections."""
-        if self.conn_all:
-            self.conn_all.commit()
-            self.conn_all.close()
-        if self.conn_latest:
-            self.conn_latest.commit()
-            self.conn_latest.close()
+        """
+        Commit any pending transactions and close the database connections.
 
+        Returns:
+            None
+        """
+        if self.conn:
+            self.conn.commit()
+            self.conn.close()
 
-class IvertJobsDatabaseServer(IvertJobsDatabase_BaseClass):
+    def fetch_last_job_number(self) -> int:
+        """Fetch the last job number from the database, in YYYYMMDDNNNN format.
+
+        Returns:
+            int: The last job number.
+        """
+        conn = self.get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT MAX(job_number) FROM all_jobs")
+
+class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
     """Class for managing the IVERT jobs database on the EC2 (server)."""
 
     def __init__(self):
@@ -174,9 +156,9 @@ class IvertJobsDatabaseServer(IvertJobsDatabase_BaseClass):
         Creates a new database from scratch.
 
         Args:
-            database_fname (str): The name of the database file.
             only_if_not_exists_in_s3 (bool): Whether to warn if the database already exists in the S3 bucket.
             overwrite (bool): Whether to overwrite the database if it already exists.
+            verbose (bool): Whether to print verbose output.
 
         Returns:
             A sqlite connection to the newly created database.
@@ -187,19 +169,19 @@ class IvertJobsDatabaseServer(IvertJobsDatabase_BaseClass):
         assert sqlite3.complete_statement(schema_text)
 
         # Create database in its location outlined in ivert_config.ini (read by the base-class constructor)
-        database_fname = self.ivert_jobs_file_all
+        database_fname = self.db_fname
 
-        if only_if_not_exists_in_s3 and self.s3m.exists(self.s3_bucket_type, self.s3_database_key_all):
+        if only_if_not_exists_in_s3 and self.s3m.exists(self.s3_database_key, bucket_type=self.s3_bucket_type):
             raise RuntimeError('The jobs database already exists in the S3 bucket. Delete from there first:\n'
-                               '> python s3.py rm {} -b {}'.format(self.s3_database_key_all, self.s3_bucket_type))
+                               '> python s3.py rm {} -b {}'.format(self.s3_database_key, self.s3_bucket_type))
 
         if os.path.exists(database_fname):
             if overwrite:
                 os.remove(database_fname)
-                # TODO: FINISH HERE.
-                # if os.path.exists(self.)
+                if verbose:
+                    print(f'Delete existing {database_fname}')
             else:
-                return self.get_connection(full_or_latest='full')
+                return self.get_connection()
 
         # Create the database
         conn = sqlite3.connect(database_fname)
@@ -209,7 +191,7 @@ class IvertJobsDatabaseServer(IvertJobsDatabase_BaseClass):
         conn.commit()
 
         # Assign it to the object attribute
-        self.conn_all = conn
+        self.conn = conn
 
         # Return the connection
         return conn
@@ -228,17 +210,6 @@ class IvertJobsDatabaseServer(IvertJobsDatabase_BaseClass):
         # TODO: Implement, and define all the possible arguments here. This will be a base method that other methods use.
         pass
 
-    def create_latest_jobs_db_from_main(self, numjobs: int = 10):
-        """
-        Subsets the latest jobs from the database and write the subset database to disk.
-
-        Args:
-            numjobs (int): The number of jobs to subset.
-
-        Returns:
-            None
-        """
-        pass
 
     def upload_databases_to_s3(self, only_if_newer: bool = True):
         """
@@ -251,24 +222,6 @@ class IvertJobsDatabaseServer(IvertJobsDatabase_BaseClass):
             None
         """
         pass
-
-    def __del__(self):
-        super().__del__()
-
-
-class IvertJobsDatabaseClient(IvertJobsDatabase_BaseClass):
-    """Class for managing the IVERT jobs database on the client side."""
-
-    def __init__(self):
-        """
-        Initializes a new instance of the IvertJobsDatabaseClient class.
-
-        Args:
-
-        Returns:
-            None
-        """
-        super().__init__()
 
     def __del__(self):
         super().__del__()

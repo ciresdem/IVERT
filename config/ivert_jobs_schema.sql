@@ -26,22 +26,23 @@ CREATE TABLE IF NOT EXISTS ivert_jobs (
     configfile      VARCHAR(128)    NOT NULL,
     processing_dir  VARCHAR(512),
     job_pid         INTEGER         NOT NULL,
-    status          VARCHAR(16)     NOT NULL    DEFAULT 'initiated',
-        -- Possible values for status are: "initiated", "started", "running", "complete", "error"
+    status          VARCHAR(16)     NOT NULL    DEFAULT 'initialized',
+        -- Possible values for status are: "initialized", "started", "running", "complete", "error"
     PRIMARY KEY (job_id, username)
 );
 
 CREATE TABLE IF NOT EXISTS ivert_files (
-    job_id              INTEGER     NOT NULL,
+    job_id              INTEGER         NOT NULL,
     username            VARCHAR(128)    NOT NULL,
     filename            VARCHAR(256)    NOT NULL,
-    import_or_export    INTEGER     NOT NULL    DEFAULT 0    CHECK(import_or_export in (0,1)),
+    import_or_export    INTEGER         NOT NULL    DEFAULT 0    CHECK(import_or_export in (0,1)),
     -- 0 means the file was imported for that job.
     -- 1 means it was exported from that job.
-    size_bytes          INTEGER     NOT NULL    CHECK(size_bytes >= 0),
-    md5                 VARCHAR(32)             CHECK (length (md5) == 32),
+    size_bytes          INTEGER         NOT NULL    CHECK(size_bytes >= 0),
+    md5                 VARCHAR(32)                 CHECK (length (md5) == 32),
     FOREIGN KEY(job_id, username)
         REFERENCES ivert_jobs(job_id, username)
         ON DELETE CASCADE -- NOTE: In order to enforce this foreign, we must run "PRAGMA foreign_keys = ON;" whenever
-                          -- we connect to the database. Foreign key constraints are disabled by default.
+                          -- we connect to the database. Foreign key constraints are disabled by default in python's
+                          -- sqlite3 library.
 );

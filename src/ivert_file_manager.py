@@ -160,17 +160,53 @@ def clean_up_finished_jobs(verbose=True):
 # TODO: Code for jobs database
 
 
+def add_common_args(parser):
+    """Parse common command line arguments, used by all sub-commands."""
+    parser.add_argument("-q", "--quiet", action="store_true", help="Run silently")
+    return parser
+
+
 def define_and_parse_args():
     """Define and parse command line arguments."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument("command", help="The command to execute. Options: 'import', 'export', 'clean'. (Only 'clean' is implemented so far.)")
-    parser.add_argument("--quiet", "-q", default=False, action="store_true",
-                        help="Run silently.")
+    ################################################
+    # Main parser
+    ################################################
+    parser = argparse.ArgumentParser(description="A python utility for managing and moving IVERT data files around.")
+
+    subparsers = parser.add_subparsers(dest="command",
+                                       help="The command to execute. Options: 'import', 'export', 'clean'. (Only 'clean' is implemented so far.)",
+                                       required=True)
+
+    ################################################
+    # 'clean' parser
+    ################################################
+    clean_parser = subparsers.add_parser("clean",
+                                         help="Clean up local data files from completed jobs.",
+                                         description="Clean up local data files from completed jobs.",
+                                         add_help=True)
+    clean_parser.add_argument("job_id", default=['all'], type=str,
+                              help="The job ID(s) to clean up, in the form <user.name>_<job_id>. "
+                                   "Use 'all' to clean up all jobs. (Default: all)",
+                              nargs="*")
+    add_common_args(clean_parser)
+
     args = parser.parse_args()
     return args
 
 
 if __name__ == "__main__":
     args = define_and_parse_args()
-    if args.command.lower() == "clean":
-        clean_up_finished_jobs(verbose=not args.quiet)
+    if args.command == "clean":
+        print(args.job_id)
+        # clean_up_finished_jobs(verbose=not args.quiet)
+
+    elif args.command == "export":
+        # Wait until we have job-tracking implemented.
+        raise NotImplementedError(f"Command '{args.command}' not yet implemented.")
+
+    elif args.command == "import":
+        # Wait until we have job-tracking implemented.
+        raise NotImplementedError(f"Command '{args.command}' not yet implemented.")
+
+    else:
+        raise NotImplementedError(f"Uknown command: '{args.command}'")
