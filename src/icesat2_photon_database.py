@@ -352,7 +352,7 @@ class ICESat2_Database:
                     os.remove(file_to_write)
                     shutil.move(tempfile_name, file_to_write)
                     success = True
-                except:
+                except Exception:
                     # Delete the tempfile, then re-raise the exception.
                     if os.path.exists(tempfile_name):
                         os.remove(tempfile_name)
@@ -884,6 +884,33 @@ class ICESat2_Database:
         - adding column 'end_date_YYYYMMDD'
         """
         gdf = self.get_gdf()
+
+        print(gdf)
+        print(gdf.columns)
+
+        gdf['numphotons_bathy'] = 0
+        gdf['start_date_YYYYMMDD'] = 20210101
+        gdf['end_date_YYYYMMDD'] = 20211231
+
+        fnames = gdf['filename'].tolist()
+        fnames = [os.path.basename(os.path.splitext(fname)[0] + ".feather") for fname in fnames]
+        gdf['filename'] = fnames
+
+        new_column_order = ['filename', 'xmin', 'xmax', 'ymin', 'ymax', 'numphotons', 'numphotons_canopy',
+                            'numphotons_ground', 'numphotons_bathy', 'start_date_YYYYMMDD', 'end_date_YYYYMMDD',
+                            'is_populated', 'geometry']
+
+        # Do a bit of validation on the files we just hard-coded here.
+        assert len(new_column_order) == len(list(gdf.columns.values)) and \
+               numpy.all([colname in list(gdf.columns.values) for colname in new_column_order])
+
+        gdf = gdf[new_column_order]
+
+        print(gdf)
+        print(gdf.columns)
+
+        self.save_geopackage(gdf=gdf)
+        self.save_geopackage(gdf=gdf, compress=True)
 
     def read_photon_tile(self, tilename):
         """Read a photon tile. If the tilename doesn't exist, return None."""
