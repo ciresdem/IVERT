@@ -386,7 +386,7 @@ def read_and_parse_args():
         description="A script for creating coastline water masks from a DEM file. Return array is (0,1) for (water,land).")
     parser.add_argument("dem_filename", type=str, help="Input DEM.")
     parser.add_argument("dest", nargs="?", default="",
-                        help="Destination file name, or file directory. If name is omitted: adds '_coastline_mask' to the input file name.")
+                        help="Destination file name, or file directory. If name is omitted: adds '_coastline_mask' to the input file name in the same directory.")
     parser.add_argument("--dont_mask_out_buildings", default=False, action="store_true",
                         help="DO NOT Mask out areas that are covered by building polygons in the OpenStreetMap dataset. Masking out buildings is useful when using this for IceSat-2 validation.")
     parser.add_argument("--dont_mask_out_lakes", default=False, action="store_true",
