@@ -882,6 +882,11 @@ class ICESat2_Database:
         - adding column 'numphotons_bathy'
         - adding column 'start_date_YYYYMMDD'
         - adding column 'end_date_YYYYMMDD'
+        - Save the file back out to disk.
+
+        This method really only needs to be run once.
+        After that it can be deprecated and eventually (once the "create_new_database" method has been updated
+        to match this table format), it can be eliminated.
         """
         gdf = self.get_gdf()
 
