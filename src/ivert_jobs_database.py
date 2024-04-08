@@ -34,9 +34,6 @@ class IvertJobsDatabaseBaseClass:
         # The schema file.
         self.schema_file = self.ivert_config.ivert_jobs_db_schema_file
 
-        # Two databases exist: First is the "all" database, containing a record of every job run on the server.
-        # The second is the "latest" database, containing the only the latest jobs run on the server.
-
         # The database connection
         self.conn = None
 
@@ -61,6 +58,8 @@ class IvertJobsDatabaseBaseClass:
 
         Raises:
             FileNotFoundError: If the specified bucket type in S3 doesn't exist.
+
+        TODO: Add support for checking only if the databse in the S3 bucket is newer than the local copy.
         """
         # Ensure that the S3Manager instance is valid
         assert isinstance(self.s3m, s3.S3Manager)
@@ -74,6 +73,11 @@ class IvertJobsDatabaseBaseClass:
         if not self.s3m.exists(db_key, bucket_type=db_btype):
             raise FileNotFoundError(f"The {db_key} database doesn't exist in the S3 bucket.")
 
+        if only_if_newer:
+            # TODO: Add support for checking only if the databse in the S3 bucket is newer than the local copy.
+            pass
+
+        # Download the database from the S3 bucket
         self.s3m.download(db_key, local_db, bucket_type=db_btype)
         return
 
@@ -85,6 +89,11 @@ class IvertJobsDatabaseBaseClass:
         """
         # If the connection isn't open yet, open it.
         if self.conn is None:
+            # Check if the database exists
+            if not self.exists(local_or_s3='local'):
+                raise FileNotFoundError(f"IVERT jobs database doesn't exist in '{self.db_fname}'.")
+
+            # Open the database
             conn = sqlite3.connect(self.db_fname)
             conn.row_factory = sqlite3.Row
             # Enforce foreign key constraints whenever we open the database
@@ -124,15 +133,45 @@ class IvertJobsDatabaseBaseClass:
             self.conn.commit()
             self.conn.close()
 
-    def fetch_last_job_number(self) -> int:
+    def fetch_latest_job_number_from_database(self) -> int:
         """Fetch the last job number from the database, in YYYYMMDDNNNN format.
 
+        This is for querying the database itself, not the metdata in the S3 bucket.
+
         Returns:
-            int: The last job number.
+            int: The last job number, in YYYYMMDDNNNN format.
         """
         conn = self.get_connection()
         cur = conn.cursor()
-        cur.execute("SELECT MAX(job_number) FROM all_jobs")
+        results = cur.execute("SELECT MAX(job_id) FROM ivert_jobs").fetchall()
+
+        # The results is a list of sqlite.Row objects. Should be only one long of my logic is right here
+        assert len(results) == 1
+
+        resultnum = results[0]['MAX(job_id)']
+
+        # If the result is None, it means there are no jobs in the database yet. Just return 0.\
+        # Else return the highest job number
+        if resultnum is None:
+            return 0
+        else:
+            return resultnum
+
+    def fetch_latest_job_number_from_s3_metadata(self) -> int:
+        """Fetch the last job number from the S3 metadata.
+
+        This is for querying the metadata in the S3 bucket, not the database itself.
+
+        Returns:
+            int: The last job number, in YYYYMMDDNNNN format.
+        """
+
+        # If the result is None, it means there are no jobs in the database yet. Just return 0.\
+        # Else return the highest job number
+        if resultnum is None:
+            return 0
+        else:
+            return resultnum
 
 class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
     """Class for managing the IVERT jobs database on the EC2 (server)."""
