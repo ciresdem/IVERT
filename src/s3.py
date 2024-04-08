@@ -583,7 +583,7 @@ class S3Manager:
         else:
             return self.compute_md5(filename) == s3_md5
 
-    def get_metadata(self, s3_key, bucket_type=None, recursive=False):
+    def get_metadata(self, s3_key, bucket_type=None, recursive=False, return_entire_header=False):
         """Return the user-defined metadata of an S3 key.
 
         If wildcards are used, return it as a {key: metadata_dict}" dictionary, even if only one file is matched.
@@ -591,7 +591,9 @@ class S3Manager:
         Args:
             s3_key (str): The S3 key to get the metadata of.
             bucket_type (str, optional): The type of bucket to use. Defaults to None.
-            recursive (bool, optional): Whether to recurse into subdirectories. Defaults to False. Only applies if wildcard flags are used."""
+            recursive (bool, optional): Whether to recurse into subdirectories. Defaults to False. Only applies if wildcard flags are used.
+            return_entire_header (bool, optional): Whether to return the entire header, or just the user-defined
+                                                   'Metadata' portion of it. Defaults to False (return just 'Metadata')."""
 
         bucket_type = self.convert_btype(bucket_type)
 
@@ -611,7 +613,11 @@ class S3Manager:
 
         bname = self.get_bucketname(bucket_type=bucket_type)
         head = client.head_object(Bucket=bname, Key=s3_key)
-        return head["Metadata"]
+
+        if return_entire_header:
+            return head
+        else:
+            return head["Metadata"]
 
 
 def pretty_print_bucket_list(use_formatting=True):
@@ -662,7 +668,6 @@ def pretty_print_bucket_list(use_formatting=True):
     for i, key in enumerate(aliases):
         if key == S3Manager.default_bucket_type:
             data[i][0] = bc.BOLD + "*" + bc.ENDC + data[i][0]
-
 
     # Print
     print()
