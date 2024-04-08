@@ -237,25 +237,22 @@ def define_and_parse_args():
     parser.add_argument("directory_or_files", type=str, nargs='+',
         help="A directory path, or a list of individual DEM tiles. Defaults to the same as the input directory, or the directory in which the first DEM resides.")
 
-    parser.add_argument("-fname_filter", "-ff", type=str, default=r"\.tif\Z",
+    parser.add_argument("--fname_filter", "-ff", type=str, default=r"\.tif\Z",
         help=r"A regex string to search for in all DEM file names, to use as a filter. Defaults to r'\.tif\Z', indicating .tif at the end of the file name. Helps elimiate files that shouldn't be considered.")
 
-    parser.add_argument("-fname_omit", "-fo", type=str, default=None,
+    parser.add_argument("--fname_omit", "-fo", type=str, default=None,
         help="A regex string to search for and OMIT if it contains a match in the file name. Useful for avoiding derived datasets (such as converted DEMs) in the folder.")
 
-    parser.add_argument("-output_dir", "-od", type=str, default=None,
+    parser.add_argument("--output_dir", "-od", type=str, default=None,
         help="Directory to output results. Default to the a sub-directory named 'icesat2' within the input directory.")
 
-    parser.add_argument("-results_h5", type=str, default=None,
-        help="Name of an output .h5 file to store the compiled grid-cell-level results for the entire dataset. Default: Just stores the summary without the actual results h5 file.")
-
-    parser.add_argument("-input_vdatum", "-ivd", default="wgs84",
+    parser.add_argument("--input_vdatum", "-ivd", default="wgs84",
         help="The vertical datum of the input DEMs. [TODO: List possibilities here.] Default: 'wgs84'")
 
-    parser.add_argument("-output_vdatum", "-ovd", default="wgs84",
+    parser.add_argument("--output_vdatum", "-ovd", default="wgs84",
         help="The vertical datume of the output analysis. Must be a vdatum compatible with Icesat-2 granules. Default: Use the same vdatum as the input files.")
 
-    parser.add_argument("-place_name", "-name", type=str, default=None,
+    parser.add_argument("--place_name", "-name", type=str, default=None,
         help="Readable name of the location being validated. Will be used in output summary plots and validation report.")
 
     parser.add_argument("--overwrite", "-o", action="store_true", default=False,
@@ -267,17 +264,17 @@ def define_and_parse_args():
     parser.add_argument('--use_urban_mask', action='store_true', default=False,
         help="Use the WSL 'Urban Area' mask rather than OSM building footprints to mask out IceSat-2 data. Useful over lower-resolution (10m or coarser) dems, which tend to be bigger than building footprints.")
 
-    parser.add_argument("--individual_results", "--ind", action="store_true", default=False,
+    parser.add_argument("--individual_results", "-ind", action="store_true", default=False,
         help="By default, a summary plot and text file are generated for the dataset. If this is selected, they will be generated for each individual DEM as well. Files will be placed in the -output_dir directory.")
 
-    parser.add_argument("--include_photon_validation", "--ph", action="store_true", default=False,
+    parser.add_argument("--include_photon_validation", "-ph", action="store_true", default=False,
         help="Produce a photon database (stored in '*_photon_level_results.h5') with errors on a photon-level (not cell-level) scale. Useful for identifying bad ICESat-2 granules.")
 
-    parser.add_argument("--delete_datafiles", "--del", action="store_true", default=False,
+    parser.add_argument("--delete_datafiles", "-del", action="store_true", default=False,
         help="By default, all data files generted in this process are kept. If this option is chosen, delete them.")
 
     parser.add_argument("--outlier_sd_threshold", default="2.5",
-                        help="Number of standard-deviations away from the mean to omit outliers. Default 2.5. May choose 'None' if no filtering is requested.")
+        help="Number of standard-deviations away from the mean to omit outliers. Default 2.5. May choose 'None' if no filtering is requested.")
 
     parser.add_argument("--write_result_tifs", action='store_true', default=False,
         help="""Write output geotiff with the errors in cells that have ICESat-2 photons, NDVs elsewhere.""")
@@ -322,7 +319,6 @@ def main():
     # the program to crash when it tries to write files there. That's a user error.
 
     validate_list_of_dems(args.directory_or_files,
-                          results_h5=args.results_h5,
                           fname_filter=args.fname_filter,
                           fname_omit=args.fname_omit,
                           output_dir=args.output_dir,
