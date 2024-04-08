@@ -13,7 +13,8 @@
 CREATE TABLE IF NOT EXISTS ivert_jobs (
     job_id          INTEGER         NOT NULL    CHECK (job_id > 200000000000 AND job_id < 300000000000),
     -- The job_id should be a 12-digit number, in the general format YYYYMMDDNNNN, so the year (YYYY) should be
-    -- something between 2000 and 3000.
+    -- something between 2000 and 3000. Job numbers should only increase, so max(job_id) should return the last
+    -- job number run (and let you formulate the next job number).
     username        VARCHAR(128)    NOT NULL,
     user_email      VARCHAR(256)                CHECK (user_email like '%@%'), -- email should contain '@'
     import_prefix   VARCHAR(1024)   NOT NULL,
