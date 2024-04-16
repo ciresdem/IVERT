@@ -660,9 +660,9 @@ def pretty_print_bucket_list(use_formatting=True):
     else:
         data = [[key, bname_dict[key], prefixes_dict[key]] for key in aliases]
     if use_formatting:
-        headers = [bc.HEADER + txt + bc.ENDC for txt in ["Alias", "S3 Bucket", "Prefix"]]
+        headers = [bc.HEADER + txt + bc.ENDC for txt in ["Alias", "S3 Bucket", "Prefix Used"]]
     else:
-        headers = ["Alias", "S3 Bucket", "Prefix"]
+        headers = ["Alias", "S3 Bucket", "Prefix Used"]
 
     # Add * to the default bucket alias
     for i, key in enumerate(aliases):
@@ -673,9 +673,12 @@ def pretty_print_bucket_list(use_formatting=True):
     print()
     print(tabulate.tabulate(data, headers=headers, colalign=["right", "left", "left"], tablefmt="plain"))
 
-    print("\n" + bc.BOLD + "*" + bc.ENDC + "default bucket on this machine.")
+    print(f"\n{bc.BOLD}*{bc.ENDC}default bucket on this machine.\n")
     if none_values_found:
-        print(f"{bc.BOLD}Note{bc.ENDC}: '{none_str}' indicates that the bucket is not used by this client and/or is not set in the config file.")
+        print(f"{bc.BOLD}Note{bc.ENDC}: '{none_str}' indicates that the bucket is not used by this client and/or is "
+              f"not set in the config file. For instance, the {bc.OKBLUE}{bc.BOLD}database{bc.ENDC}{bc.ENDC} and "
+              f"{bc.OKBLUE}{bc.BOLD}trusted{bc.ENDC}{bc.ENDC} buckets are used by the EC2 server and are not set in "
+              f"a user's config file. ({bc.ITALIC}This is fine.{bc.ENDC})\n")
 
 
 def add_bucket_param(subparser):
