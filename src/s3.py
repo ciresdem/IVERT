@@ -681,7 +681,7 @@ def pretty_print_bucket_list(use_formatting=True):
               f"a user's config file. ({bc.ITALIC}This is fine.{bc.ENDC})\n")
 
 
-def add_bucket_param(subparser):
+def add_subparser_bucket_param(subparser):
     """All the sub-parsers use the same bucket optional argument. Add it here."""
 
     subparser.add_argument("--bucket", "-b", default=None, choices=list(S3Manager.available_bucket_types) + [None],
@@ -726,7 +726,7 @@ def define_and_parse_args_v2() -> argparse.Namespace:
                            help="The directory/prefix or file/key to list from the S3. "
                                 "Wildcards (e.g. ./ncei19*.tif) allowed. "
                                 "Use '.' or '/' to quiery the base prefix for the S3 bucket. Default: .")
-    add_bucket_param(parser_ls)
+    add_subparser_bucket_param(parser_ls)
     parser_ls.add_argument("-r", "--recursive", dest="recursive", action="store_true", default=False,
                            help="List files recursively (including all keys in subdirectories).")
     parser_ls.add_argument("-m", "--meta", "--metadata", dest="metadata", action="store_true",
@@ -755,7 +755,7 @@ def define_and_parse_args_v2() -> argparse.Namespace:
                            help="The directory/prefix or file/key to remove from the S3. "
                                 "Wildcards (e.g. ./ncei19*.tif) allowed. "
                                 "Use '.' or '/' to quiery the base prefix for the S3 bucket. Default: .")
-    add_bucket_param(parser_rm)
+    add_subparser_bucket_param(parser_rm)
     parser_rm.add_argument("-r", "--recursive", dest="recursive", action="store_true", default=False,
                            help="If a direcrory is specified with a wildcard, remove files recursively "
                                 "(including all files in sub-directories). "
@@ -793,14 +793,14 @@ def define_and_parse_args_v2() -> argparse.Namespace:
                                 "If an existing directory is given, the filename will remain the same. "
                                 "To specify an S3 key (i.e. to upload), use the 's3:' or 's3://' prefix. Unlike aws "
                                 "commands, the bucket-name is not provided here (specified in the --bucket alias argument).")
-    add_bucket_param(parser_cp)
+    add_subparser_bucket_param(parser_cp)
     parser_cp.add_argument("-r", "--recursive", dest="recursive", action="store_true", default=False,
                            help="If a direcrory is specified with a wildcard, copy/move files recursively "
                                 "(including all files in sub-directories). "
                                 "For safetly, if a '*' wildcare is used as the key along with '-r', a confirmation "
                                 "a warning will be issued to the user before removing all contents of the bucket.")
     parser_cp.add_argument("-m", "--meta", "--metadata", dest="metadata", metavar="KEY=VALUE",
-                           nargs='+', default=[],
+                           nargs='+', default=dict(),
                            help="For uploads only: Add one or more metadata values to the S3 metadata for the file(s) in the "
                                 "destination S3 bucket. Args should be listed as key=value pairs. Ignored for downloads.")
     parser_cp.add_argument("-md5", "--md5", dest="md5", action="store_true", default=False,
@@ -928,6 +928,7 @@ if __name__ == "__main__":
                          recursive=args.recursive)
 
         # If only the second key is an S3 key, we're uploading.
+        # If so, include the any metdata tags that are supplied via the command line.
         elif not is_key1_s3 and is_key2_s3:
             s3m.upload(k1,
                        k2,
