@@ -47,7 +47,8 @@ class IvertJobsDatabaseBaseClass:
         self.s3m = s3.S3Manager()
 
         # The metadata key for the latest job in the database, to tag with the file in the s3 bucket.
-        self.s3_latest_job_metadata_key = self.ivert_config.s3_latest_job_metadata_key
+        self.s3_latest_job_metadata_key = self.ivert_config.s3_jobs_db_latest_job_metadata_key
+        self.s3_vnum_metadata_key = self.ivert_config.s3_jobs_db_version_number_metadata_key
 
         return
 
@@ -185,8 +186,8 @@ class IvertJobsDatabaseBaseClass:
         # Else return the highest job number.
         if self.s3m.exists(self.s3_database_key, bucket_type=self.s3_bucket_type):
             md = self.s3m.get_metadata(self.s3_database_key, bucket_type=self.s3_bucket_type)
-            if md is not None and self.s3_jobs_db_latest_job_metadata_key in md.keys():
-                return md[self.s3_jobs_db_latest_job_metadata_key]
+            if md is not None and self.s3_latest_job_metadata_key in md.keys():
+                return md[self.s3_latest_job_metadata_key]
             else:
                 return None
         # If the database doesn't exist in the S3 bucket, just return 0.
@@ -216,8 +217,8 @@ class IvertJobsDatabaseBaseClass:
         """
         if self.s3m.exists(self.s3_database_key, bucket_type=self.s3_bucket_type):
             md = self.s3m.get_metadata(self.s3_database_key, bucket_type=self.s3_bucket_type)
-            if md is not None and self.s3_jobs_db_version_number_metadata_key in md.keys():
-                return md[self.s3_jobs_db_version_number_metadata_key]
+            if md is not None and self.s3_vnum_metadata_key in md.keys():
+                return md[self.s3_vnum_metadata_key]
             else:
                 return None
         # If the database doesn't exist in the S3 bucket, just return None.
