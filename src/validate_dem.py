@@ -663,10 +663,10 @@ def validate_dem_parallel(dem_name,
             if not quiet:
                 print("Writing outputs to S3...", end="")
             files_to_export = []
-            ivert_cloud_manager.export_ivert_output_data(files_to_export,
-                                                         s3_output_dir,
-                                                         s3_bucket_type=s3_output_bucket_type,
-                                                         verbose=not quiet)
+            ivert_file_manager.export_ivert_output_data(files_to_export,
+                                                        s3_output_dir,
+                                                        s3_bucket_type=s3_output_bucket_type,
+                                                        verbose=not quiet)
             if not quiet:
                 print("Done.")
 
@@ -1267,10 +1267,10 @@ def validate_dem_parallel(dem_name,
         if not quiet:
             print("Exporting results to S3...", end="")
 
-        ivert_cloud_manager.export_ivert_output_data(files_to_export,
-                                                     s3_output_dir,
-                                                     s3_bucket_type=s3_output_bucket_type,
-                                                     verbose=not quiet)
+        ivert_file_manager.export_ivert_output_data(files_to_export,
+                                                    s3_output_dir,
+                                                    s3_bucket_type=s3_output_bucket_type,
+                                                    verbose=not quiet)
         if not quiet:
             print("Done.")
 
@@ -1406,6 +1406,8 @@ def read_and_parse_args():
                         help='Delete the interim data files generated. Reduces storage requirements. (Default: keep them all.)')
     parser.add_argument('--use_urban_mask', action='store_true', default=False,
                         help="Use the WSL 'Urban Area' mask rather than OSM building footprints to mask out IceSat-2 data. Useful over lower-resolution (10m or coarser) dems, which tend to be bigger than building footprints.")
+    parser.add_argument("--measure_coverage", "-mc", action="store_true", default=False,
+                        help="Measure the coverage %age of icesat-2 data in each of the output DEM cells.")
     parser.add_argument('--write_result_tifs', action='store_true', default=False,
                         help=""""Write output geotiff with the errors in cells that have ICESat-2 photons, NDVs elsewhere.""")
     parser.add_argument("--outlier_sd_threshold", default="2.5",
@@ -1455,6 +1457,7 @@ if __name__ == "__main__":
                           s3_input_bucket_type=args.s3_input_bucket_type,
                           s3_output_dir=(None if not args.s3_output_dir else args.s3_output_dir),
                           s3_output_bucket_type=args.s3_output_bucket_type,
+                          measure_coverage=args.measure_coverage,
                           numprocs=args.numprocs,
                           quiet=args.quiet)
 

@@ -44,6 +44,7 @@ def validate_list_of_dems(dem_list_or_dir,
                           write_result_tifs=False,
                           omit_bad_granules = True,
                           write_summary_csv = True,
+                          measure_coverage = False,
                           outliers_sd_threshold=2.5,
                           verbose=True):
     """Take a list of DEMs, presumably in a single area, and output validation files for those DEMs.
@@ -179,7 +180,8 @@ def validate_list_of_dems(dem_list_or_dir,
                                            plot_results = create_individual_results,
                                            outliers_sd_threshold=outliers_sd_threshold,
                                            mark_empty_results=True,
-                                           omit_bad_granules = omit_bad_granules,
+                                           omit_bad_granules=omit_bad_granules,
+                                           measure_coverage=measure_coverage,
                                            quiet=not verbose)
 
         if os.path.exists(results_h5_file):
@@ -274,7 +276,10 @@ def define_and_parse_args():
         help="By default, all data files generted in this process are kept. If this option is chosen, delete them.")
 
     parser.add_argument("--outlier_sd_threshold", default="2.5",
-        help="Number of standard-deviations away from the mean to omit outliers. Default 2.5. May choose 'None' if no filtering is requested.")
+                        help="Number of standard-deviations away from the mean to omit outliers. Default 2.5. May choose 'None' if no filtering is requested.")
+
+    parser.add_argument("--measure_coverage", "-mc", action="store_true", default=False,
+                        help="Measure the coverage %age of icesat-2 data in each of the output DEM cells.")
 
     parser.add_argument("--write_result_tifs", action='store_true', default=False,
         help="""Write output geotiff with the errors in cells that have ICESat-2 photons, NDVs elsewhere.""")
@@ -332,6 +337,7 @@ def main():
                           write_result_tifs=args.write_result_tifs,
                           use_urban_mask=args.use_urban_mask,
                           omit_bad_granules=True,
+                          measure_coverage=args.measure_coverage,
                           write_summary_csv=args.write_summary_csv,
                           outliers_sd_threshold=ast.literal_eval(args.outlier_sd_threshold),
                           verbose=not args.quiet)
