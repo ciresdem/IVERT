@@ -865,7 +865,10 @@ if __name__ == "__main__":
 
         # Remove s3: or s3:// prefix if it exists
         elif re.match(r'^s3:', args.key, re.IGNORECASE):
-            args.key = args.key[3:].lstrip('/')
+            args.key = args.key[3:]
+
+        # Remove opening / if it exists.
+        args.key = args.key.lstrip('/')
 
         s3m = S3Manager()
         try:
@@ -894,7 +897,10 @@ if __name__ == "__main__":
 
         # Remove s3: or s3:// prefix if it exists
         elif re.match(r'^s3:', args.key, re.IGNORECASE):
-            args.key = args.key[3:].lstrip('/')
+            args.key = args.key[3:]
+
+        # Remove opening / if it exists.
+        args.key = args.key.lstrip('/')
 
         s3m = S3Manager()
         try:
@@ -970,6 +976,13 @@ if __name__ == "__main__":
 
     elif args.command in ("metadata", "m", "meta"):
         s3m = S3Manager()
+
+        # Remove s3: or s3:// prefix if it exists
+        if re.match(r'^s3:', args.key, re.IGNORECASE):
+            args.key = args.key[3:]
+        # Remove opening / if it exists.
+        args.key = args.key.lstrip('/')
+
         md = s3m.get_metadata(args.key, bucket_type=args.bucket)
         for k, v in md.items():
             print(f"\"{k}\": {v}")
