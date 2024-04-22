@@ -226,14 +226,15 @@ class IvertJobsDatabaseBaseClass:
             return None
 
     def job_exists(self, username, job_id) -> bool:
-        """Returns T/F whether a (username, job_id) job presently exists in the database or not."""
+        """Returns True/False whether a (username, job_id) job presently exists in the database or not."""
         conn = self.get_connection()
         cur = conn.cursor()
-        cur.execute("SELECT rowid FROM ivert_jobs WHERE username = ? AND job_id = ?", (username, job_id))
-        data = cur.fetchone()
-        if data is None:
+        cur.execute("SELECT count(*) FROM ivert_jobs WHERE username = ? AND job_id = ?", (username, job_id))
+        count = cur.fetchone()[0]
+        if count == 0:
             return False
         else:
+            assert count == 1
             return True
 
     def get_params_from_s3_path(self, s3_key, bucket_type=None) -> dict:
