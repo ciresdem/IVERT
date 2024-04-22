@@ -403,9 +403,9 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
                         bucket_type=self.s3_bucket_type,
                         include_md5=True,
                         other_metadata={
-                            self.s3_jobs_db_latest_job_metadata_key: str(latest_job_id),
-                            self.s3_jobs_db_version_number_metadata_key: str(self.fetch_latest_db_vnum_from_database())
-                            }
+                            self.s3_latest_job_metadata_key: str(latest_job_id),
+                            self.s3_vnum_metadata_key: str(self.fetch_latest_db_vnum_from_database())
+                        }
                         )
 
         return
