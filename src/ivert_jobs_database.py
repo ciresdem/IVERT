@@ -273,11 +273,12 @@ class IvertJobsDatabaseBaseClass:
             command (str): The command.
             username (str): The username.
             job_id (int or str): The job ID.
-            local_os (bool): Whether the path is on the local OS. Defaults to False.
+            local_os (bool): Whether the path is on the local OS. Defaults to False. Only matters if we're on a Windows
+                             machine with a different path separator.
 
         Returns:
             str: The relative folder path."""
-        job_path_template = self.ivert_config.ivert_job_subdirs_template
+        job_path_template = self.ivert_config.s3_ivert_job_subdirs_template
         path = job_path_template.replace("[command]", command.strip().lower()
                                          ).replace("[username]", username.strip().lower()
                                                    ).replace("[job_id]", str(job_id).strip().lower())
