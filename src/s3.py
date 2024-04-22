@@ -818,9 +818,9 @@ def define_and_parse_args_v2() -> argparse.Namespace:
 
     parser_cp.error = types.MethodType(custom_error_cp, parser_cp)
 
-    ##########################################################
-    #################### 'list' parser #######################
-    ##########################################################
+    #############################################################
+    #################### 'buckets' parser #######################
+    #############################################################
 
     parser_buckets = subparsers.add_parser("buckets", aliases=["list_buckets"],
                                            description="Print a list of the S3 buckets set for this account, mapped "
@@ -829,8 +829,24 @@ def define_and_parse_args_v2() -> argparse.Namespace:
                                            help="Print a list of the S3 buckets activated for this account.",
                                            add_help=True)
 
+    ##############################################################
+    #################### 'metadata' parser #######################
+    ##############################################################
 
+    parser_metadata = subparsers.add_parser("metadata", aliases=["m", "meta"],
+                                           description="Print the user-defined metadata values for an s3 key.",
+                                           help="Print the user-defined metadata values for an s3 key.",
+                                           add_help=True)
+    parser_metadata.add_argument("key", help="The s3 key to print the metadata for.")
+    add_subparser_bucket_param(parser_metadata)
 
+    def custom_error_metadata(self, default_msg):
+        extra_msg = "For more details type 'python {0} metadata --help'".format(os.path.basename(__file__))
+        print(f"{os.path.basename(__file__)} metadata error:", default_msg + "\n" + extra_msg)
+
+    parser_metadata.error = types.MethodType(custom_error_metadata, parser_metadata)
+
+    ##############################################################
     # Parse args and return namespace
     return parser.parse_args()
 
@@ -860,7 +876,11 @@ if __name__ == "__main__":
 
         for r in results:
             if args.metadata or args.md5:
-                print(r, s3m.get_metadata(r, bucket_type=args.bucket))
+                if s3m.is_existing_s3_directory(r, bucket_type=args.bucket):
+                    print(r)
+                else:
+                    print(r, s3m.get_metadata(r, bucket_type=args.bucket))
+
             else:
                 print(r)
 
@@ -947,6 +967,12 @@ if __name__ == "__main__":
     elif args.command in ("buckets", "list_buckets"):
         # Fetch the bucket data from the config file
         pretty_print_bucket_list()
+
+    elif args.command in ("metadata", "m", "meta"):
+        s3m = S3Manager()
+        md = s3m.get_metadata(args.key, bucket_type=args.bucket)
+        for k, v in md.items():
+            print(f"\"{k}\": {v}")
 
     else:
         raise NotImplementedError("Command '{args.command}' not yet implemented.")
