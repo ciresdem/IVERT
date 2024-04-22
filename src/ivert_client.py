@@ -84,10 +84,14 @@ def define_and_parse_args():
     download_help_msg = "Download the results of an IVERT job."
     parser_download = subparsers.add_parser("download", help=download_help_msg, description=download_help_msg)
     parser_download.add_argument("job_id", type=str, default="LATEST",
-                                 help="Enter the job ID to download. Typically in a '<user.name>_<number>' format."
+                                 help="Enter the job ID to download, typically a 12-digit number in YYYYMMDDNNNN format."
                                       " Default: Download the latest job submitted by this user.")
+    parser_download.add_argument("-u", "--user", "--username", dest="username", type=str, default="",
+                                 help="Manually specify the IVERT username. Default: Use the username of the current "
+                                      "user saved in ~/.ivert/creds/ivert_user_config.ini.")
     parser_download.add_argument("-w", "--wait", dest="wait", default=False, action="store_true",
-                                 help="Wait to exit until the results are finished, then downloaded them.")
+                                 help="Wait to exit until the results are finished, then downloaded them. "
+                                      "Default: Print the job status and exit immediately.")
     parser_download.add_argument("-ld", "--local_dir", dest="local_dir", type=str, default=".",
                                  help="Specify the local directory to download results. Default: '.'")
 
