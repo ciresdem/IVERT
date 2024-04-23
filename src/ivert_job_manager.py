@@ -29,8 +29,11 @@ def is_another_manager_running() -> typing.Union[bool, psutil.Process]:
 
     return False
 
+
 class IvertJobManager:
-    """Class for managing and running IVERT jobs on an EC2 instance."""
+    """Class for managing and running IVERT jobs on an EC2 instance.
+
+    This will be initialized by the ivert_setup.sh script in the ivert_setup repository, using a supervisord process."""
 
     def __init__(self, time_interval_s: int = 100):
         """
@@ -57,15 +60,18 @@ class IvertJob:
     """Class for managing and running IVERT individual jobs on an EC2 instance.
 
     The IvertJobManager class is always running and kicks off new IvertJob objects as needed."""
-    def __init__(self):
+
+    def __init__(self,
+                 job_config_s3_key: str,
+                 job_config_s3_bucket_type: str = "trusted"):
         """
         Initializes a new instance of the IvertJob class.
 
         Args:
-
-        Returns:
-            None
+            job_config_s3_key (str): The S3 key of the job configuration file.
+            job_config_s3_bucket_type (str): The S3 bucket type of the job configuration file. Defaults to "trusted".
         """
+
 
 def define_and_parse_arguments() -> argparse.Namespace:
     """Defines and parses the command line arguments.
