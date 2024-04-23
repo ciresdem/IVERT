@@ -14,6 +14,10 @@ import psutil
 import time
 import typing
 
+import ivert_jobs_database
+import s3
+import utils.configfile
+
 
 def is_another_manager_running() -> typing.Union[bool, psutil.Process]:
     """Returns True if another instance of this script is already running.
@@ -35,7 +39,9 @@ class IvertJobManager:
 
     This will be initialized by the ivert_setup.sh script in the ivert_setup repository, using a supervisord process."""
 
-    def __init__(self, time_interval_s: int = 100):
+    def __init__(self,
+                 input_bucket_type: str = "trusted",
+                 time_interval_s: int = 100):
         """
         Initializes a new instance of the IvertJobManager class.
 
@@ -45,16 +51,39 @@ class IvertJobManager:
             None
         """
         self.time_interval_s = time_interval_s
-        pass
+        self.ivert_config = utils.configfile.config()
+        self.input_bucket_type = input_bucket_type
+
+        # The jobs database object. We assume this is running on the S3 server (it doesn't make sense otherwise).
+        self.jobs_db = ivert_jobs_database.IvertJobsDatabaseServer()
 
     def start(self):
         """Start the job manager.
 
-        This is a persistent process and should be run in the background."""
+        This is a persistent process and should be run in the background.
+
+        Will quietly exit if another instance of this script is already running.
+        """
+        # Check to see if another instance of this script is already running
+        if is_another_manager_running():
+            return
+
+        # Check to see if the jobs database exists, locally and/or in the S3 bucket.
+        # If not, create it.
+        # TODO: Implement checking for the database and creating the jobs database locally and then on the S3 bucket.
+        #  First, check if the databse exists locally (also check that it's valid.)
+        #  Then, check if it exists in the S3 bucket.
+        #  If both, check which one is newer, and delete the older one.
+        #  If exists on S3, download to local.
+        #  If only exists local, upload to S3.
+        #  If neither, create the database locally and upload to S3.
+
         while True:
             time.sleep(self.time_interval_s)
 
-            # TODO: Implement searching for new input files in the trusted bucket and kicking off new processes.
+            # TODO: Implement searching for new input files in the trusted bucket that aren't in the database,
+            #  and kicking off new processes.
+
 
 class IvertJob:
     """Class for managing and running IVERT individual jobs on an EC2 instance.
@@ -71,6 +100,9 @@ class IvertJob:
             job_config_s3_key (str): The S3 key of the job configuration file.
             job_config_s3_bucket_type (str): The S3 bucket type of the job configuration file. Defaults to "trusted".
         """
+        self.s3_configfile_key = job_config_s3_key
+        self.s3_configfile_bucket_type = job_config_s3_bucket_type
+
 
 
 def define_and_parse_arguments() -> argparse.Namespace:
@@ -82,6 +114,9 @@ def define_and_parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Ivert Job Manager... for detecting, running, and managing IVERT jobs on an EC2 instance.")
     parser.add_argument("-t", "--time_interval_s", type=int, target="time_interval_s", default=120,
                         help="The time interval in seconds between checking for new IVERT jobs. Default: 120.")
+    parser.add_argument("-b", "--bucket", type=str, target="bucket", default="trusted",
+                        help="The S3 bucket type to search for incoming job files. Default: 'trusted'. "
+                             "Run 'python s3.py list_buckets' to see all available bucket types.")
 
     return parser.parse_args()
 

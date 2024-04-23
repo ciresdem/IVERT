@@ -1,5 +1,7 @@
 ## A module for managing the IVERT jobs database.
 
+import argparse
+import botocore.exceptions
 import os
 import re
 import sqlite3
@@ -58,15 +60,15 @@ class IvertJobsDatabaseBaseClass:
         Fetches the IVERT jobs database from the S3 bucket.
 
         Args:
-            only_if_newer (bool, optional): Whether to only download if the local copy is older than the one in the S3 bucket. Defaults to True.
+            only_if_newer (bool, optional): Whether to only download if the local copy is older than the one in the S3
+                bucket. Defaults to Truej. If the s3 version is newer, the local copy will be deleted before downloading
+                the new verison.
 
         Returns:
             None
 
         Raises:
             FileNotFoundError: If the specified bucket type in S3 doesn't exist.
-
-        TODO: Add support for checking only if the databse in the S3 bucket is newer than the local copy.
         """
         # Ensure that the S3Manager instance is valid
         assert isinstance(self.s3m, s3.S3Manager)
@@ -80,12 +82,16 @@ class IvertJobsDatabaseBaseClass:
         if not self.s3m.exists(db_key, bucket_type=db_btype):
             raise FileNotFoundError(f"The {db_key} database doesn't exist in the S3 bucket.")
 
-        if only_if_newer:
-            header = self.s3m.get_metadata(db_key, bucket_type=db_btype)
-            print(header)
-            return
-            # TODO: Add support for checking only if the databse in the S3 bucket is newer than the local copy.
-            pass
+        if only_if_newer and os.path.exists(local_db):
+            s3_vnum = self.fetch_latest_db_vnum_from_s3_metadata()
+            local_vnum = self.fetch_latest_db_vnum_from_database()
+
+            # If the s3 version number is less than the local version number, don't download.
+            if s3_vnum <= local_vnum:
+                return
+            # If the s3 version number is greater than the local version number, delete the local version.
+            else:
+                os.remove(local_db)
 
         # Download the database from the S3 bucket
         self.s3m.download(db_key, local_db, bucket_type=db_btype)
@@ -225,17 +231,28 @@ class IvertJobsDatabaseBaseClass:
         else:
             return None
 
-    def job_exists(self, username, job_id) -> bool:
-        """Returns True/False whether a (username, job_id) job presently exists in the database or not."""
+    def job_exists(self, username, job_id, return_row: bool = False) -> typing.Union[bool, sqlite3.Row]:
+        """Returns True/False whether a (username, job_id) job presently exists in the database or not.
+
+        If return_row is True, then it returns the sqlite3.Row object for the job if it exists.
+        """
         conn = self.get_connection()
         cur = conn.cursor()
-        cur.execute("SELECT count(*) FROM ivert_jobs WHERE username = ? AND job_id = ?", (username, job_id))
-        count = cur.fetchone()[0]
-        if count == 0:
-            return False
+        if return_row:
+            results = cur.execute("SELECT * FROM ivert_jobs WHERE username = ? AND job_id = ?",
+                                  (username, job_id)).fetchone()
+            if results is None:
+                return False
+            else:
+                return results
         else:
-            assert count == 1
-            return True
+            cur.execute("SELECT count(*) FROM ivert_jobs WHERE username = ? AND job_id = ?", (username, job_id))
+            count = cur.fetchone()[0]
+            if count == 0:
+                return False
+            else:
+                assert count == 1
+                return True
 
     def get_params_from_s3_path(self, s3_key, bucket_type=None) -> dict:
         """Get the parameters from the S3 path.
@@ -288,6 +305,15 @@ class IvertJobsDatabaseBaseClass:
             path = path.replace("/", os.sep)
         return path
 
+    def delete_database(self) -> None:
+        """Deletes the database from the S3 bucket.
+
+        Returns:
+            None
+        """
+        if self.conn:
+            self.conn.close()
+        os.remove(self.db_fname)
 
 class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
     """Class for managing the IVERT jobs database on the EC2 (server)."""
@@ -413,12 +439,13 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
         return
 
     def create_new_job(self,
-                       job_s3_prefix: str,
+                       job_s3_import_config_prefix: str,
+                       job_s3_import_config_bucket_type: str = 'trusted',
                        ) -> sqlite3.Row:
         """
         Given the prefix of a job in the S3 bucket, create a new job in the "ivert_jobs" table of the database.
 
-        If the (username, job_id) tuple already exists in the database, the job is not created but the tuple is returned.
+        If the (username, job_id) tuple already exists in the database, the job is not created but the Row is returned.
         No files are created here.
 
         Args:
@@ -426,7 +453,23 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
         Returns:
             The database row (record) of the new job.
         """
-        # TODO: Implement
+        params = self.get_params_from_s3_path(job_s3_import_config_prefix)
+        command = params['command']
+        username = params['username']
+        job_id = params['job_id']
+
+        # Check if the (username, job_id) tuple already exists in the database.
+        # If so, just return it.
+        existing_row = self.job_exists(username, job_id, return_row=True)
+        if existing_row:
+            return existing_row
+
+        # Get the config file.
+
+        # TODO: Finish Implementing
+        # Insert the new job into the database
+        c = self.get_connection().cursor()
+        c.execute("INSERT INTO ivert_jobs (command, username, job_id, import_prefix, import_bucket, configfile, ) VALUES (?, ?, ?);", (command, username, job_id))
         pass
 
     def create_new_file_record(self,
@@ -460,3 +503,45 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
 
     def __del__(self):
         super().__del__()
+
+    def delete_database(self) -> None:
+        """Deletes the database from the S3 bucket and locally.
+
+        Returns:
+            None
+        """
+        # Delete the database from the S3 bucket.
+        if self.s3m.exists(self.s3_database_key, bucket_type=self.s3_bucket_type):
+            try:
+                self.s3m.delete(self.s3_database_key, bucket_type=self.s3_bucket_type)
+            except botocore.exceptions.ClientError as e:
+                if e.response['Error']['Code'] == 'AccessDenied':
+                    print("Access denied to delete the database from the S3 bucket.")
+                else:
+                    raise e
+
+        # Delete the database locally using the IvertJobsDatabaseBaseClass::delete_database() method.
+        super().delete_database()
+
+
+def define_and_parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Manipulate the ivert_jobs database.")
+    parser.add_argument("command", type=str,
+                        help="The command to execute. Choices: create, upload, download, delete")
+    parser.add_argument("-o", "--overwrite", dest="overwrite", action="store_true",
+                        help="Overwrite the existing database. (For create command only) Default: False")
+
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = define_and_parse_args()
+    i = IvertJobsDatabaseServer()
+    if args.command == "create":
+        i.create_new_database(only_if_not_exists_in_s3=True, overwrite=args.overwrite)
+    elif args.command == "upload":
+        i.upload_to_s3()
+    elif args.command == "download":
+        i.download_from_s3()
+    elif args.command == "delete":
+        i.delete_database()
