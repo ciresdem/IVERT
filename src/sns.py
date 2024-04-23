@@ -5,6 +5,7 @@ import boto3
 import typing
 
 import utils.configfile
+import utils.is_email
 
 ivert_config = utils.configfile.config()
 
@@ -41,6 +42,47 @@ def send_sns_message(subject: str,
                            MessageAttributes=msg_attributes)
 
     return reply
+
+
+def subscribe(email: str,
+              username_filter: typing.Union[str, list[str], None] = None) -> None:
+    """Subscribe an email address to the IVERT AWS SNS topic.
+
+    Args:
+        email (str): The email address to subscribe.
+        username_filter (typing.Union[str, list[str], None]): The username or list of usernames to filter on.
+                    Defaults to None, which applies no filters (you'll get all the messages).
+
+    Returns:
+        None
+    """
+    client = boto3.client('sns')
+
+    if not utils.is_email.is_email(email):
+        raise ValueError(f"'{email}' is not a valid email address.")
+
+    # Get the SNS topic ARN from the ivert_config object (which fetches it from ivert_setup/setup/paths.sh).
+    topic_arn = ivert_config.sns_arn
+    assert topic_arn is not None
+
+    if type(username_filter) is str:
+        filter_policy = {"username": [username_filter]}
+    elif type(username_filter) is list:
+        filter_policy = {"username": username_filter}
+    else:
+        filter_policy = None
+
+    # Send the message.
+    reply = client.subscribe(TopicArn=topic_arn,
+                             Protocol="email",
+                             Endpoint=email,
+                             ReturnSubscriptionArn=True,
+                             Attributes={"FilterPolicy": filter_policy,
+                                         "FilterPolicyScope": "MessageAttributes"} if filter_policy else None,
+                             )
+
+    return reply
+
 
 def define_and_parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Send a message to an AWS SNS topic.")
