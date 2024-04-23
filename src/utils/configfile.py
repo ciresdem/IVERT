@@ -150,7 +150,7 @@ class config:
         setattr(self, key, value)
         return
 
-    def _fill_bucket_names_from_ivert_setup(self):
+    def _fill_bucket_names_from_ivert_setup(self, include_sns_arn=True):
         """Fills in the bucket name entries in the config object.
 
         If we're server-side, we need to fill in [S3_BUCKET_DATABASE], [S3_BUCKET_TRUSTED], and [S3_BUCKET_EXPORT].
@@ -159,6 +159,8 @@ class config:
         assert hasattr(self, "s3_bucket_import_untrusted")
         assert hasattr(self, "s3_bucket_import_trusted")
         assert hasattr(self, "s3_bucket_export")
+        if include_sns_arn:
+            assert hasattr(self, "sns_arn")
 
         if not os.path.exists(self.ivert_setup_paths_file):
             raise FileNotFoundError(f"ivert_setup_paths_file not found: {self.ivert_setup_paths_file}")
@@ -191,12 +193,20 @@ class config:
         except IndexError:
             self.s3_bucket_export = None
 
+        if include_sns_arn:
+            try:
+                sns_line = [line for line in paths_text_lines if line.lower().startswith("cudem_sns_arn")][0]
+                self.sns_arn = sns_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
+            except IndexError:
+                self.sns_arn = None
+
         # Check to see if any of these just reference other variables. If so, fill them in. This could just point
         # to another variable, so keep looping until we've gotten an actual value.
         for varname in ["s3_bucket_database", "s3_bucket_import_untrusted", "s3_bucket_import_trusted", "s3_bucket_export"]:
             if getattr(self, varname) is None:
                 continue
 
+            # Since we're reading from a bash shell script, variables are defined as $varname.
             while getattr(self, varname).find("$") > -1:
                 varname_from = getattr(self, varname).replace("$", "")
                 setattr(self, varname, getattr(self, varname_from))
