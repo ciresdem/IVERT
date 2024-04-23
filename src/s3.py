@@ -247,6 +247,7 @@ class S3Manager:
 
             files_downloaded.append(filename_to_download)
 
+            # Delete the original file from the s3 if requested (such as in a 'mv' command)
             if delete_original:
                 client.delete_object(Bucket=bucket_name, Key=s3k)
 
