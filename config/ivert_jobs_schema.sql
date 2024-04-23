@@ -30,14 +30,21 @@ CREATE TABLE IF NOT EXISTS ivert_jobs (
     export_prefix   VARCHAR(1024),
     export_bucket   VARCHAR(64),
 
-    -- command will be the primary command being run, such as 'validate', 'update', 'import', etc.
-    command         VARCHAR(64)     NOT NULL,
+    -- command will be the primary command being run: 'validate', 'update', 'import'.
+    command         VARCHAR(16)     NOT NULL,
+
+    -- the full command-line options of the command, listed in the configfile.
+    command_full    VARCHAR(2048)   NOT NULL,
 
     -- every job should come with a config .ini file. The name of it goes here.
     configfile      VARCHAR(128)    NOT NULL,
 
-    -- The directory in which the files will be downloaded and processed.
-    processing_dir  VARCHAR(512),
+    -- The directory into which the input files will be locally downloaded.
+    -- This will typically be [ivert_basedir]/ivert_data/jobs/[command]/[username]/[job_id]/
+    input_dir_local VARCHAR(1024),
+    -- The directory into which the output files will be written and placed.
+    -- This will typically be a subdirectory of the input_dir_local called 'outputs'.
+    output_dir_local VARCHAR(1024),
 
     -- The process ID # on the machine that is processing this job. The parent process may spin off multiple
     -- sub-processes that are not captured here. This allows IVERT to check on the existence of any jobs that may have
