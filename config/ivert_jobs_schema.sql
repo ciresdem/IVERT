@@ -20,7 +20,6 @@ CREATE TABLE IF NOT EXISTS ivert_jobs (
     -- exact same YYYYMMDDNNNN job-number, the (job_id, username) pair is treated as a unique key in this table.
     -- (See below for the "PRIMARY KEY" definition.)
     username        VARCHAR(128)    NOT NULL,
-    user_email      VARCHAR(256)                CHECK (user_email like '%@%'), -- email should contain '@'
 
     -- The buckets on the import (trusted) directory where the files will be found.
     import_prefix   VARCHAR(1024)   NOT NULL,
@@ -100,6 +99,20 @@ CREATE TABLE IF NOT EXISTS ivert_files (
                           -- "ON DELETE CASCADE" means that if a record is deleted from the ivert_jobs table, all file
                           -- records linked to that job in this table should also be deleted automatically.
 );
+
+CREATE TABLE IF NOT EXISTS sns_subscriptions (
+-- Table keeping track of any SNS (Simple Notification Service) subscription requests for new users.
+-- These are typically updated using the "update" command with a ivert_user_config.ini file attached.
+-- This does not track whether a user later unsubscribed. It just creates a record of all the subscription requests
+-- that IVERT has processed, regardless of their current status.
+    username        VARCHAR(128)    NOT NULL,
+    user_email      VARCHAR(256)    NOT NULL     CHECK (user_email like '%@%'), -- email should contain '@'
+    topic_arn       VARCHAR(2048)   NOT NULL     CHECK(length(topic_arn) >= 20),
+    sns_filter_string VARCHAR(1024), -- Typically we're filtering by a single username. But it can be a (string-converted)
+                                    -- list of usernames as well. Null here implies no filtering was applied.
+    sns_arn         VARCHAR(2048) -- The return value ARN provided when the subscription was executed.
+);
+
 
 CREATE TABLE IF NOT EXISTS vnumber (
     -- A single value holding the current "version number" (vnum) of the database.
