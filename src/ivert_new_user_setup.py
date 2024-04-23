@@ -218,7 +218,7 @@ def confirm_inputs_with_user(args: argparse.Namespace) -> None:
                      args.export_bucket_name,
                      args.export_access_key_id,
                      args.export_secret_access_key,)):
-        print(f"  {(k + r": ").ljust(max_left + 2)}{v}")
+        print(f"  {(k + r': ').ljust(max_left + 2)}{v}")
 
     print()
     print(bcolors.OKGREEN + bcolors.BOLD + "Is this correct?" + bcolors.ENDC + bcolors.ENDC, end="")
