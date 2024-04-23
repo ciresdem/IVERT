@@ -29,8 +29,8 @@ def send_sns_message(subject: str,
     assert topic_arn is not None
 
     # We could send "job_id" as a "Number" datatype but they max it out at 10^9 and our job_ids are 12 digits.
-    msg_attributes = {{"Name": "job_id", "Type": "String", "Value": str(job_id)},
-                      {"Name": "username", "Type": "String", "Value": username},
+    msg_attributes = {"job_id" : {"DataType": "String", "StringValue": str(job_id)},
+                      "username": {"DataType": "String", "StringValue": username},
                       }
 
     # Send the message.
