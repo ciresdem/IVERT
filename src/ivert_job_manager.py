@@ -85,6 +85,25 @@ class IvertJobManager:
             #  and kicking off new processes.
 
 
+    def check_for_new_files(self, input_bucket_type: str = "trusted"):
+        """Return a list of new files in the trusted bucket that haven't yet been added to the database."""
+        # TODO: Implement this.
+
+    def check_for_new_jobs(self, input_bucket_type: str = "trusted"):
+        """Return a list of new .ini config files in the trusted bucket that haven't yet been added to the database.
+
+        These indicate new IVERT jobs. Once the .ini file arrives, we can parse it and create and start the IvertJob
+        object, which will handle the rest of the files and kick off the new job.."""
+        # TODO: Implement this.
+
+    def push_sns_notification_for_finished_job(self, job: IvertJob):
+        """Push a SNS notification for a finished job.
+
+        This notifies the IVERT user that the job has finished and that they can download the results.
+        """
+        # TODO: Implement this.
+
+
 class IvertJob:
     """Class for managing and running IVERT individual jobs on an EC2 instance.
 
@@ -103,6 +122,15 @@ class IvertJob:
         self.s3_configfile_key = job_config_s3_key
         self.s3_configfile_bucket_type = job_config_s3_bucket_type
 
+        self.jobs_db = ivert_jobs_database.IvertJobsDatabaseServer()
+
+        # Assign the job ID and username.
+        params_dict = self.jobs_db.get_params_from_s3_path(self.s3_configfile_key,
+                                                           bucket_type=self.s3_configfile_bucket_type)
+
+        self.job_id = params_dict["job_id"]
+        self.username = params_dict["username"]
+        self.command = params_dict["command"]
 
 
 def define_and_parse_arguments() -> argparse.Namespace:

@@ -59,7 +59,9 @@ If you wish to cancel your job, run "ivert kill {username}_{job_id}" at the comm
 [Insert this bit only if results will be generated.]
 You will get another email when the job is complete and your results are ready to download."""
 
-    send_sns_message(subject,
-                     message,
-                     job_id,
-                     username)
+    response = send_sns_message(subject,
+                                message,
+                                job_id,
+                                username)
+
+    print(response)
