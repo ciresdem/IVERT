@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS ivert_jobs (
 
     -- Possible values for status are: "initialized", "started", "running", "complete", "error", "unknown"
     status          VARCHAR(16)     NOT NULL    DEFAULT 'unknown'
-                            CHECK (status in ('initialized', 'started', 'running', 'complete', 'error', 'unknown')),
+                            CHECK (status in ('initialized', 'started', 'running', 'complete', 'error', 'killed', 'unknown')),
 
     -- Job_id and username are a unique primary key.
     -- Job_id will (usually) be unique by itself, but two different users could submit jobs at the same time,
