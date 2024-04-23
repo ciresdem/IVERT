@@ -1,5 +1,6 @@
 """sns.py -- Code for pushing messages to AWS SNS topics."""
 
+import argparse
 import boto3
 import typing
 
@@ -41,27 +42,42 @@ def send_sns_message(subject: str,
 
     return reply
 
+def define_and_parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Send a message to an AWS SNS topic.")
+    parser.add_argument("-s", "--subject", dest="subject", type=str, required=True,
+                        help="The subject of the message.")
+    parser.add_argument("-m", "--message", dest="message", type=str, required=True,
+                        help="The body of the message.")
+    parser.add_argument("-j", "--job_id", dest="job_id", type=str, required=True,
+                        help="The 12-digit numerical ID of the job.")
+    parser.add_argument("-u", "--username", dest="username", type=str, required=True,
+                        help="The username of the user who submitted the job.")
+
+    return parser.parse_args()
+
 
 if __name__ == "__main__":
-    username = "michael.macferrin"
-    job_id = 202404160000
-    subject = f"IVERT: Job {username}_{job_id} has been created."
+    args = define_and_parse_args()
 
-    message = f"""This is an automated message from the ICESat-2 Validation of Elevations Reporting Tool (IVERT). Do not reply to this message.
+    subject = f"IVERT: Job \"{args.username}_{args.job_id}\" has been created."
 
-Your job "{username}_{job_id}" has been created and is being started. You can monitor the status of your job at any time by running "ivert status {username}_{job_id}" at the command line.
+    message = f"""This is an automated message from the ICESat-2 Validation of Elevations Reporting Tool (IVERT).
+Do not reply to this message.
+
+Your job "{args.username}_{args.job_id}" has been created and is being started.
+You can monitor the status of your job at any time by running "ivert status {args.username}_{args.job_id}" at the command line.
 
 The following options are assigned to this job:
 [Insert stuff here for message options.]
 
-If you wish to cancel your job, run "ivert kill {username}_{job_id}" at the command line and it will be terminated when the EC2 receives the notification. All files uploaded with the job will be deleted.
+If you wish to cancel your job, run "ivert kill {args.username}_{args.job_id}" at the command line and it will be terminated when the EC2 receives the notification. All files uploaded with the job will be deleted.
 
 [Insert this bit only if results will be generated.]
 You will get another email when the job is complete and your results are ready to download."""
 
     response = send_sns_message(subject,
                                 message,
-                                job_id,
-                                username)
+                                args.job_id,
+                                args.username)
 
     print(response)
