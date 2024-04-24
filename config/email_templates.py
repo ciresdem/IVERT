@@ -20,20 +20,20 @@ The following IVERT command is being run on the EC2 server:
 
 You can monitor the status of your job at any time by running "ivert status {0}_{1}" at the command line.
 
-If you wish to cancel this job, run "ivert kill {0}_{1}" at the command line and it will be terminated when the EC2 receives the notification. All files uploaded with the job will be deleted, along with any output files.
+If you wish to cancel this job, run "ivert kill {0}_{1}" at the command line and it will be terminated when the EC2 receives the notification. All files uploaded with the job will be deleted. Output files already exported will remain for 7 days before being deleted.
 
 You will get another email when the job is complete and results (if any) are ready to download."""
 
 # Subject line for when a job is finished.
 # 0: username,
 # 1: job_id
-# 2: "completed successfully", "completed with partial success", or "terminated unexpectedly"
+# 2: "completed successfully", "completed with partial success", "terminated unexpectedly", or "been killed"
 subject_template_job_completed = "IVERT: Job \"{0}_{1}\" has {2}"
 
 # Email template to send out if the job is finished without any exports.
 # 0: username,
 # 1: job_id
-# 2: "completed successfully", "completed with partial success", or "terminated early"
+# 2: "completed successfully", "completed with partial success", "terminated unexpectedly", or "been killed"
 # 3: number of input files processed (not including the config file)
 # 4: number of input files processed successfully.
 # 5: number of input files processed unsuccessfully (errors, etc)
@@ -48,7 +48,7 @@ It processed {3} input files ({4} successful, {5} unsuccessful).
 # 0: username,
 # 1: job_id
 email_template_job_finished_unsuccessful_addendum = """
-If the job was unsuccessful or any files were not completed successfully, you may download a detailed logfile by running "ivert download {0}_{1}" at the command line and send it to the IVERT developers to debug and fix the issue.
+If the job was unsuccessful or any files were not completed successfully, you may download a detailed logfile by running "ivert download {0}_{1}" at the command line and send the logfile to the IVERT developers to debug and fix the issue.
 """
 
 # An email addendum to add if any files were exported.

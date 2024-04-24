@@ -132,6 +132,15 @@ class IvertJob:
         self.username = params_dict["username"]
         self.command = params_dict["command"]
 
+        # These jobs are run as a subprocess, so after initialization they automatically start the processing.
+        self.start()
+
+    def start(self):
+        """Start the job."""
+        # TODO: Implement this.
+
+        # TODO: Get our PID and store it in the jobs database.
+
 
 def define_and_parse_arguments() -> argparse.Namespace:
     """Defines and parses the command line arguments.

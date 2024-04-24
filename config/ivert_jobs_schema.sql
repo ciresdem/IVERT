@@ -38,6 +38,10 @@ CREATE TABLE IF NOT EXISTS ivert_jobs (
     -- every job should come with a config .ini file. The name of it goes here.
     configfile      VARCHAR(128)    NOT NULL,
 
+    -- every job generates a logfile with outputs that the user can download. It is placed in the export_bucket under
+    -- the export_prefix folder.
+    logfile         VARCHAR(128)    NOT NULL,
+
     -- The directory into which the input files will be locally downloaded.
     -- This will typically be [ivert_basedir]/ivert_data/jobs/[command]/[username]/[job_id]/
     input_dir_local VARCHAR(1024),
@@ -52,7 +56,7 @@ CREATE TABLE IF NOT EXISTS ivert_jobs (
 
     -- Possible values for status are: "initialized", "started", "running", "complete", "error", "unknown"
     status          VARCHAR(16)     NOT NULL    DEFAULT 'unknown'
-                            CHECK (status in ('initialized', 'started', 'running', 'complete', 'error', 'killed', 'unknown')),
+                            CHECK (status in ('started', 'running', 'complete', 'error', 'killed', 'unknown')),
 
     -- Job_id and username are a unique primary key.
     -- Job_id will (usually) be unique by itself, but two different users could submit jobs at the same time,
@@ -75,10 +79,10 @@ CREATE TABLE IF NOT EXISTS ivert_files (
     filename            VARCHAR(256)    NOT NULL,
 
     -- Both imported files and exported files are tracked here. This flag indicates which each file was.
-    import_or_export    INTEGER         NOT NULL    DEFAULT 0   CHECK(import_or_export in (0,1,2)),
     -- 0 means the file was imported for that job.
     -- 1 means it was exported from that job.
-    -- 2 means the file was imported but will also be exported.
+    -- 2 means the file was imported and will also be exported.
+    import_or_export    INTEGER         NOT NULL    DEFAULT 0   CHECK(import_or_export in (0,1,2)),
 
     -- Size of the file in bytes.
     size_bytes          INTEGER         NOT NULL    CHECK (size_bytes >= 0),

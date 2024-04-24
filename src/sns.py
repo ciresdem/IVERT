@@ -66,9 +66,9 @@ def subscribe(email: str,
     assert topic_arn is not None
 
     if type(username_filter) is str:
-        filter_policy = {"username": [username_filter]}
+        filter_policy = {"username": [username_filter.lower().strip()]}
     elif type(username_filter) is list:
-        filter_policy = {"username": username_filter}
+        filter_policy = {"username": [f.lower().strip() for f in username_filter]}
     else:
         filter_policy = None
 
@@ -77,7 +77,7 @@ def subscribe(email: str,
                              Protocol="email",
                              Endpoint=email,
                              ReturnSubscriptionArn=True,
-                             Attributes={"FilterPolicy": filter_policy,
+                             Attributes={"FilterPolicy": str(filter_policy),
                                          "FilterPolicyScope": "MessageAttributes"} if filter_policy else None,
                              )
 
