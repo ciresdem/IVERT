@@ -1,12 +1,16 @@
+"""email_templates.py -- Email templates for IVERT."""
+
+# Subject line for when a job is submitted and detected on the EC2.
+# 0: username,
+# 1: job_id
+subject_template_job_submitted = "IVERT: Job \"{0}_{1}\" has been created"
+
+# Generic email intro from IVERT.
 email_intro = """
 Hello,
 This is an automated email from the ICESat-2 Validation of Elevations Reporting Tool (IVERT).
 Do not reply to this message.
 """
-# Subject line for when a job is submitted and detected on the EC2.
-# 0: username,
-# 1: job_id
-subject_template_job_submitted = "IVERT: Job \"{0}_{1}\" has been created"
 
 # Email template to send out when a job is submitted and detected on the EC2.
 # 0: username,
@@ -61,10 +65,3 @@ email_template_job_finished_with_exports = email_template_job_finished_without_e
 
 IVERT result files have a lifecycle of 7 days and may be deleted from the server after that time.
 """
-
-
-email_field_definitions = {"submitted": {0: "username", 1: "job_id", 2: "full_command"},
-                "finished": {0: "username", 1: "job_id", 2: "status", 3: "input_files_successful",
-                             4: "input_files_with_results", 5: "input_files_unsuccessful", 6: "output_files_exported"}}
-
-subject_field_definitions = {0: "username", 1: "job_id", 2: "successfully_or_unsuccessfully"}
