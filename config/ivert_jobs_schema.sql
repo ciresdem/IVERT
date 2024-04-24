@@ -117,6 +117,19 @@ CREATE TABLE IF NOT EXISTS sns_subscriptions (
     sns_arn         VARCHAR(2048) -- The return value ARN provided when the subscription was executed.
 );
 
+CREATE TABLE IF NOT EXISTS sns_messages (
+-- Table to keep track of all SNS messages that we send out.
+    job_id          INTEGER         NOT NULL,
+    username        VARCHAR(128)    NOT NULL,
+    subject         VARCHAR(256)    NOT NULL,
+    messages        VARCHAR(8192)   NOT NULL,
+    response        VARCHAR(2048),  -- The full response returned by the call to aws.sns.publish in JSON format. This
+                                    -- includes the date it was sent, the size, and the MessageID.
+    FOREIGN KEY(job_id, username)
+        REFERENCES ivert_jobs(job_id, username)
+        ON DELETE CASCADE -- Links to the uniqe (job_id, username) pair in ivert_jobs. More than one message may be
+                          -- sent from a single job.
+);
 
 CREATE TABLE IF NOT EXISTS vnumber (
     -- A single value holding the current "version number" (vnum) of the database.
@@ -124,7 +137,7 @@ CREATE TABLE IF NOT EXISTS vnumber (
     -- parameter in the S3 key. This allows us to quickly see if we have the "most current" version of the database
     -- in hand.
     vnum INT NOT NULL,
-    -- The "enforcer" field is just a dummy field (set to zero) that does not allow us to insert another 'unumber'
+    -- The "enforcer" field is just a dummy field (set to zero) that does not allow us to insert another 'vnum'
     -- record into this table. If we do it'll try to create another "enforcer" value set to zero which will break
     -- the UNIQUE constraint. This helps ensure there is only one single record in this table.
     enforcer INT DEFAULT 0 NOT NULL CHECK (enforcer == 0),
