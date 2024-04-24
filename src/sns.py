@@ -2,6 +2,7 @@
 
 import argparse
 import boto3
+import json
 import typing
 
 import utils.configfile
@@ -77,7 +78,7 @@ def subscribe(email: str,
                              Protocol="email",
                              Endpoint=email,
                              ReturnSubscriptionArn=True,
-                             Attributes={"FilterPolicy": str(filter_policy),
+                             Attributes={"FilterPolicy": json.dumps(filter_policy),
                                          "FilterPolicyScope": "MessageAttributes"} if filter_policy else None,
                              )
 
