@@ -76,21 +76,21 @@ def define_and_parse_args(return_parser: bool = False):
                              help="Prompt the user to verify settings before uploading files to IVERT. Default: False")
 
     ###############################################################
-    # Create the "check" subparser
+    # Create the "status" subparser
     ###############################################################
-    check_help_msg = "Check the status of an IVERT job."
-    parser_check = subparsers.add_parser("check", help=check_help_msg, description=check_help_msg)
-    parser_check.add_argument("job_id", type=str, default="LATEST",
-                              help="Enter the job ID to check. Typically in a '<user.name>_<number>' format."
-                                   " Default: Check the latest job submitted by this user fromn this machine.")
-    parser_check.add_argument("-d", "--download_if_finished", dest="download_if_finished",
-                              default=False, action="store_true",
-                              help="Automatically download results if the job has finished. Default: False")
-    parser_check.add_argument("-w", "--wait", dest="wait", default=False, action="store_true",
-                              help="Wait to exit until the results are finished, then downloaded them."
-                                   " Default: False (return status and exit immediately).")
-    parser_check.add_argument("-ld", "--local_dir", dest="local_dir", type=str, default=".",
-                              help="Specify the local directory to download results. Default: '.'")
+    status_help_msg = "Check the status of an IVERT job."
+    parser_status = subparsers.add_parser("status", help=status_help_msg, description=status_help_msg)
+    parser_status.add_argument("job_id", type=str, default="LATEST",
+                               help="Enter the job ID to check. Typically in a '<user.name>_<number>' format."
+                                    " Default: Check the latest job submitted by this user fromn this machine.")
+    parser_status.add_argument("-d", "--download_if_finished", dest="download_if_finished",
+                               default=False, action="store_true",
+                               help="Automatically download results if the job has finished. Default: False")
+    parser_status.add_argument("-w", "--wait", dest="wait", default=False, action="store_true",
+                               help="Wait to exit until the results are finished, then downloaded them."
+                                    " Default: False (return status and exit immediately).")
+    parser_status.add_argument("-ld", "--local_dir", dest="local_dir", type=str, default=".",
+                               help="Specify the local directory to download results. Default: '.'")
 
     ###############################################################
     # Create the "download" subparser
@@ -163,11 +163,49 @@ def ivert_client_cli():
     """Run the IVERT client CLI."""
     args = define_and_parse_args()
 
+    # Set up the IVERT client on a new system
     if args.command == "setup":
         ivert_new_user_setup.setup_new_user(args)
 
+    # Validate a set of DEMs
+    elif args.command == "validate":
+        # TODO: Implement this
+        raise NotImplementedError("Command 'validate' not yet implemented.")
+        pass
+
+    # Download results from IVERT
+    elif args.command == "download":
+        # TODO: Implement this
+        raise NotImplementedError("Command 'download' not yet implemented.")
+        pass
+
+    # Update part of the IVERT database.
+    elif args.command == "update":
+        # TODO: Implement this
+        raise NotImplementedError("Command 'update' not yet implemented.")
+        pass
+
+    # Test the IVERT client and server in an end-to-end "dry run."
+    elif args.command == "test":
+        # TODO: Implement this
+        raise NotImplementedError("Command 'test' not yet implemented.")
+        pass
+
+    # Check on the status of a running job
+    elif args.command == "status":
+        # TODO: Implement this
+        raise NotImplementedError("Command 'status' not yet implemented.")
+        pass
+
+    # Import data into the IVERT tool (for setup purposes only)
+    elif args.command == "import":
+        # TODO: Implement this
+        raise NotImplementedError("Command 'import' not yet implemented.")
+        pass
+
+    # Raise an error if the command doesn't exist.
     else:
-        raise NotImplementedError("Command '{args.command}' not yet implemented.")
+        raise NotImplementedError("Command '{args.command}' does not exist in IVERT or is not implemented.")
 
 
 if __name__ == "__main__":
