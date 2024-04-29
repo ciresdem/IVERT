@@ -14,7 +14,7 @@ ivert_config = utils.configfile.config()
 def send_sns_message(subject: str,
                      message: str,
                      job_id: typing.Union[str, int],
-                     username: str) -> dict:
+                     username: str) -> str:
     """Send a message to an AWS SNS topic.
 
     Args:
@@ -24,7 +24,7 @@ def send_sns_message(subject: str,
         username (str): The username of the user who submitted the job.
 
     Returns:
-        dict: The response attributues from the SNS API.
+        str: The response attributues from the SNS API, in json text format.
     """
     client = boto3.client('sns')
 
@@ -42,20 +42,20 @@ def send_sns_message(subject: str,
                            Message=message,
                            MessageAttributes=msg_attributes)
 
-    return reply
+    return json.dumps(reply)
 
 
 def subscribe(email: str,
-              username_filter: typing.Union[str, list[str], None] = None) -> None:
+              username_filter: typing.Union[str, list[str], None] = None) -> str:
     """Subscribe an email address to the IVERT AWS SNS topic.
 
     Args:
         email (str): The email address to subscribe.
-        username_filter (typing.Union[str, list[str], None]): The username or list of usernames to filter on.
+        username_filter (str, list[str], or None): The username or list of usernames to filter on.
                     Defaults to None, which applies no filters (you'll get all the messages).
 
     Returns:
-        None
+        A string of the subscription ARN of the new subscription just created.
     """
     client = boto3.client('sns')
 
@@ -82,7 +82,7 @@ def subscribe(email: str,
                                          "FilterPolicyScope": "MessageAttributes"} if filter_policy else None,
                              )
 
-    return reply
+    return reply["SubscriptionArn"]
 
 
 def define_and_parse_args() -> argparse.Namespace:
