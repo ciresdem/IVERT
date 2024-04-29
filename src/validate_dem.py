@@ -26,6 +26,7 @@ import plot_validation_results
 import classify_icesat2_photons
 import icesat2_photon_database
 import find_bad_icesat2_granules
+# TODO: Remove references to ivert_server_file_manager and s3. Should handle those outside of the validate_dem methods.
 import ivert_server_file_manager
 import s3
 
@@ -1267,10 +1268,10 @@ def validate_dem_parallel(dem_name,
         if not quiet:
             print("Exporting results to S3...", end="")
 
-        ivert_file_manager.export_ivert_output_data(files_to_export,
-                                                    s3_output_dir,
-                                                    s3_bucket_type=s3_output_bucket_type,
-                                                    verbose=not quiet)
+        ivert_server_file_manager.export_ivert_output_data(files_to_export,
+                                                           s3_output_dir,
+                                                           s3_bucket_type=s3_output_bucket_type,
+                                                           verbose=not quiet)
         if not quiet:
             print("Done.")
 
