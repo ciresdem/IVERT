@@ -63,6 +63,7 @@ class IvertJobsDatabaseBaseClass:
             only_if_newer (bool, optional): Whether to only download if the local copy is older than the one in the S3
                 bucket. Defaults to Truej. If the s3 version is newer, the local copy will be deleted before downloading
                 the new verison.
+            overwrite (bool, optional): Whether to overwrite the local copy if it already exists. Defaults to False.
 
         Returns:
             None
@@ -285,7 +286,7 @@ class IvertJobsDatabaseBaseClass:
         return {"command": s3_parts[-3], "username": s3_parts[-2], "job_id": s3_parts[-1]}
 
     def get_job_path_from_params(self, command, username, job_id, local_os: bool = False) -> str:
-        """Get the relative folder path from the parameters.
+        """Get the relative folder path from the parameters, outlined in ivert_config::s3_ivert_job_subdirs_template
 
         Args:
             command (str): The command.
@@ -306,7 +307,9 @@ class IvertJobsDatabaseBaseClass:
         return path
 
     def delete_database(self) -> None:
-        """Deletes the database from the S3 bucket.
+        """Deletes the database locally.
+
+        Does not touch the database in the S3 bucket.
 
         Returns:
             None
@@ -315,8 +318,23 @@ class IvertJobsDatabaseBaseClass:
             self.conn.close()
         os.remove(self.db_fname)
 
+    def is_valid(self):
+        """Returns True if the database is internally valid."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA integrity_check;")
+        resp = cursor.fetchone()[0]
+        if resp.lower() == "ok":
+            return True
+        else:
+            return False
+
+
 class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
-    """Class for managing the IVERT jobs database on the EC2 (server)."""
+    """Class for managing the IVERT jobs database on the EC2 (server).
+
+    The base class can only read and query the database. The server class can write to the database and upload it."""
 
     def __init__(self):
         """
@@ -378,19 +396,58 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
         # Return the connection
         return conn
 
-    def update_job_status(self):
+    def update_job_status(self,
+                          job_username: str,
+                          job_id: typing.Union[int, str],
+                          status: str,
+                          increment_vnumber: bool = True,
+                          upload_to_s3: bool = True):
         """
         Updates a job record in the existing database.
 
         Args:
+            job_username (str): The username of the job.
+            job_id (int or str): The ID of the job.
+            status (str): The new status of the job.
+            increment_vnumber (bool): Whether to increment the database version number. This may be set to false if
+                                      several changes are being made at once, including this one.
+                                      If this is set to False, then the database version number will not be incremented
+                                      and the change will not be committed.
+            upload_to_s3 (bool): Whether to upload the database to the S3 bucket.
 
         Returns:
             None
         """
-        # TODO: Implement, and define all the possible arguments here.
+        # Convert job_id to int if it's a string
+        job_id = int(job_id)
+
+        # First check to see if the job exists
+        if not self.job_exists(job_username, job_id):
+            raise RuntimeError(f"Job {job_username}_{job_id} does not exist in the database.")
+
+        # Connect to the database
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # Build the update statement
+        update_stmt = """UPDATE ivert_jobs
+                         SET status = ?
+                         WHERE username = ? AND job_id = ?;"""
+
+        cursor.execute(update_stmt, (status, job_username, job_id))
+
+        # Increment the database version number
+        if increment_vnumber:
+            self.increment_vnumber(cursor)
+            conn.commit()
+
+        # Upload the database to the S3 bucket
+        if upload_to_s3:
+            self.upload_to_s3(only_if_newer=False)
+
         pass
 
-    def update_file_processing_status(self):
+    def update_file_processing_status(self, jobs_file_id: int, status: str):
         """
         Updates a file record in the existing database.
 
@@ -426,6 +483,8 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
         latest_job_id = self.fetch_latest_job_number_from_database()
         local_filename = self.db_fname
         db_s3_key = self.s3_database_key
+
+        # Upload the database to the S3 bucket. Set the md5, the latest_job number, and the vnum in the S3 metadata.
         self.s3m.upload(local_filename,
                         db_s3_key,
                         bucket_type=self.s3_bucket_type,
@@ -433,7 +492,7 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
                         other_metadata={
                             self.s3_latest_job_metadata_key: str(latest_job_id),
                             self.s3_vnum_metadata_key: str(self.fetch_latest_db_vnum_from_database())
-                        }
+                        },
                         )
 
         return
@@ -492,14 +551,31 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
         # TODO: Implement
         pass
 
-    def increment_vnumber(self):
+    def increment_vnumber(self, cursor: typing.Union[sqlite3.Cursor, None] = None) -> None:
         """Increment the version number in the database.
 
-        This is done every time a commit change is made to the database."""
-        conn = self.get_connection()
-        cur = conn.cursor()
-        cur.execute("UPDATE vnumber SET vnum = vnum + 1;")
-        conn.commit()
+        This is done every time a commit change is made to the database.
+
+        If a cursor is provided, it will be used and
+        the change will not be committed (the caller is responsible for committing the change).
+        If not, a new cusor will be created and the change will be committed.
+
+        Args:
+            cursor (typing.Union[sqlite3.Cursor, None], optional): The cursor to use. Defaults to None.
+
+        Returns:
+            None
+        """
+        if cursor is None:
+            conn = self.get_connection()
+            cursor_to_use = conn.cursor()
+        else:
+            cursor_to_use = cursor
+
+        cursor_to_use.execute("UPDATE vnumber SET vnum = vnum + 1;")
+
+        if cursor is None:
+            conn.commit()
 
     def __del__(self):
         super().__del__()
