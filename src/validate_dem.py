@@ -26,7 +26,7 @@ import plot_validation_results
 import classify_icesat2_photons
 import icesat2_photon_database
 import find_bad_icesat2_granules
-import ivert_file_manager
+import ivert_server_file_manager
 import s3
 
 import argparse
@@ -511,11 +511,11 @@ def validate_dem_parallel(dem_name,
         s3_key = "/".join([s3_input_dir, os.path.basename(dem_name)]).replace("//", "/")
         if not quiet:
             print(f"Importing '{os.path.basename(dem_name)}' from S3.")
-        local_file_list = ivert_cloud_manager.import_ivert_input_data(s3_key,
-                                                                      os.path.dirname(dem_name),
-                                                                      s3_bucket_type=s3_input_bucket_type,
-                                                                      create_local_dir=True,
-                                                                      verbose=not quiet)
+        local_file_list = ivert_server_file_manager.import_ivert_input_data(s3_key,
+                                                                            os.path.dirname(dem_name),
+                                                                            s3_bucket_type=s3_input_bucket_type,
+                                                                            create_local_dir=True,
+                                                                            verbose=not quiet)
         assert len(local_file_list) <= 1
 
     # If we still don't have the input dem, raise an error.
@@ -663,10 +663,10 @@ def validate_dem_parallel(dem_name,
             if not quiet:
                 print("Writing outputs to S3...", end="")
             files_to_export = []
-            ivert_file_manager.export_ivert_output_data(files_to_export,
-                                                        s3_output_dir,
-                                                        s3_bucket_type=s3_output_bucket_type,
-                                                        verbose=not quiet)
+            ivert_server_file_manager.export_ivert_output_data(files_to_export,
+                                                               s3_output_dir,
+                                                               s3_bucket_type=s3_output_bucket_type,
+                                                               verbose=not quiet)
             if not quiet:
                 print("Done.")
 

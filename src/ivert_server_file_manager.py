@@ -1,4 +1,4 @@
-"""ivert_file_manager.py -- Code for managing cloud files and IVERT instances within the EC2 instance."""
+"""ivert_server_file_manager.py -- Code for managing cloud files and IVERT instances within the EC2 instance."""
 
 import argparse
 import glob
@@ -9,11 +9,12 @@ import sys
 
 import utils.configfile
 
+
 def import_ivert_input_data(s3_key: str,
                             local_dir: str,
-                            s3_bucket_type: str="trusted",
-                            create_local_dir: bool=True,
-                            verbose: bool=True) -> list:
+                            s3_bucket_type: str = "trusted",
+                            create_local_dir: bool = True,
+                            verbose: bool = True) -> list:
     """Copies files from an S3 bucket directory to a local directory.
 
     For a list of s3 IVERT bucket types, see s3.py.
@@ -54,9 +55,10 @@ def import_ivert_input_data(s3_key: str,
             file_list = [s3_key]
     else:
         if verbose:
-            print(f"Error: S3 key '{s3_key}' does not exist on bucket '{s3m.get_bucketname(bucket_type=s3_bucket_type)}'.",
-                  "No files imported.",
-                  file=sys.stderr)
+            print(
+                f"Error: S3 key '{s3_key}' does not exist on bucket '{s3m.get_bucketname(bucket_type=s3_bucket_type)}'.",
+                "No files imported.",
+                file=sys.stderr)
         return []
 
     # Copy the files
@@ -70,13 +72,17 @@ def import_ivert_input_data(s3_key: str,
     return local_files
 
 
-def export_ivert_output_data(local_dir_file_or_list, s3_dir, s3_bucket_type="export", file_pattern="*", verbose=True):
+def export_ivert_output_data(local_dir_or_file_list: typing.Union[str, list[str]],
+                             s3_dir: str,
+                             s3_bucket_type: str = "export",
+                             file_pattern: str = "*",
+                             verbose: bool = True):
     """Copies files from a local directory in the EC2 to an S3 bucket.
 
     For a list of s3 IVERT bucket types, see s3.py.
 
     Args:
-        local_dir (str): Local directory path where the files are located.
+        local_dir_or_file_list (str or list[str]): Local directory path where the files are located, or a list of files to upload.
         s3_dir (str): Key to identify the destination prefix in the S3 bucket.
         s3_bucket_type (str, optional): Type of S3 bucket. Defaults to "export".
         file_pattern (str, optional): Pattern to match files. Defaults to "*".
@@ -85,11 +91,11 @@ def export_ivert_output_data(local_dir_file_or_list, s3_dir, s3_bucket_type="exp
     Returns:
         list: A list of the files keys copied. If no files were copied, an empty list is returned.
     """
-    if type(local_dir_file_or_list) in (list, tuple):
-        local_files = local_dir_file_or_list
+    if type(local_dir_or_file_list) in (list, tuple):
+        local_files = local_dir_or_file_list
 
     else:
-        local_files = [local_dir_file_or_list]
+        local_files = [local_dir_or_file_list]
 
     files_uploaded = []
 
@@ -111,7 +117,8 @@ def export_ivert_output_data(local_dir_file_or_list, s3_dir, s3_bucket_type="exp
         # Upload the files to S3
         for local_fname in file_list:
             s3_file = "/".join([s3_dir, os.path.basename(local_fname)]).replace("//", "/")
-            s3m.upload(local_fname, s3_file, bucket_type=s3_bucket_type, delete_original=False, fail_quietly=not verbose)
+            s3m.upload(local_fname, s3_file, bucket_type=s3_bucket_type, delete_original=False,
+                       fail_quietly=not verbose)
             if s3m.exists(s3_file, bucket_type=s3_bucket_type):
                 files_uploaded.append(s3_file)
             elif verbose:
@@ -142,6 +149,7 @@ def clean_up_finished_jobs(verbose=True):
     subprocess.run(rm_outputs_cmd, shell=True)
 
     return
+
 
 # TODO: Code for identifying new jobs coming in and copying the files into the local directory
 
