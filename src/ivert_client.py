@@ -15,7 +15,7 @@ import ivert_new_user_setup
 
 # TODO 4: Code to upload the files and "submit" the new job.
 
-def define_and_parse_args():
+def define_and_parse_args(return_parser: bool = False):
     parser = argparse.ArgumentParser(description="The ICESat-2 Validation of Elevations Reporting Tool (IVERT)")
 
     # The first argument in the command. The other sub-parsers depend upon which command was used here.
@@ -23,54 +23,66 @@ def define_and_parse_args():
                                        help=f"Run '{os.path.basename(__file__)} <command> --help' for more info about each command.")
     subparsers.required = True
 
+    ###############################################################
     # Create the "validate" subparser
+    ###############################################################
     validate_help_msg = "Validate DEMs using IVERT (the core functionality)."
     parser_validate = subparsers.add_parser("validate", help=validate_help_msg, description=validate_help_msg)
     parser_validate.add_argument("files_or_directory", type=str, nargs="+",
                                  help="Enter a file, list of files, or a directory."
-                                      " Can also enter a shell-style wildcard such as ncei*.tif")
-    parser_validate.add_argument("-ivd", "--input_vdatum", type=str, default="egm2008",
+                                      " May use bash-style wildcards such as ncei*.tif")
+    parser_validate.add_argument("-ivd", "--input_vdatum", dest="input_vdatum", type=str, default="egm2008",
                                  help="Input DEM vertical datum. (Default: 'egm2008')"
                                       " Other options are: [TODO: FILL IN SOON]")
-    parser_validate.add_argument("-ovd", "--output_vdatum", type=str, default="egm2008",
+    parser_validate.add_argument("-ovd", "--output_vdatum", dest="output_vdatum", type=str, default="egm2008",
                                  help="Output DEM vertical datum. (Default: 'egm2008')"
                                       " Other options are: [TODO: FILL IN SOON]")
-    parser_validate.add_argument("-w", "--wait", default=False, action="store_true",
+    parser_validate.add_argument("-w", "--wait", dest="wait", default=False, action="store_true",
                                  help="Wait to exit until the results are finished and downloaded. Default:"
                                       " just upload the data and exit. You can then run 'ivert_client.py check <job_id>' to check the status"
                                       " of the job and 'ivert_client.py download <job_id> --local_dir <dirname>' to download results."
                                       " Default: False")
-    parser_validate.add_argument("-d", "--dry_run", default=False, action="store_true",
+    parser_validate.add_argument("-d", "--dry_run", dest="dry_run", default=False, action="store_true",
                                  help="Print out the complete config options that will be used for this job and then"
                                       " exit. Do not upload files or submit the job to IVERT.")
+    parser_validate.add_argument("-p", "--prompt", dest="prompt", default=False, action="store_true",
+                                 help="Prompt the user to verify settings before uploading files to IVERT. Default: False")
+    # TODO: Parse the "files_or_directory" argument and replace it with a "files" argument listing all the files.
 
+    ###############################################################
     # Create the "setup" subparser
+    ###############################################################
     setup_help_msg = "Set up a new IVERT user on the local machine. Run once before using IVERT. Re-run again to change settings."
     # Use the parent parser from ivert_new_user_setup.py to define the arguments for the subparser
-    setup_parser = subparsers.add_parser("setup",
+    parser_setup = subparsers.add_parser("setup",
                                          parents=[ivert_new_user_setup.define_and_parse_args(just_return_parser=True)],
                                          add_help=False,
                                          help=setup_help_msg, description=setup_help_msg)
 
-
+    ###############################################################
     # Create the "test" subparser
+    ###############################################################
     test_help_msg = "Test the end-to-end functionalty of IVERT in the NCCF system." + \
                     " No data will be processed, but a test file will be pushed and a textfile" + \
                     " will be received on the other end. This will test your connectivity with the" + \
                     " IVERT system."
-    parser_help = subparsers.add_parser("test", help=test_help_msg, description=test_help_msg)
-    parser_help.add_argument("-w", "--wait", dest="wait", default=False, action="store_true",
+    parser_test = subparsers.add_parser("test", help=test_help_msg, description=test_help_msg)
+    parser_test.add_argument("-w", "--wait", dest="wait", default=False, action="store_true",
                              help="Wait to exit until the results are finished and downloaded. If False,"
                                   " just upload the data and exit. You can run 'ivert_client.py check <job_id>' to check the status"
                                   " of the job and 'ivert_client.py download <job_id> --local_dir <dirname>' to download results."
                                   " Default: False")
+    parser_test.add_argument("-p", "--prompt", dest="prompt", default=False, action="store_true",
+                             help="Prompt the user to verify settings before uploading files to IVERT. Default: False")
 
+    ###############################################################
     # Create the "check" subparser
+    ###############################################################
     check_help_msg = "Check the status of an IVERT job."
     parser_check = subparsers.add_parser("check", help=check_help_msg, description=check_help_msg)
     parser_check.add_argument("job_id", type=str, default="LATEST",
                               help="Enter the job ID to check. Typically in a '<user.name>_<number>' format."
-                                   " Default: Check the latest job submitted by this user.")
+                                   " Default: Check the latest job submitted by this user fromn this machine.")
     parser_check.add_argument("-d", "--download_if_finished", dest="download_if_finished",
                               default=False, action="store_true",
                               help="Automatically download results if the job has finished. Default: False")
@@ -80,7 +92,9 @@ def define_and_parse_args():
     parser_check.add_argument("-ld", "--local_dir", dest="local_dir", type=str, default=".",
                               help="Specify the local directory to download results. Default: '.'")
 
+    ###############################################################
     # Create the "download" subparser
+    ###############################################################
     download_help_msg = "Download the results of an IVERT job."
     parser_download = subparsers.add_parser("download", help=download_help_msg, description=download_help_msg)
     parser_download.add_argument("job_id", type=str, default="LATEST",
@@ -95,8 +109,10 @@ def define_and_parse_args():
     parser_download.add_argument("-ld", "--local_dir", dest="local_dir", type=str, default=".",
                                  help="Specify the local directory to download results. Default: '.'")
 
+    ###############################################################
     # Create the "update" subparser
-    update_help_msg = "Update the IVERT photon database."
+    ###############################################################
+    update_help_msg = "Request updated data in the IVERT photon database."
     parser_update = subparsers.add_parser("update", help=update_help_msg, description=update_help_msg)
     parser_update.add_argument("polygon_file", type=str,
                                help="Enter a polygon file (.shp, .json, .geojson, or .gkpg).")
@@ -119,21 +135,32 @@ def define_and_parse_args():
                                     " This may results in data redundancy if new data periods overlap existing data periods. Old"
                                     " records should be removed manually sometime after this operation."
                                     " Default: False (delete old data after writing new data.")
+    parser_update.add_argument("-p", "--prompt", default=False, action="store_true",
+                               help="Prompt the user to verify settings before uploading files to IVERT. Default: False")
 
+    ###############################################################
     # Create the "import" subparser
-    import_help_msg = "Import data into IVERT."
+    ###############################################################
+    import_help_msg = "Import data into the IVERT tool."
     parser_import = subparsers.add_parser("import", help=import_help_msg, description=import_help_msg)
-    parser_import.add_argument("files", type=str,
+    parser_import.add_argument("files", type=str, nargs="+",
                                help="Enter a file, list of files, or a directory to import into the IVERT work bucket."
-                                    " Can also enter a bash-style wildcard such as *.feather.")
+                                    " May use bash-style wildcards such as ivert*.feather.")
     parser_import.add_argument("-d", "-dest", "--destination_prefix", dest="destination_prefix",
                                type=str, default="",
                                help="Destintion prefix to place files into the IVERT work bucket."
                                     " Default: '', for the base directory.")
+    parser_import.add_argument("-p", "--prompt", default=False, action="store_true",
+                               help="Prompt the user to verify settings before uploading files to IVERT. Default: False")
 
-    return parser.parse_args()
+    if return_parser:
+        return parser
+    else:
+        return parser.parse_args()
 
-if __name__ == "__main__":
+
+def ivert_client_cli():
+    """Run the IVERT client CLI."""
     args = define_and_parse_args()
 
     if args.command == "setup":
@@ -141,3 +168,7 @@ if __name__ == "__main__":
 
     else:
         raise NotImplementedError("Command '{args.command}' not yet implemented.")
+
+
+if __name__ == "__main__":
+    ivert_client_cli()
