@@ -95,6 +95,10 @@ CREATE TABLE IF NOT EXISTS ivert_files (
                             CHECK (status in ('downloaded', 'processing', 'processed',
                                               'uploaded', 'error', 'quarantined', 'unknown')),
 
+    -- The job_id, username, filename tuple should be unique.
+    PRIMARY KEY (job_id, username, filename)
+
+    -- The foreign key should map back to a job in the ivert_jobs table.
     FOREIGN KEY(job_id, username)
         REFERENCES ivert_jobs(job_id, username)
         ON DELETE CASCADE -- NOTE: In order to enforce this foreign key, we must run "PRAGMA foreign_keys = ON;"
@@ -137,7 +141,7 @@ CREATE TABLE IF NOT EXISTS vnumber (
     -- parameter in the S3 key. This allows us to quickly see if we have the "most current" version of the database
     -- in hand.
     vnum INT NOT NULL,
-    -- The "enforcer" field is just a dummy field (set to zero) that does not allow us to insert another 'vnum'
+    -- "enforcer" is a dummy field (set to zero) that does not allow us to insert another 'vnum'
     -- record into this table. If we do it'll try to create another "enforcer" value set to zero which will break
     -- the UNIQUE constraint. This helps ensure there is only one single record in this table.
     enforcer INT DEFAULT 0 NOT NULL CHECK (enforcer == 0),

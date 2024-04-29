@@ -96,13 +96,6 @@ class IvertJobManager:
         object, which will handle the rest of the files and kick off the new job.."""
         # TODO: Implement this.
 
-    def push_sns_notification_for_finished_job(self, job: IvertJob):
-        """Push a SNS notification for a finished job.
-
-        This notifies the IVERT user that the job has finished and that they can download the results.
-        """
-        # TODO: Implement this.
-
 
 class IvertJob:
     """Class for managing and running IVERT individual jobs on an EC2 instance.
@@ -140,6 +133,21 @@ class IvertJob:
         # TODO: Implement this.
 
         # TODO: Get our PID and store it in the jobs database.
+
+        # TODO: Create a new job entry in the jobs database.
+
+
+    def parse_job_config_ini(self):
+        """Parse the job configuration file, defining the IVERT job parameters."""
+        # TODO: Implement this.
+
+
+    def push_sns_notification(self, start_or_finish: str):
+        """Push a SNS notification for a started or finished job.
+
+        This notifies the IVERT user that the job has finished and that they can download the results.
+        """
+        # TODO: Implement this.
 
 
 def define_and_parse_arguments() -> argparse.Namespace:
