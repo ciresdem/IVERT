@@ -79,7 +79,7 @@ def subscribe(email: str,
                              Endpoint=email,
                              ReturnSubscriptionArn=True,
                              Attributes={"FilterPolicy": json.dumps(filter_policy),
-                                         "FilterPolicyScope": "MessageAttributes"} if filter_policy else None,
+                                         "FilterPolicyScope": "MessageAttributes"} if filter_policy else {},
                              )
 
     return reply["SubscriptionArn"]
