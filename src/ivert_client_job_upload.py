@@ -124,6 +124,7 @@ def create_new_job_config(ivert_args: argparse.Namespace,
 
     del args.command
 
+    # Get the command arguments as a string. Remove the "Namespace(...)" part of the string.
     cmd_args_text = str(args).lstrip("Namespace").lstrip("(").rstrip(")")
     if len(cmd_args_text) == 0:
         cmd_args_text = '""'
