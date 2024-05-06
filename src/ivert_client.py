@@ -5,16 +5,6 @@ import os
 
 import ivert_new_user_setup
 
-##########################################################
-# TODO 1: Code for reading input configuration files.
-
-# TODO 2: Code for finding the correct "new job number" and mapping the new job to the "Untrusted" input bucket.
-# This will require access to data from the EC2. Look to Tom's guidance for IAM credentials to our work bucket.
-
-# TODO 3: Code to generate a "submission-config" file profile to send to the untrusted bucket.
-
-# TODO 4: Code to upload the files and "submit" the new job.
-
 def define_and_parse_args(return_parser: bool = False):
     parser = argparse.ArgumentParser(description="The ICESat-2 Validation of Elevations Reporting Tool (IVERT)")
 
@@ -52,7 +42,10 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     # Create the "setup" subparser
     ###############################################################
-    setup_help_msg = "Set up a new IVERT user on the local machine. Run once before using IVERT. Re-run again to change settings."
+    setup_help_msg = ("Install the IVERT client on the local machine and create user settings. "
+                      "Run this once before using IVERT. Re-run again to change settings."
+                      " Note: It is recommended to get the ivert_s3_credentials.ini file and put it the ~/.ivert/creds/ "
+                      "directory. It will save you from having to copy-paste each credential from that file.")
     # Use the parent parser from ivert_new_user_setup.py to define the arguments for the subparser
     parser_setup = subparsers.add_parser("setup",
                                          parents=[ivert_new_user_setup.define_and_parse_args(just_return_parser=True)],
@@ -153,6 +146,27 @@ def define_and_parse_args(return_parser: bool = False):
     parser_import.add_argument("-p", "--prompt", default=False, action="store_true",
                                help="Prompt the user to verify settings before uploading files to IVERT. Default: False")
 
+    ###############################################################
+    # Create the "subscribe" subparser
+    ###############################################################
+    subscribe_help_msg = ("Subscribe to IVERT email notifications. It will overwrite any previous subscriptions defined"
+                          " for that user.")
+    parser_subscribe = subparsers.add_parser("subscribe", help=subscribe_help_msg, description=subscribe_help_msg)
+    parser_subscribe.add_argument("email", type=str,
+                                  help="Enter an email address to subscribe to IVERT email notifications.")
+    parser_subscribe.add_argument("-a", "--all", dest="all", default=False, action="store_true",
+                                  help="Subscribe to all IVERT email notifications. Default: False (only get the ones that are produced for your account).")
+    parser_subscribe.add_argument("-u", "--username", dest="username", type=str, default=None,
+                                  help="The username of the IVERT user. Default: Derives it from the email (before the '@' symbol).")
+
+    ###############################################################
+    # Create the "unsubscribe" subparser
+    ###############################################################
+    unsubscribe_help_msg = "Unsubscribe from IVERT email notifications. This can also be done by using the 'unsubscribe' link in any IVERT emails you receive."
+    parser_unsubscribe = subparsers.add_parser("unsubscribe", help=unsubscribe_help_msg, description=unsubscribe_help_msg)
+    parser_unsubscribe.add_argument("email", type=str,
+                                    help="Enter an email address to unsubscribe from IVERT email notifications.")
+
     if return_parser:
         return parser
     else:
@@ -166,6 +180,16 @@ def ivert_client_cli():
     # Set up the IVERT client on a new system
     if args.command == "setup":
         ivert_new_user_setup.setup_new_user(args)
+
+    # Subscribe to IVERT email notifications
+    elif args.command == "subscribe":
+        raise NotImplementedError("Command 'subscribe' not yet implemented.")
+        pass
+
+    # Unsubscribe from IVERT email notifications
+    elif args.command == "unsubscribe":
+        raise NotImplementedError("Command 'unsubscribe' not yet implemented.")
+        pass
 
     # Validate a set of DEMs
     elif args.command == "validate":
