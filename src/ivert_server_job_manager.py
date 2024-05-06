@@ -12,6 +12,7 @@ import multiprocessing as mp
 import numpy
 import os
 import psutil
+import sys
 import time
 import typing
 
@@ -21,7 +22,7 @@ import utils.configfile
 
 
 def is_another_manager_running() -> typing.Union[bool, psutil.Process]:
-    """Returns True if another instance of this script is already running.
+    """Returns a Process if another instance of this script is already running. If none is found, returns False.
 
     Returns:
         The psuil.Process object if another instance of this script is already running. False otherwise."""
@@ -46,6 +47,7 @@ class IvertJobManager:
         Initializes a new instance of the IvertJobManager class.
 
         Args:
+            input_bucket_type (str, optional): The type of S3 bucket to use for input. Defaults to "trusted".
 
         Returns:
             None
@@ -53,10 +55,13 @@ class IvertJobManager:
         self.ivert_config = utils.configfile.config()
         self.time_interval_s = self.ivert_config.ivert_server_job_check_interval_s
         self.input_bucket_type = input_bucket_type
+        self.input_prefix = self.ivert_config.s3_import_prefix_base
 
         # The jobs database object. We assume this is running on the S3 server (it doesn't make sense otherwise).
         self.jobs_db = ivert_jobs_database.IvertJobsDatabaseServer()
         self.running_jobs: list[mp.Process] = []
+
+        self.s3m = s3.S3Manager()
 
     def start(self):
         """Start the job manager.
@@ -88,10 +93,15 @@ class IvertJobManager:
             except Exception as e:
                 # If something crashes for any reason, sleep a bit and try again.
                 # TODO: Implement logging if errors pop up.
+                if isinstance(e, KeyboardInterrupt):
+                    raise e
+
+                print(f"Error: {e}", file=sys.stderr)
+
                 time.sleep(self.time_interval_s)
                 continue
 
-    def sync_database_with_s3(self):
+    def sync_database_with_s3(self) -> None:
         """Sync the jobs database with the S3 bucket.
 
         This is called only once when start() is called, to make sure the "best" version of the database is being used."""
@@ -143,8 +153,17 @@ class IvertJobManager:
         # 1. Get a list of all files in the trusted bucket.
         # 2. Filter out any files already in the database.
         # 3. Return the remaining file list.
-        # TODO: Implement this.
-        return []
+        files_in_bucket = self.s3m.listdir(self.input_prefix, bucket_type=self.input_bucket_type, recursive=True)
+        # print(files_in_bucket)
+
+        new_files = []
+        for s3_key in files_in_bucket:
+            fname = s3_key.split("/")[-1]
+            s3_params = self.jobs_db.get_params_from_s3_path(s3_key, bucket_type=self.input_bucket_type)
+            if not self.jobs_db.is_file_in_database(fname, s3_params['username'], s3_params['job_id']):
+                new_files.append(s3_key)
+
+        return new_files
 
     def check_for_new_jobs(self, input_bucket_type: str = "trusted") -> list[str]:
         """Return a list of new .ini config files in the trusted bucket that haven't yet been added to the database.
