@@ -2,6 +2,7 @@
 
 import argparse
 import datetime
+import glob
 import os
 
 import ivert_jobs_database
@@ -112,22 +113,41 @@ def create_new_job_config(ivert_args: argparse.Namespace,
             files = args.files
         else:
             raise ValueError(f"Unexpected type of 'files' argument: {type(args.files)}")
-    else:
-        files = []
 
-    files_text = " ".join([wrap_fname_in_quotes_if_needed(os.path.basename(f.strip())) for f in files])
-    if len(files_text) == 0:
-        files_text = '""'
+        files_out = []
+        # Check to see if any files contain a glob pattern. If so, expand it.
+        for fn in files:
+            if s3.S3Manager.contains_glob_flags(fn):
+                matching_fnames = glob.glob(os.path.expanduser(fn))
+                files_out.extend(matching_fnames)
 
-    if hasattr(args, "files"):
+        # Check to see if any of the files have spaces in the name. If so, wrap them in quotes.
+        files_text = " ".join([wrap_fname_in_quotes_if_needed(os.path.basename(f.strip())) for f in files_out])
+        if len(files_text) == 0:
+            files_text = '""'
+
         del args.files
 
-    del args.command
+    else:
+        files_out = []
+        files_text = '""'
+
+    # These variables are stored elsewhere in the config file. Remove them from the namespace of "extra arguments"
+    if hasattr(args, "command"):
+        del args.command
+    if hasattr(args, "username"):
+        del args.username
+    if hasattr(args, "user_email"):
+        del args.user_email
+    if hasattr(args, "user"):
+        del args.user
+    if hasattr(args, "email"):
+        del args.email
 
     # Get the command arguments as a string. Remove the "Namespace(...)" part of the string.
-    cmd_args_text = str(args).lstrip("Namespace").lstrip("(").rstrip(")")
+    cmd_args_text = repr(vars(args))
     if len(cmd_args_text) == 0:
-        cmd_args_text = '""'
+        cmd_args_text = '{}'
 
     # Now that we've gathered all the fields needed, insert them into the config template text.
     config_text = grab_job_config_template()
@@ -140,15 +160,20 @@ def create_new_job_config(ivert_args: argparse.Namespace,
         .replace("[LIST_OF_FILES]", files_text) \
         .replace("[PARAMS_STRING]", cmd_args_text)
 
+    # Create the new job local directory if it doesn't exist.
+    local_jobdir = os.path.join(ivert_config.ivert_jobs_directory_local, job_name)
+    if not os.path.exists(local_jobdir):
+        os.makedirs(local_jobdir)
+
     # Write out the new config file.
-    new_job_config_fname = os.path.join(ivert_config.ivert_jobs_directory_local, f"{job_name}.ini")
+    new_job_config_fname = os.path.join(local_jobdir, f"{job_name}.ini")
     with open(new_job_config_fname, 'w') as f:
         f.write(config_text)
 
     if verbose:
         print(f"{new_job_config_fname} created.")
 
-    return new_job_config_fname, upload_prefix, files
+    return new_job_config_fname, upload_prefix, files_out
 
 
 def grab_job_config_template() -> str:
