@@ -260,7 +260,7 @@ class IvertJobsDatabaseBaseClass:
 
         IVERT input-output paths are of the form "s3://[BUCKET_NAME]/[common prefix]/[command]/[username]/[YYYYMMDDNNNN]/[filename]
 
-        Return a dictionary with each of these parameters.
+        Return a dictionary with the "command", "username", and "job_id" parameters.
         """
         if not bucket_type:
             bucket_type = self.s3_bucket_type
@@ -329,6 +329,19 @@ class IvertJobsDatabaseBaseClass:
             return True
         else:
             return False
+
+    def is_file_in_database(self, filename: str, username: str, job_id: str) -> bool:
+        """Returns True if the file is in the database."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT count(*) FROM ivert_jobs WHERE filename = ? AND username = ? AND job_id = ?",
+                       (filename, username, job_id))
+        count = cursor.fetchone()[0]
+        if count == 0:
+            return False
+        else:
+            assert count == 1
+            return True
 
 
 class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
