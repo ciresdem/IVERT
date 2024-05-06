@@ -27,8 +27,9 @@ def setup_new_user(args: argparse.Namespace) -> None:
     # Validate all the inputs for basic correctness.
     validate_inputs(args)
 
-    # Confirm the inputs with the user.
-    # confirm_inputs_with_user(args)
+    # Confirm the inputs with the user (if requested).
+    if args.prompt:
+        confirm_inputs_with_user(args)
 
     # Update the AWS profiles on the local machine.
     update_local_aws_profiles(args)
@@ -36,12 +37,8 @@ def setup_new_user(args: argparse.Namespace) -> None:
     # Update the IVERT user config file.
     update_ivert_user_config(args)
 
-    # Prompt the user if requested.
-    if args.prompt:
-        confirm_inputs_with_user(args)
-
     # Send new_user config (as an "update" command) to the IVERT cloud tool. This will subscribe the user to the IVERT SNS topic.
-    send_new_user_config_to_ivert_cloud(args)
+    subscribe_user_to_sns_notifications(args)
 
     print("\nIVERT user setup complete!")
     print(f"\nYou may now run '{bcolors.BOLD}python ivert.py test{bcolors.ENDC}' to test the IVERT system.")
@@ -58,7 +55,7 @@ def read_ivert_s3_credentials(error_if_not_found: bool = True):
             return None
 
 
-def send_new_user_config_to_ivert_cloud(args: argparse.Namespace) -> None:
+def subscribe_user_to_sns_notifications(args: argparse.Namespace) -> None:
     """Send new_user config (as an "update" command) to the IVERT cloud tool. This will subscribe the user to the IVERT SNS topic."""
     if not args.subscribe_to_sns:
         return
@@ -69,9 +66,10 @@ def send_new_user_config_to_ivert_cloud(args: argparse.Namespace) -> None:
     # Create a copy of the original arguments
     args_copy = argparse.Namespace(**vars(args))
     args_copy.command = "update"
-    args_copy.ADD_NEW_USER = True
+    args_copy.sub_command = "subscribe"
 
     # Remove references to bucket names and access keys, as well as the local AWS profile names.
+    # They are for setting up the local machine with AWS S3 credentials.
     # The IVERT server doesn't need those and we don't need to transmit them publicly.
     del args_copy.untrusted_bucket_name
     del args_copy.untrusted_access_key_id
@@ -82,6 +80,7 @@ def send_new_user_config_to_ivert_cloud(args: argparse.Namespace) -> None:
     del args_copy.ivert_ingest_profile
     del args_copy.ivert_export_profile
     # Can delete username and email since those will be grabbed from the user config file (that we just set up)
+    # in the ivert_client_job_upload:upload_new_job() function
     del args_copy.user
     del args_copy.email
     # The "prompt" argument is not needed for the IVERT server.
@@ -89,6 +88,8 @@ def send_new_user_config_to_ivert_cloud(args: argparse.Namespace) -> None:
 
     # Send the command to the IVERT cloud tool.
     ivert_client_job_upload.upload_new_job(args_copy)
+
+    return
 
 
 def collect_inputs(args: argparse.Namespace, only_if_not_provided: bool = True) -> argparse.Namespace:
@@ -98,6 +99,7 @@ def collect_inputs(args: argparse.Namespace, only_if_not_provided: bool = True) 
 
     # Check to make sure all the args are present here.
     assert "email" in args
+    assert "username" in args
     assert "untrusted_bucket_name" in args
     assert "untrusted_access_key_id" in args
     assert "untrusted_secret_access_key" in args
@@ -109,6 +111,9 @@ def collect_inputs(args: argparse.Namespace, only_if_not_provided: bool = True) 
 
     if not args.email.strip() or not only_if_not_provided:
         args.email = input("\n" + bcolors.UNDERLINE + "Your email address" + bcolors.ENDC + ": ").strip()
+
+    if not args.username.strip():
+        args.username = args.email.split("@")[0]
 
     # Check for valid AWS profile names (they can basically be anyting except empty strings)
     # If we weren't provided a profile name or we aren't using the defaults, prompt for them.
@@ -195,6 +200,7 @@ def collect_inputs(args: argparse.Namespace, only_if_not_provided: bool = True) 
 def validate_inputs(args: argparse.Namespace) -> None:
     """Validate user inputs for correctness. These should be a completed set of args, not a partial set."""
     assert "email" in args
+    assert "username" in args
     assert "untrusted_bucket_name" in args
     assert "untrusted_access_key_id" in args
     assert "untrusted_secret_access_key" in args
@@ -474,49 +480,67 @@ def define_and_parse_args(just_return_parser: bool=False):
     """Define and parse command-line arguments."""
 
     parser = argparse.ArgumentParser(description="Set up a new IVERT user on the local machine.")
-    parser.add_argument("-e", "--email", dest="email", type=utils.is_email.return_email,
-                        required=False, default="",
-                        help="The email address of the new user.")
-    parser.add_argument("-u", "--untrusted_bucket_name", dest="untrusted_bucket_name",
-                        default="", type=str, required=False,
-                        help="The name of the bucket where untrusted data uploaded to IVERT.")
-    parser.add_argument("-uak", "--untrusted_access_key_id", dest="untrusted_access_key_id",
-                        default="", type=str, required=False,
-                        help="The access key ID for the bucket where untrusted data uploaded to IVERT.")
-    parser.add_argument("-usk", "--untrusted_secret_access_key", dest="untrusted_secret_access_key",
-                        default="", type=str, required=False,
-                        help="The secret access key for the bucket where untrusted data uploaded to IVERT.")
-    parser.add_argument("-xb", "--export_bucket_name", dest="export_bucket_name",
-                        default="", type=str, required=False,
-                        help="The name of the bucket where IVERT data is exported to be downloaded.")
-    parser.add_argument("-xak", "--export_access_key_id", dest="export_access_key_id",
-                        default="", type=str, required=False,
-                        help="The access key ID for the bucket where IVERT data is exported to be downloaded.")
-    parser.add_argument("-xsk", "--export_secret_access_key", dest="export_secret_access_key",
-                        default="", type=str, required=False,
-                        help="The secret access key for the bucket where IVERT data is exported to be downloaded.")
+    parser.add_argument("email", type=utils.is_email.return_email,
+                        help="The email address of the user.")
+    parser.add_argument("-u", "--username", dest="username", type=str, required=False, default="",
+                        help="The username of the new user. Only needed if you want to create a custom username. "
+                             "Default: Derived from the left side of your email. It's recommended you just "
+                             "use the default unless you have specific reasons to do otherwise.")
     parser.add_argument("-ns", "--do_not_subscribe", dest="subscribe_to_sns", action="store_false",
                         default=True, required=False,
                         help="Do not subscribe the new user to the IVERT SNS topic to receive email notifications. "
-                             " This is a good option to use if you've already susbcribed to email notifications perviously and don't want to again."
-                             " Default: Subscribe to email notifications.")
+                             "Default: Subscribe to email notifications. (If you were already subscribed with the "
+                             "same email, the subscription settings will just be overwritten. You will not be "
+                             "'double-subscribed'.)")
+    # Note, this option is an "opt-out", but gets saved as a positive "opt-in" in the variable.
     parser.add_argument("-nf", "--no_sns_filter", dest="filter_sns", action="store_false",
                         default=True, required=False,
-                        help="Do not filter email notifications by username. This will make you receive all emails from all jobs."
-                             " Does nothing if the -ns flag is used."
-                             " Default: Only get emails that *this* user submits.")
-    parser.add_argument("-ip", "--ivert_ingest_profile", dest="ivert_ingest_profile",
-                        default=ivert_user_config_template.aws_profile_ivert_ingest,
-                        type=str, required=False,
-                        help="Manually set the name of the AWS profile for IVERT ingest. "
-                             f" Default: '{ivert_user_config_template.aws_profile_ivert_ingest}'.")
-    parser.add_argument("-xp", "--ivert_export_profile", dest="ivert_export_profile",
-                        default=ivert_user_config_template.aws_profile_ivert_export,
-                        type=str, required=False,
-                        help="Manually set the name of the AWS profile for IVERT export. "
-                             f"Default: '{ivert_user_config_template.aws_profile_ivert_export}'.")
+                        help="Do not filter email notifications by username. This will make you receive all emails from all jobs. "
+                             "Does nothing if the -ns flag is used. "
+                             "Default: Only get emails for jobs that *this* user submits.")
     parser.add_argument("-p", "--prompt", dest="prompt", default=False, action="store_true",
-                        help="Prompt the user to verify settings before uploading files to IVERT. Default: False")
+                        help="Prompt the user to verify settings before setting up IVERT. Use if you'd like to have "
+                             "'one last look' before the setup scripts complete. (If something was wrong, you can "
+                             "always re-run this command and it will overwrite old settings. Default: False (no prompt)")
+
+    bucket_group = parser.add_argument_group("IVERT S3 bucket settings",
+                              description="Manually enter the IVERT S3 bucket settings and credentials. It is FAR EASIER "
+                              "to skip these options, copy the 'ivert_s3_credentials.ini' file from the "
+                              "team's GDrive, and place it in ~/.ivert/ivert_s3_credentials.ini. The script will "
+                              "automatically grab all these variables from there.")
+    bucket_group.add_argument("-ub", "--untrusted_bucket_name", dest="untrusted_bucket_name",
+                              default="", type=str, required=False,
+                              help="The name of the bucket where untrusted data uploaded to IVERT.")
+    bucket_group.add_argument("-uak", "--untrusted_access_key_id", dest="untrusted_access_key_id",
+                              default="", type=str, required=False,
+                              help="The access key ID for the bucket where untrusted data uploaded to IVERT.")
+    bucket_group.add_argument("-usk", "--untrusted_secret_access_key", dest="untrusted_secret_access_key",
+                              default="", type=str, required=False,
+                              help="The secret access key for the bucket where untrusted data uploaded to IVERT.")
+    bucket_group.add_argument("-xb", "--export_bucket_name", dest="export_bucket_name",
+                              default="", type=str, required=False,
+                              help="The name of the bucket where IVERT data is exported to be downloaded.")
+    bucket_group.add_argument("-xak", "--export_access_key_id", dest="export_access_key_id",
+                              default="", type=str, required=False,
+                              help="The access key ID for the bucket where IVERT data is exported to be downloaded.")
+    bucket_group.add_argument("-xsk", "--export_secret_access_key", dest="export_secret_access_key",
+                              default="", type=str, required=False,
+                              help="The secret access key for the bucket where IVERT data is exported to be downloaded.")
+
+    aws_group = parser.add_argument_group("IVERT AWS profile settings",
+                              description="Manually enter the IVERT AWS profile names. Only useful if either of these "
+                              "names are already used and you want to avoid conflicts. It's recommended to just use "
+                              "the default settings here and skip these options.")
+    aws_group.add_argument("-ip", "--ivert_ingest_profile", dest="ivert_ingest_profile",
+                           default=ivert_user_config_template.aws_profile_ivert_ingest,
+                           type=str, required=False,
+                           help="Manually set the name of the AWS profile for IVERT ingest. "
+                                f" Default: '{ivert_user_config_template.aws_profile_ivert_ingest}'.")
+    aws_group.add_argument("-xp", "--ivert_export_profile", dest="ivert_export_profile",
+                           default=ivert_user_config_template.aws_profile_ivert_export,
+                           type=str, required=False,
+                           help="Manually set the name of the AWS profile for IVERT export. "
+                                f"Default: '{ivert_user_config_template.aws_profile_ivert_export}'.")
 
     if just_return_parser:
         return parser
