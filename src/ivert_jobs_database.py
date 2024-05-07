@@ -334,7 +334,7 @@ class IvertJobsDatabaseBaseClass:
         """Returns True if the file is in the database."""
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT count(*) FROM ivert_jobs WHERE filename = ? AND username = ? AND job_id = ?",
+        cursor.execute("SELECT count(*) FROM ivert_files WHERE filename = ? AND username = ? AND job_id = ?",
                        (filename, username, job_id))
         count = cursor.fetchone()[0]
         if count == 0:
