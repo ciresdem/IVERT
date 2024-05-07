@@ -148,7 +148,7 @@ class IvertJobManager:
 
         return
 
-    def check_for_new_files(self, input_bucket_type: str = "trusted") -> list[str]:
+    def check_for_new_files(self) -> list[str]:
         """Return a list of new files in the trusted bucket that haven't yet been added to the database."""
         # 1. Get a list of all files in the trusted bucket.
         # 2. Filter out any files already in the database.
@@ -165,7 +165,7 @@ class IvertJobManager:
 
         return new_files
 
-    def check_for_new_jobs(self, input_bucket_type: str = "trusted") -> list[str]:
+    def check_for_new_jobs(self) -> list[str]:
         """Return a list of new .ini config files in the trusted bucket that haven't yet been added to the database.
 
         These indicate new IVERT jobs. Once the .ini file arrives, we can parse it and create and start the IvertJob
@@ -173,8 +173,8 @@ class IvertJobManager:
         # Call check_for_new_files() and get list of any new files incoming.
         # When one of these is a .ini file, kick off an IvertJob object to handle it.
         # Add it to the list of running jobs.
-        # TODO: Implement this.
-        return []
+        new_ini_files = [fn for fn in self.check_for_new_files() if fn.lower().endswith('.ini')]
+        return new_ini_files
 
     def check_on_running_jobs(self):
         """Check on all running jobs to see if they are still running.
