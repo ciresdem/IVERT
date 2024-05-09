@@ -625,12 +625,12 @@ def define_and_parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = define_and_parse_args()
-    i = IvertJobsDatabaseServer()
+    idb = IvertJobsDatabaseServer()
     if args.command == "create":
-        i.create_new_database(only_if_not_exists_in_s3=True, overwrite=args.overwrite)
+        idb.create_new_database(only_if_not_exists_in_s3=True, overwrite=args.overwrite)
     elif args.command == "upload":
-        i.upload_to_s3()
+        idb.upload_to_s3()
     elif args.command == "download":
-        i.download_from_s3()
+        idb.download_from_s3()
     elif args.command == "delete":
-        i.delete_database()
+        idb.delete_database()
