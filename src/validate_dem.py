@@ -535,7 +535,7 @@ def validate_dem_parallel(dem_name,
     dem_ds = None
 
     if not output_dir:
-        output_dir = os.path.dirname(dem_name)
+        output_dir = os.path.dirname(os.path.abspath(dem_name))
     if not os.path.exists(output_dir):
         if not quiet:
             print("Creating output directory", output_dir)
