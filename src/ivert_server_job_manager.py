@@ -228,13 +228,15 @@ class IvertJob:
 
     def __init__(self,
                  job_config_s3_key: str,
-                 job_config_s3_bucket_type: str = "trusted"):
+                 job_config_s3_bucket_type: str = "trusted",
+                 auto_start: bool = True):
         """
         Initializes a new instance of the IvertJob class.
 
         Args:
             job_config_s3_key (str): The S3 key of the job configuration file.
             job_config_s3_bucket_type (str): The S3 bucket type of the job configuration file. Defaults to "trusted".
+            auto_start (bool): Start the job immediately upon initialization.
         """
         self.ivert_config = utils.configfile.config()
 
@@ -271,7 +273,8 @@ class IvertJob:
 
         # These jobs are run as a subprocess, so after initialization they automatically start the processing.
         # Start the job.
-        self.start()
+        if auto_start:
+            self.start()
 
     def start(self):
         """Start the job."""

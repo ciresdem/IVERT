@@ -51,7 +51,9 @@ def setup_new_user(args: argparse.Namespace) -> None:
     else:
         print("\nYou may now ", end="")
 
-    print(f"run '{bcolors.BOLD}python ivert.py test{bcolors.ENDC}' to perform an end-to-end test the IVERT system.\n")
+    print(f"run\n\n> {bcolors.BOLD}{bcolors.OKBLUE}ivert test{bcolors.ENDC}{bcolors.ENDC}\n\n...to perform a dry run, end-to-end test the IVERT system.\n")
+    print(f"At any time, run\n> {bcolors.BOLD}{bcolors.OKBLUE}ivert --help{bcolors.ENDC}{bcolors.ENDC}\n...to see a complete list of other IVERT commands. "
+          f"Happy validations!\n")
 
 
 def read_ivert_s3_credentials(error_if_not_found: bool = True):
