@@ -3,6 +3,7 @@ import numpy
 
 import argparse
 
+
 def accrue_variables(var_id_list, dataset_name="ATL03", return_type=list, str_sep="\n"):
     """Given a list of variable IDs, return a complete list of granule variables to acquire.
 
@@ -23,6 +24,7 @@ def accrue_variables(var_id_list, dataset_name="ATL03", return_type=list, str_se
 
     return return_type(var_list)
 
+
 def list_argument_ids(dataset_name="ATL03"):
     dataset_name = dataset_name.upper().strip()
     var_dict = {"ATL03": ATL03_var_dict,
@@ -30,6 +32,7 @@ def list_argument_ids(dataset_name="ATL03"):
                 "ATL08": ATL08_var_dict}[dataset_name]
 
     return sorted(var_dict.keys())
+
 
 def make_variable_id_dict(var_list, sort=True):
     """From a complete list of ICESat-2 granule variables, create a dictionary
