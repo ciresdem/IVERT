@@ -50,7 +50,7 @@ def create_new_job_params(username: str = None) -> tuple[str, int]:
     else:
         new_job_number = int(datetime.date.today().strftime("%Y%m%d")) * 10000
 
-    return username, new_job_number, user_email
+    return username, new_job_number
 
 
 def wrap_fname_in_quotes_if_needed(fn: str) -> str:
@@ -110,24 +110,18 @@ def create_new_job_config(ivert_args: argparse.Namespace,
                 matching_fnames = glob.glob(os.path.expanduser(fn))
                 files_out.extend(matching_fnames)
 
-        # Check to see if any of the files have spaces in the name. If so, wrap them in quotes.
-        files_text = " ".join([wrap_fname_in_quotes_if_needed(os.path.basename(f.strip())) for f in files_out])
-        if len(files_text) == 0:
-            files_text = '""'
-
         del args.files
 
     else:
         files_out = []
-        files_text = '""'
+
+    files_text = repr(files_out)
 
     # These variables are stored elsewhere in the config file. Remove them from the namespace of "extra arguments"
     if hasattr(args, "command"):
         del args.command
     if hasattr(args, "username"):
         del args.username
-    if hasattr(args, "user_email"):
-        del args.user_email
     if hasattr(args, "user"):
         del args.user
 

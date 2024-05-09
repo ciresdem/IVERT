@@ -84,7 +84,7 @@ def subscribe_user_to_sns_notifications(args: argparse.Namespace) -> None:
     del args_copy.ivert_export_profile
     # Can delete username since that will be grabbed from the user config file (that we just set up)
     # in the ivert_client_job_upload:upload_new_job() function
-    del args_copy.user
+    del args_copy.username
     # The "prompt" argument is not needed for the IVERT server.
     del args_copy.prompt
 
@@ -432,9 +432,11 @@ def update_ivert_user_config(args: argparse.Namespace) -> None:
         user_config_text = f.read()
 
     # Update the user config text with the new values.
+    user_config_text = re.sub(r"user_email\s*=\s*[\w\[\]\.@\-]+", f"user_email = {args.email}", user_config_text)
+
 
     # Update the username in the user config text.
-    user_config_text = re.sub(r"username\s*\=\s*[\w\[\]\.\-]+", f"username = {args.user}", user_config_text)
+    user_config_text = re.sub(r"username\s*\=\s*[\w\[\]\.\-]+", f"username = {args.username}", user_config_text)
 
     # Update the aws_profile_ivert_ingest in the user config text, if needed.
     # If it's using a different profile name, then update it.
