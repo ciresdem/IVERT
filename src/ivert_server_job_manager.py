@@ -263,6 +263,8 @@ class IvertJob:
         # The directory where the job will be run and files stored. This will be populated and created in
         # start()-->create_local_job_folder()
         self.job_dir = None
+        self.job_config_local = None
+        self.job_config_object = None
 
         # A copy of the S3Manager used to upload and download files from the S3 bucket.
         self.s3m = s3.S3Manager()
@@ -285,6 +287,8 @@ class IvertJob:
         self.parse_job_config_ini()
 
         # 4. Create a new job entry in the jobs database.
+        self.create_new_job_entry()
+
         # 5. Create entry for the config-file in the jobs database. (Upload to s3)
         # 6. Download all other job files.
         #  --- Enter them each in database. (Upload to s3)
@@ -322,12 +326,41 @@ class IvertJob:
 
     def download_job_config_file(self):
         """Download the job configuration file from the S3 bucket."""
-        dest_file = os.path.join(self.job_dir, self.s3_configfile_key.split("/")[-1])
-        self.s3m.download(self.job_config_s3_key, dest_file, bucket_type=self.job_config_s3_bucket_type)
+        self.job_config_local = os.path.join(self.job_dir, self.s3_configfile_key.split("/")[-1])
+        self.s3m.download(self.job_config_s3_key, self.job_config_local, bucket_type=self.job_config_s3_bucket_type)
 
     def parse_job_config_ini(self):
         """Parse the job configuration file, defining the IVERT job parameters."""
-        # TODO: Implement this.
+        # The job configfile is a .ini configuration file.
+        assert os.path.exists(self.job_config_local)
+
+        self.job_config_object = utils.configfile.config(self.job_config_local)
+
+        if not self.is_valid_job_config(self.job_config_object):
+            raise ValueError(f"Configfile {os.path.basename(self.job_config_local)} is not formatted correctly. "
+                             "Does the IVERT code need to be updated?")
+
+        return
+
+    def is_valid_job_config(self, job_config_obj: utils.configfile.config) -> bool:
+        """Validate to make sure the input configfile is correctly formatted and has all the necessary fields."""
+        jco = job_config_obj
+        if (not hasattr(jco, "username")) or type(jco.username) is not str:
+            return False
+        if (not hasattr(jco, "job_id")) or type(jco.job_id) is not int:
+            return False
+        if (not hasattr(jco, "job_name")) or type(jco.job_name) is not str:
+            return False
+        if (not hasattr(jco, "job_upload_prefix")) or type(jco.job_upload_prefix) is not str:
+            return False
+        if (not hasattr(jco, "ivert_command")) or type(jco.ivert_command) is not str:
+            return False
+        if (not hasattr(jco, "files")) or type(jco.files) is not list:
+            return False
+        if (not hasattr(jco, "cmd_args")) or type(jco.cmd_args) is not dict:
+            return False
+
+        return True
 
     def create_new_job_entry(self):
         """Create a new job entry in the jobs database."""

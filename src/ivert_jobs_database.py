@@ -511,8 +511,9 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
         return
 
     def create_new_job(self,
-                       job_s3_import_config_prefix: str,
+                       job_config_obj: utils.configfile.config,
                        job_s3_import_config_bucket_type: str = 'trusted',
+                       skip_database_upload: bool = False,
                        ) -> sqlite3.Row:
         """
         Given the prefix of a job in the S3 bucket, create a new job in the "ivert_jobs" table of the database.
@@ -525,18 +526,16 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
         Returns:
             The database row (record) of the new job.
         """
-        params = self.get_params_from_s3_path(job_s3_import_config_prefix)
-        command = params['command']
-        username = params['username']
-        job_id = params['job_id']
+        # job_config_obj should be a configfile.config object with fields defined in
+        # config/ivert_job_config_TEMPLATE.ini
+        assert hasattr(job_config_obj, "username")
+        assert hasattr(job_config_obj, "")
 
         # Check if the (username, job_id) tuple already exists in the database.
         # If so, just return it.
         existing_row = self.job_exists(username, job_id, return_row=True)
         if existing_row:
             return existing_row
-
-        # Get the config file.
 
         # TODO: Finish Implementing
         # Insert the new job into the database
