@@ -14,17 +14,15 @@ import utils.progress_bar
 ivert_config = utils.configfile.config()
 
 
-def create_new_job_params(username: str = None, user_email: str = None) -> tuple[str, int, str]:
-    """Create a new job number, username, and email address..
+def create_new_job_params(username: str = None) -> tuple[str, int]:
+    """Create a new job number and username pair.
 
     Args:
         username (str, optional): The username of the user. Defaults to just getting it from the config file.
-        user_email (str, optional): The email address of the user. Defaults to just getting it from the config file.
 
     Returns:
         str: Username
         int: New job number
-        str: User email address
     """
     # Since this is running on the client, we only get the functionality of the base class, not the server.
     dbo = ivert_jobs_database.IvertJobsDatabaseBaseClass()
@@ -34,21 +32,12 @@ def create_new_job_params(username: str = None, user_email: str = None) -> tuple
         raise FileNotFoundError(
             "Error connecting to the S3 jobs database. Check your online connection and/or contact your IVERT developers.")
 
-    # Get the user email address.
-    if not user_email:
-        user_email = ivert_config.user_email
-
-    if not user_email:
-        raise FileNotFoundError(
-            "Did not get user email from user's config file. Run 'ivert setup' to set up your IVERT account locally.")
-
     # Get the username.
     if not username:
         username = ivert_config.username
 
-    # If the username isn't set in the config file, just take it from the user's email address.
     if not username:
-        username = user_email.split("@")[0]
+        raise ValueError("Username not defined in .")
 
     # The last job number is YYYYMMDDNNNN. If the last job was "today", we just increment it. Otherwise, we create a new job number using today's date.
     today_str = datetime.date.today().strftime("%Y%m%d")
@@ -93,7 +82,7 @@ def create_new_job_config(ivert_args: argparse.Namespace,
     assert args.command in ivert_config.ivert_commands
 
     config_text = grab_job_config_template()
-    username, new_job_number, user_email = create_new_job_params(ivert_config.username, ivert_config.user_email)
+    username, new_job_number = create_new_job_params(ivert_config.username)
 
     # Genereate the full upload prefix for this new job.
     upload_prefix = str(os.path.join(ivert_config.s3_import_prefix_base, args.command, username, str(new_job_number)))
@@ -141,8 +130,6 @@ def create_new_job_config(ivert_args: argparse.Namespace,
         del args.user_email
     if hasattr(args, "user"):
         del args.user
-    if hasattr(args, "email"):
-        del args.email
 
     # Get the command arguments as a string. Remove the "Namespace(...)" part of the string.
     cmd_args_text = repr(vars(args))
@@ -152,7 +139,6 @@ def create_new_job_config(ivert_args: argparse.Namespace,
     # Now that we've gathered all the fields needed, insert them into the config template text.
     config_text = grab_job_config_template()
     config_text = config_text.replace("[USERNAME]", username) \
-        .replace("[EMAIL_ADDRESS]", user_email) \
         .replace("[JOB_ID]", str(new_job_number)) \
         .replace("[JOB_NAME]", job_name) \
         .replace("[JOB_UPLOAD_PREFIX]", upload_prefix) \

@@ -282,6 +282,8 @@ class IvertJob:
         self.download_job_config_file()
 
         # 3. Parse the job configuration file.
+        self.parse_job_config_ini()
+
         # 4. Create a new job entry in the jobs database.
         # 5. Create entry for the config-file in the jobs database. (Upload to s3)
         # 6. Download all other job files.
