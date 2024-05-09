@@ -31,6 +31,9 @@ def setup_new_user(args: argparse.Namespace) -> None:
     if args.prompt:
         confirm_inputs_with_user(args)
 
+    # Create the ivert local directories (in ~/.ivert)
+    create_local_dirs()
+
     # Update the AWS profiles on the local machine.
     update_local_aws_profiles(args)
 
@@ -79,10 +82,9 @@ def subscribe_user_to_sns_notifications(args: argparse.Namespace) -> None:
     del args_copy.export_secret_access_key
     del args_copy.ivert_ingest_profile
     del args_copy.ivert_export_profile
-    # Can delete username and email since those will be grabbed from the user config file (that we just set up)
+    # Can delete username since that will be grabbed from the user config file (that we just set up)
     # in the ivert_client_job_upload:upload_new_job() function
     del args_copy.user
-    del args_copy.email
     # The "prompt" argument is not needed for the IVERT server.
     del args_copy.prompt
 
@@ -191,9 +193,6 @@ def collect_inputs(args: argparse.Namespace, only_if_not_provided: bool = True) 
                          f"{ivert_config.ivert_s3_credentials_file} and run setup again. "
                          "If error persists, contact the IVERT developers.")
 
-    # Derive the username from the email
-    args.user = args.email.split("@")[0].strip().lower()
-
     return args
 
 
@@ -217,10 +216,6 @@ def validate_inputs(args: argparse.Namespace) -> None:
     if not email_regex.match(args.email):
         print()
         raise ValueError(f"{args.email} is an invalid email address.")
-    # Check (for now) specifically for a noaa.gov email.
-    if args.email.split("@")[1].lower().strip() != "noaa.gov":
-        print()
-        raise ValueError(f"Email must be from noaa.gov. '{args.email}' is not from noaa.gov.")
 
     # Check bucket names for validity.
     # Bucket naming rules from https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html
@@ -414,6 +409,19 @@ def update_local_aws_credentials(aws_credentials_file: str,
     return
 
 
+def create_local_dirs() -> None:
+    """Create the local directories needed to store IVERT user data."""
+    creds_folder = ivert_config.user_data_creds_directory
+    jobs_folder = ivert_config.ivert_jobs_directory_local
+
+    if not os.path.exists(creds_folder):
+        os.makedirs(creds_folder)
+    if not os.path.exists(jobs_folder):
+        os.makedirs(jobs_folder)
+
+    return
+
+
 def update_ivert_user_config(args: argparse.Namespace) -> None:
     """Create or overwrite the ivert_user_config_[name].ini file."""
     # First, find all instances of existing user config files in the config/ directory.
@@ -424,8 +432,6 @@ def update_ivert_user_config(args: argparse.Namespace) -> None:
         user_config_text = f.read()
 
     # Update the user config text with the new values.
-    # Update the email in the user config text.
-    user_config_text = re.sub(r"user_email\s*\=\s*[\w\[\]\.\@]+", f"user_email = {args.email}", user_config_text)
 
     # Update the username in the user config text.
     user_config_text = re.sub(r"username\s*\=\s*[\w\[\]\.\-]+", f"username = {args.user}", user_config_text)

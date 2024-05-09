@@ -6,6 +6,7 @@ import os
 import s3
 import subprocess
 import sys
+import typing
 
 import utils.configfile
 

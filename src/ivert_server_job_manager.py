@@ -97,6 +97,7 @@ class IvertJobManager:
                     raise e
 
                 print(f"Error: {e}", file=sys.stderr)
+                print(f"Continuing to iterate. Will try again in {self.time_interval_s} seconds.", file=sys.stderr)
 
                 time.sleep(self.time_interval_s)
                 continue
@@ -235,6 +236,8 @@ class IvertJob:
             job_config_s3_key (str): The S3 key of the job configuration file.
             job_config_s3_bucket_type (str): The S3 bucket type of the job configuration file. Defaults to "trusted".
         """
+        self.ivert_config = utils.configfile.config()
+
         self.s3_configfile_key = job_config_s3_key
         self.s3_configfile_bucket_type = job_config_s3_bucket_type
 
@@ -251,7 +254,18 @@ class IvertJob:
         self.job_config_s3_key = job_config_s3_key
         self.job_config_s3_bucket_type = job_config_s3_bucket_type
 
+        # Parameters read from the config file.
+        self.job_files = []
+        self.job_cmd_args = None
+
         self.pid = os.getpid()
+
+        # The directory where the job will be run and files stored. This will be populated and created in
+        # start()-->create_local_job_folder()
+        self.job_dir = None
+
+        # A copy of the S3Manager used to upload and download files from the S3 bucket.
+        self.s3m = s3.S3Manager()
 
         # These jobs are run as a subprocess, so after initialization they automatically start the processing.
         # Start the job.
@@ -262,7 +276,11 @@ class IvertJob:
         # TODO: Implement this.
 
         # 1. Create local folders to store the job input files
+        self.create_local_job_folder()
+
         # 2. Download the job configuration file from the S3 bucket.
+        self.download_job_config_file()
+
         # 3. Parse the job configuration file.
         # 4. Create a new job entry in the jobs database.
         # 5. Create entry for the config-file in the jobs database. (Upload to s3)
@@ -284,9 +302,37 @@ class IvertJob:
 
         # TODO: Create a new job entry in the jobs database.
 
+    def create_local_job_folder(self):
+        """Create a local folder to store the job input files."""
+        data_basedir = self.ivert_config.ivert_jobs_directory_local
+        # Make sure there's a trailing slash.
+        data_basedir = data_basedir if data_basedir[-1] == "/" else data_basedir + "/"
+
+        self.job_dir = data_basedir + self.ivert_configs3_ivert_job_subdirs_template \
+            .replace('[command]', self.command) \
+            .replace('[username]', self.username) \
+            .replace('[job_id]', self.job_id)
+
+        if not os.path.exists(self.job_dir):
+            os.makedirs(self.job_dir)
+
+        return
+
+    def download_job_config_file(self):
+        """Download the job configuration file from the S3 bucket."""
+        dest_file = os.path.join(self.job_dir, self.s3_configfile_key.split("/")[-1])
+        self.s3m.download(self.job_config_s3_key, dest_file, bucket_type=self.job_config_s3_bucket_type)
+
     def parse_job_config_ini(self):
         """Parse the job configuration file, defining the IVERT job parameters."""
         # TODO: Implement this.
+
+    def create_new_job_entry(self):
+        """Create a new job entry in the jobs database."""
+        # TODO: Implement this.
+
+    def download_job_files(self):
+        """Download all other job files from the S3 bucket and add their entries to the jobs database."""
 
     def push_sns_notification(self, start_or_finish: str):
         """Push a SNS notification for a started or finished job.
