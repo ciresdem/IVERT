@@ -80,8 +80,8 @@ class config:
         for k, v in self._config["DEFAULT"].items():
             self._read_option(k, v)
 
-        # Then, if we're running in an AWS environment, read all the values from the [AWS] section.
-        if self.is_aws:
+        # Then, if we're running in an AWS environment, read all the values from the [AWS] section (if it exists).
+        if self.is_aws and ("AWS" in self._config):
             section = self._config["AWS"]
             for k, v in section.items():
                 self._read_option(k, v)
