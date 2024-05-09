@@ -317,7 +317,7 @@ class IvertJob:
         # Make sure there's a trailing slash.
         data_basedir = data_basedir if data_basedir[-1] == "/" else data_basedir + "/"
 
-        self.job_dir = data_basedir + self.ivert_configs3_ivert_job_subdirs_template \
+        self.job_dir = data_basedir + self.ivert_config.s3_ivert_job_subdirs_template \
             .replace('[command]', self.command) \
             .replace('[username]', self.username) \
             .replace('[job_id]', self.job_id)
