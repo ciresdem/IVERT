@@ -40,11 +40,18 @@ def setup_new_user(args: argparse.Namespace) -> None:
     # Update the IVERT user config file.
     update_ivert_user_config(args)
 
-    # Send new_user config (as an "update" command) to the IVERT cloud tool. This will subscribe the user to the IVERT SNS topic.
-    subscribe_user_to_sns_notifications(args)
+    if args.subscribe_to_sns:
+        # Send new_user config (as an "update" command) to the IVERT cloud tool. This will subscribe the user to the IVERT SNS topic.
+        subscribe_user_to_sns_notifications(args)
 
     print("\nIVERT user setup complete!")
-    print(f"\nYou may now run '{bcolors.BOLD}python ivert.py test{bcolors.ENDC}' to test the IVERT system.")
+    if args.subscribe_to_sns:
+        print(f"\nYou sould receive an email from the IVERT server to {bcolors.BOLD}{args.email}{bcolors.ENDC} confirming your subscription to the IVERT SNS notifications.")
+        print("\nAfter receiveing that email, you may ", end="")
+    else:
+        print("\nYou may now ", end="")
+
+    print(f"run '{bcolors.BOLD}python ivert.py test{bcolors.ENDC}' to perform an end-to-end test the IVERT system.\n")
 
 
 def read_ivert_s3_credentials(error_if_not_found: bool = True):
