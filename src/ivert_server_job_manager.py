@@ -664,7 +664,7 @@ class IvertJob:
             if os.path.exists(f_path):
                 # Upload the file.
                 self.upload_file_to_export_bucket(str(f_path))
-            elif os.path.exists(f_path_other)
+            elif os.path.exists(f_path_other):
                 # Or, upload the other file if it exists.
                 self.upload_file_to_export_bucket(str(f_path_other))
             elif row["status"] in ["error", "timeout", "quarantined", "unknown"]:
