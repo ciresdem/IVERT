@@ -65,7 +65,7 @@ def create_new_job_config(ivert_args: argparse.Namespace,
     Saves the config file locally and returns a path to it.
 
     Args:
-        ivert_args (argparse.Namespace): The parsed arguments from the command line given to ivert_client.py.
+        ivert_args (argparse.Namespace): The parsed arguments from the command line given to ivert_client.py, or a slightly-modified version.
             See ivert_client.py for listings of these arguments.
         verbose (bool, optional): Whether to print the path to the new job config file. Defaults to True.
 

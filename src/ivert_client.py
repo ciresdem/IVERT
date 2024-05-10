@@ -4,6 +4,7 @@ import argparse
 import os
 
 import ivert_new_user_setup
+import ivert_client_subscriptions
 
 def define_and_parse_args(return_parser: bool = False):
     parser = argparse.ArgumentParser(description="The ICESat-2 Validation of Elevations Reporting Tool (IVERT)")
@@ -157,7 +158,7 @@ def define_and_parse_args(return_parser: bool = False):
     parser_subscribe.add_argument("-a", "--all", dest="all", default=False, action="store_true",
                                   help="Subscribe to all IVERT email notifications. Default: False (only get the ones that are produced for your account).")
     parser_subscribe.add_argument("-u", "--username", dest="username", type=str, default=None,
-                                  help="The username of the IVERT user. Default: Derives it from the email (before the '@' symbol).")
+                                  help="The username of the IVERT user upon which to filter the sns notificaions, if different from the default. Default: Derives it from the email (before the '@' symbol). Ignored if -a is set.")
 
     ###############################################################
     # Create the "unsubscribe" subparser
@@ -183,13 +184,11 @@ def ivert_client_cli():
 
     # Subscribe to IVERT email notifications
     elif args.command == "subscribe":
-        raise NotImplementedError("Command 'subscribe' not yet implemented.")
-        pass
+        ivert_client_subscriptions.run_subscribe_command(args)
 
     # Unsubscribe from IVERT email notifications
     elif args.command == "unsubscribe":
-        raise NotImplementedError("Command 'unsubscribe' not yet implemented.")
-        pass
+        ivert_client_subscriptions.run_unsubscribe_command(args)
 
     # Validate a set of DEMs
     elif args.command == "validate":

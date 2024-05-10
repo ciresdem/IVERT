@@ -642,20 +642,15 @@ class IvertJob:
     def run_subscribe_command(self):
         "Run a 'subscribe' command to subscribe a user to an SNS notification service."
         cmd_args = self.job_config_object.cmd_args
-        assert "subscribe_to_sns" in cmd_args
         # If for some reason we get a 'subscribe' command where we've opted *not* to create the subscription, then just
         # quietly quit and call it a day.
         self.update_job_status("running")
 
         try:
-            if not cmd_args["subscribe_to_sns"]:
-                self.update_job_status("complete")
-                return
-
             assert "email" in cmd_args
-            assert "filter_sns" in cmd_args
+            assert "all" in cmd_args
 
-            filter_string = self.username if cmd_args["filter_sns"] else None
+            filter_string = None if cmd_args["all"] else self.username
             sns_arn = sns.subscribe(cmd_args["email"],
                                     filter_string)
 
