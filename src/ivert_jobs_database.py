@@ -345,8 +345,8 @@ class IvertJobsDatabaseBaseClass:
             self.conn.close()
         os.remove(self.db_fname)
 
-    def is_valid(self):
-        """Returns True if the database is internally valid."""
+    def is_valid(self) -> bool:
+        """Return True if the database is internally valid."""
         conn = self.get_connection()
         cursor = conn.cursor()
 
@@ -356,19 +356,6 @@ class IvertJobsDatabaseBaseClass:
             return True
         else:
             return False
-
-    def is_file_in_database(self, filename: str, username: str, job_id: str) -> bool:
-        """Returns True if the file is in the database."""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT count(*) FROM ivert_files WHERE filename = ? AND username = ? AND job_id = ?",
-                       (filename, username, job_id))
-        count = cursor.fetchone()[0]
-        if count == 0:
-            return False
-        else:
-            assert count == 1
-            return True
 
     def len(self, table_name: str) -> int:
         """Return how many rows exist in the given table.
@@ -428,7 +415,12 @@ class IvertJobsDatabaseBaseClass:
         conn = self.get_connection()
         return pandas.read_sql_query(query, conn)
 
-
+    def get_sns_arn(self, email: str) -> str:
+        """Get the SNS ARN for the given email address."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT sns_arn FROM sns_subscriptions WHERE user_email = '{email}';")
+        return cursor.fetchone()[0]
 
 class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
     """Class for managing the IVERT jobs database on the EC2 (server).
@@ -516,13 +508,22 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
 
         Returns:
             None
+
+        Raises:
+            ValueError: If the job does not exist in the database.
         """
         # Convert job_id to int if it's a string
         job_id = int(job_id)
 
         # First check to see if the job exists
-        if not self.job_exists(job_username, job_id):
-            raise RuntimeError(f"Job {job_username}_{job_id} does not exist in the database.")
+        results = self.job_exists(job_username, job_id, return_row=True)
+        if results:
+            # Check to see if the status is different. If not, don't do anything.
+            if results['status'] == status:
+                return
+        else:
+            raise ValueError(f"Job {job_username}_{job_id} does not exist in the database.")
+
 
         # Connect to the database
         conn = self.get_connection()
@@ -538,25 +539,132 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
         # Increment the database version number
         if increment_vnumber:
             self.increment_vnumber(cursor)
-            conn.commit()
+
+        conn.commit()
 
         # Upload the database to the S3 bucket
         if upload_to_s3:
             self.upload_to_s3(only_if_newer=False)
 
-        pass
+        return
 
-    def update_file_processing_status(self, jobs_file_id: int, status: str):
+    def update_file_status(self,
+                           username: str,
+                           job_id: typing.Union[int, str],
+                           filename: str,
+                           status: str,
+                           increment_vnumber: bool = True,
+                           upload_to_s3: bool = True) -> None:
         """
         Updates a file record in the existing database.
 
         Args:
+            username (str): The username of the job.
+            job_id (int or str): The ID of the job.
+            filename (str): The name of the file.
+            status (str): The new status of the file. Look in ivert_jobs_schema.sql::ivert_files::status for the possible statuses.
+            increment_vnumber (bool): Whether to increment the database version number. This may be set to false if we're making other sequential changes.
+            upload_to_s3 (bool): Whether to upload the database to the S3 bucket. Default True.
 
         Returns:
             None
+
+        Raises:
+            ValueError: If the file does not exist in the database.
         """
-        # TODO: Implement, and define all the possible arguments here.
-        pass
+        # Convert job_id to str if it's an int
+        job_id = str(job_id)
+        # Use only the basename of the filename. Paths are stored in the ivert_jobs table.
+        file_basename = os.path.basename(filename)
+
+        # First check to see if the file exists
+        result = self.file_exists(file_basename, username, job_id, return_row=True)
+        if result:
+            # Check to see if the status is different. If not, don't do anything.
+            if result['status'] == status:
+                return
+        else:
+            raise ValueError(f"File {file_basename} does not exist in the database.")
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        update_stmt = """UPDATE ivert_files
+                         SET status = ?
+                         WHERE username = ? AND job_id = ? AND filename = ?;"""
+
+        cursor.execute(update_stmt, (status, username, job_id, file_basename))
+
+        # Increment the database version number
+        if increment_vnumber:
+            self.increment_vnumber(cursor)
+
+        # Commit the changes
+        conn.commit()
+
+        # Upload the database to the S3 bucket
+        if upload_to_s3:
+            self.upload_to_s3(only_if_newer=False)
+
+        return
+
+    def update_file_statistics(self,
+                               username: str,
+                               job_id: typing.Union[int, str],
+                               filename: str,
+                               increment_vnumber: bool = True,
+                               upload_to_s3: bool = True) -> None:
+        """
+        Updates a file record in the existing database with new md5 and file size statistics.
+
+        A file record can be created and then the file changed (such as a job logfile, for instance).
+        If that happens, use this method to update the statistics in the table.
+
+        Args:
+            username (str): The username of the job.
+            job_id (int or str): The ID of the job.
+            filename (str): The name of the file.
+            increment_vnumber (bool): Whether to increment the database version number. This may be set to false if we're making other sequential changes.
+            upload_to_s3 (bool): Whether to upload the database to the S3 bucket. Default True.
+
+        Returns:
+            None
+
+        Raises:
+            ValueError: If the file does not exist in the database.
+        """
+        # Convert job_id to str if it's an int
+        job_id = str(job_id)
+        file_basename = os.path.basename(filename)
+
+        if not os.path.exists(filename):
+            raise ValueError(f"File {filename} does not exist.")
+
+        # Compute the stats
+        md5 = self.s3m.compute_md5(filename)
+        size_bytes = os.path.getsize(filename)
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        update_query = """UPDATE ivert_files
+                          SET md5 = ?, size_bytes = ?
+                          WHERE username = ? AND job_id = ? AND filename = ?;"""
+
+        cursor.execute(update_query, (md5, size_bytes, username, job_id, file_basename))
+
+        # Increment the database version number
+        if increment_vnumber:
+            self.increment_vnumber(cursor)
+
+        # Commit the changes
+        conn.commit()
+
+        # Upload the database to the S3 bucket
+        if upload_to_s3:
+            self.upload_to_s3(only_if_newer=False)
+
+        return
 
     def upload_to_s3(self, only_if_newer: bool = True) -> None:
         """
@@ -642,13 +750,14 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
         conn = self.get_connection()
         c = conn.cursor()
         c.execute("INSERT INTO ivert_jobs (command, username, job_id, import_prefix, configfile, "
-                  "command_args, logfile, input_dir_local, output_dir_local, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                  "command_args, logfile, input_dir_local, output_dir_local, job_pid, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                  (jco.ivert_command, jco.username, jco.job_id, jco.job_upload_prefix,
                   os.path.basename(job_configfile),
                   str(job_config_obj.cmd_args),
                   os.path.basename(job_logfile),
                   job_local_dir.removeprefix(self.ivert_config.ivert_jobs_directory_local),
                   job_local_output_dir.removeprefix(self.ivert_config.ivert_jobs_directory_local),
+                  os.getpid(),
                   job_status.strip().lower()))
 
         self.increment_vnumber(c)
@@ -692,6 +801,7 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
         if not self.job_exists(username, job_id):
             raise ValueError(f"Job '{username}_{job_id} does not exist in the IVERT jobs database.")
 
+        # Get just the basename of the filename. Strip any directories.
         f_basename = os.path.basename(filename)
 
         existing_row = self.file_exists(f_basename, username, job_id, return_row=True)
@@ -699,10 +809,12 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
             return existing_row
 
         if fake_file_stats:
+            # Providing fake values here is useful if there was an error processing the file and the file itself
+            # doesn't exist on disk but we are still logging it as an error.
             file_md5 = "-" * 32
             file_size = 0
         else:
-            # Get just the basename of the filename. Strip any directories.
+            # If the file exists, compute the md5 and the size of it.
             file_md5 = self.s3m.compute_md5(filename)
             file_size = os.stat(filename).st_size
 
@@ -711,8 +823,13 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("INSERT INTO ivert_files (job_id, username, filename, import_or_export, size_bytes, md5, status) "
-                       "VALUES (?, ?, ?, ?, ?, ?, ?);",
+        insert_query = """INSERT INTO ivert_files
+                          (job_id, username, filename, import_or_export, size_bytes, md5, status)
+                          VALUES (?, ?, ?, ?, ?, ?, ?);
+                          """
+
+        # Insert the new file into the database
+        cursor.execute(insert_query,
                        (job_id,
                         username,
                         f_basename,
@@ -760,48 +877,61 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
                                           username: str,
                                           email: str,
                                           topic_arn: str,
+                                          sns_arn: str,
                                           sns_filter_string: typing.Union[str, None],
-                                          sns_arn: str):
+                                          increment_vnum: bool = True,
+                                          upload_to_s3: bool = True) -> None:
         """Create a record of a new SNS subscription. If this record alredy exists, update it."""
         # First, see if this subscription already exists or not.
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT count(*) FROM sns_subscriptions WHERE user_email = ? AND topic_arn = ? AND sns_arn = ?;",
+        cursor.execute("SELECT * FROM sns_subscriptions WHERE user_email = ? AND topic_arn = ? AND sns_arn = ?;",
                        (email, topic_arn, sns_arn))
-        count = cursor.fetchone()[0]
-        if count == 0:
+        result = cursor.fetchone()
+        if result is None:
             # The sns subscription doesn't exist. Create a new record.
             cursor.execute("INSERT INTO sns_subscriptions (username, user_email, topic_arn, sns_filter_string, sns_arn) "
                            "VALUES (?, ?, ?, ?, ?);",
                            (username, email, topic_arn, sns_filter_string, sns_arn))
         else:
-            assert count == 1
             cursor.execute("UPDATE sns_subscriptions SET username = ?, sns_filter_string = ? "
                            "WHERE user_email = ? AND topic_arn = ? AND sns_arn = ?;",
                            (username, sns_filter_string, email, topic_arn, sns_arn))
 
+        if increment_vnum:
+            self.increment_vnumber(cursor)
+
         conn.commit()
-        self.increment_vnumber()
-        self.upload_to_s3()
+
+        if upload_to_s3:
+            self.upload_to_s3()
 
     def remove_sns_subscription(self,
                                 email: str,
-                                topic_arn: str,
-                                sns_arn: str):
+                                update_vnum: bool = True,
+                                upload_to_s3: bool = True) -> None:
         "Remove a record of an SNS subscription from the database."
         # First, see if this subscription already exists or not.
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT count(*) FROM sns_subscriptions WHERE user_email = ? AND topic_arn = ? AND sns_arn = ?;",
-                       (email, topic_arn, sns_arn))
+        cursor.execute("SELECT count(*) FROM sns_subscriptions WHERE user_email = ?;",
+                       (email))
         count = cursor.fetchone()[0]
         if count == 0:
             # If it doesn't exist, just return. Nothing to do here.
             return
 
-        cursor.execute("DELETE FROM sns_subscriptions WHERE user_email = ? AND topic_arn = ? AND sns_arn = ?;")
+        cursor.execute("DELETE FROM sns_subscriptions WHERE user_email = ?;")
+
+        if update_vnum:
+            self.increment_vnumber(cursor)
+
+        conn.commit()
+
+        if upload_to_s3:
+            self.upload_to_s3(only_if_newer=False)
 
 
     def __del__(self):
