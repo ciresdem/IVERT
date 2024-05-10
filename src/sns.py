@@ -63,7 +63,7 @@ def subscribe(email: str,
         raise ValueError(f"'{email}' is not a valid email address.")
 
     # Get the SNS topic ARN from the ivert_config object (which fetches it from ivert_setup/setup/paths.sh).
-    topic_arn = ivert_config.sns_arn
+    topic_arn = ivert_config.sns_topic_arn
     assert topic_arn is not None
 
     if type(username_filter) is str:
@@ -83,6 +83,11 @@ def subscribe(email: str,
                              )
 
     return reply["SubscriptionArn"]
+
+
+def topic_arn():
+    "Return the currently-used SNS topic arn."
+    return ivert_config.sns_topic_arn
 
 
 def define_and_parse_args() -> argparse.Namespace:
