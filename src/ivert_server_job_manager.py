@@ -534,12 +534,13 @@ class IvertJob:
 
         elif start_or_finish == "finish":
             email_templates = utils.configfile.config(self.ivert_config.ivert_email_templates)
-            files_df = self.collect_job_file_df()
+            files_df = self.collect_job_files_df()
+            # TODO: FINISH
 
         else:
             raise ValueError(f"parameter 'start_or_finish' must be one of 'start', or 'finish'. '{start_or_finish}' not recoginzed.")
 
-    def collect_job_file_df(self) -> pandas.DataFrame:
+    def collect_job_files_df(self) -> pandas.DataFrame:
         """From the ivert_files database, collect the status of all files associated with a given job, both inputs and outputs."""
         # Query the database to get the table as a pandas dataframe.
         files_df = self.jobs_db.read_table_as_pandas_df("files", self.username, self.job_id)
@@ -616,7 +617,9 @@ class IvertJob:
         self.upload_file_to_export_bucket(self.logfile)
 
     def upload_file_to_export_bucket(self, fname: str):
-        """When exporting a file, upload it here. Also add an entry to the jobs_database for this export."""
+        """When exporting a file, upload it here and update the file's status in the database.
+
+        If the file doesn't yet exist in the databse, add an entry to the jobs_database for this exported file."""
         if not os.path.exists(fname):
             return
 
@@ -627,7 +630,51 @@ class IvertJob:
         # Upload the file.
         self.s3m.upload(fname, f_key, bucket_type=self.export_bucket_type)
         # Add an export file entry into the database for this job.
-        self.jobs_db.create_new_file_record(fname, self.job_id, self.username, 1, status="uploaded")
+        if self.jobs_db.file_exists(self.username, self.job_id, fname):
+            self.jobs_db.update_file_status(self.username, self.job_id, fname, "uploaded")
+        else:
+            self.jobs_db.create_new_file_record(fname, self.job_id, self.username, 1, status="uploaded")
+
+        return
+
+    def upload_export_files(self):
+        """Upload any files that are set to the exported to the export bucket."""
+        # Get a list of all the job files associated with this job.
+        job_files_df = self.collect_job_files_df()
+        # Filter the list to only include files that are marked for export.
+        export_files_df = job_files_df[job_files_df["import_or_export"] >= 1]
+
+        # If there are no files to export, do nothing.
+        if len(export_files_df) == 0:
+            return
+
+        # Retrieve the local paths to the job files from the job.
+        job_row = self.jobs_db.job_exists(self.username, self.job_id, return_row=True)
+        assert job_row
+        job_local_path = job_row["input_dir_local"]
+        job_output_path = job_row["output_dir_local"]
+
+        # Iterate over each file.
+        for index, row in export_files_df.iterrows():
+            f_basename = row["filename"]
+
+            f_path = os.path.join(job_output_path, f_basename)
+            f_path_other = os.path.join(job_local_path, f_basename)
+
+            if os.path.exists(f_path):
+                # Upload the file.
+                self.upload_file_to_export_bucket(str(f_path))
+            elif os.path.exists(f_path_other)
+                # Or, upload the other file if it exists.
+                self.upload_file_to_export_bucket(str(f_path_other))
+            elif row["status"] in ["error", "timeout", "quarantined", "unknown"]:
+                # If we'd already had a problem with this file, leave the status as it was.
+                continue
+            else:
+                # Otherwise, change the status to 'error'. Something's wrong if we can't find the file.
+                self.jobs_db.update_file_status(self.username, self.job_id, f_basename, "error")
+                # Also put a message in the logfile.
+                self.write_to_logfile("Error: File not found: " + f_path)
 
         return
 
@@ -666,12 +713,6 @@ class IvertJob:
                                                            )
 
             self.update_job_status("complete")
-
-            self.write_to_logfile(f"Job {self.job_config_object.job_name} log:\n\n"
-                                  f"{cmd_args['email']} has been subscribed to IVERT SNS notifications" + \
-                                  (f" using filter '{filter_string}'" if filter_string else "")
-                                  + ".\n"
-                                  "You may run 'ivert unsubscribe', or click the 'unsubscribe' link at the bottom of any of your notification emails, to stop receiving such messages.")
 
         except KeyboardInterrupt as e:
             self.update_job_status("killed")
