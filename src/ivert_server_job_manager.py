@@ -623,9 +623,12 @@ class IvertJob:
         if not os.path.exists(fname):
             return
 
-        f_key = self.ivert_config.s3_export_prefix_base + \
-                "/".join(self.s3_configfile_key.split("/")[:-1]).removeprefix(self.ivert_config.s3_import_prefix_base) + \
-                "/" + os.path.basename(fname)
+        export_prefix = self.jobs_db.populate_export_prefix_if_not_set(self.username,
+                                                                       self.job_id,
+                                                                       increment_vnum=False,
+                                                                       upload_to_s3=False)
+
+        f_key = export_prefix + os.path.basename(fname)
 
         # Upload the file.
         self.s3m.upload(fname, f_key, bucket_type=self.export_bucket_type)

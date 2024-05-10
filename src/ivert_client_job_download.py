@@ -4,6 +4,7 @@ import argparse
 import os
 
 import ivert_jobs_database
+import s3
 import utils.configfile
 
 ivert_config = utils.configfile.config()
@@ -30,9 +31,28 @@ def find_matching_job_dir(job_name: str) -> str:
 def download_job(job_name: str,
                  dest: str) -> None:
     """Download the job results from the S3 bucket."""
+    # Parse the job name in the format username_jobid
+    assert job_name.find("_") != -1
+
+    username = job_name[:job_name.rfind("_")]
+    job_id = int(job_name[job_name.rfind("_") + 1:])
+
     # First, grab the database from the s3 bucket.
     db = ivert_jobs_database.JobsDatabaseClient()
+    db.download_from_s3(only_if_newer=True)
 
+    # Get the s3 prefix for downloaded files from the database
+    job_row = db.job_exists(username, job_id, return_row=True)
+    if not job_row:
+        raise ValueError(f"Could not find job with name {job_name} in the IVERT jobs database.")
+
+    export_prefix = job_row["export_prefix"]
+
+    export_glob_str = export_prefix + ("*" if export_prefix[-1] == "/" else "/*")
+
+    # Download the results
+    s3m = s3.S3Manager()
+    s3m.download(export_glob_str, dest, bucket_type="export", progress_bar=True)
 
 
 def define_and_parse_args() -> argparse.Namespace:

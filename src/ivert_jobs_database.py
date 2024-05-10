@@ -717,6 +717,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
                        job_logfile: str,
                        job_local_dir: str,
                        job_local_output_dir: str,
+                       job_export_prefix: typing.Union[str, None] = None,
                        job_status: str = "unknown",
                        skip_database_upload: bool = False,
                        ) -> sqlite3.Row:
@@ -756,9 +757,14 @@ class JobsDatabaseServer(JobsDatabaseClient):
         # Insert the new job into the database
         conn = self.get_connection()
         c = conn.cursor()
-        c.execute("INSERT INTO ivert_jobs (command, username, job_id, import_prefix, configfile, "
-                  "command_args, logfile, input_dir_local, output_dir_local, job_pid, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                 (jco.ivert_command, jco.username, jco.job_id, jco.job_upload_prefix,
+        c.execute("INSERT INTO ivert_jobs (command, username, job_id, import_prefix, export_prefix, configfile, "
+                  "command_args, logfile, input_dir_local, output_dir_local, job_pid, status) "
+                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                 (jco.ivert_command,
+                  jco.username,
+                  jco.job_id,
+                  jco.job_upload_prefix,
+                  job_export_prefix,
                   os.path.basename(job_configfile),
                   str(job_config_obj.cmd_args),
                   os.path.basename(job_logfile),
@@ -775,6 +781,42 @@ class JobsDatabaseServer(JobsDatabaseClient):
 
         existing_row = self.job_exists(jco.username, jco.job_id, return_row=True)
         return existing_row
+
+    def populate_export_prefix_if_not_set(self,
+                                          username: str,
+                                          job_id: typing.Union[int, str],
+                                          increment_vnum: bool = True,
+                                          upload_to_s3: bool = True) -> str:
+        """For a given job, if we're exporting files, populate the export_prefix field in the database."""
+        job_row = self.job_exists(username, job_id, return_row=True)
+        if not job_row:
+            raise ValueError(f"Job ({username}, {job_id}) does not exist in the database.")
+
+        if job_row["export_prefix"] is not None:
+            return job_row["export_prefix"]
+
+        # Get the export prefix from the config file.
+        export_base_prefix = self.ivert_config.s3_export_prefix_base + "jobs/"
+
+        export_prefix = export_base_prefix + self.ivert_config.s3_ivert_job_subdirs_template \
+                                                .replace("[command]", job_row["command"]) \
+                                                .replace("[username]", job_row["username"]) \
+                                                .replace("[job_id]", job_row["job_id"]) + "/"
+
+        conn = self.get_connection()
+        c = conn.cursor()
+        c.execute("UPDATE ivert_jobs SET export_prefix = ? WHERE username = ? AND job_id = ?;",
+                  (export_prefix, username, job_id))
+
+        if increment_vnum:
+            self.increment_vnumber(c)
+
+        conn.commit()
+
+        if upload_to_s3:
+            self.upload_to_s3(only_if_newer=False)
+
+        return export_prefix
 
     def create_new_file_record(self,
                                filename: str,
