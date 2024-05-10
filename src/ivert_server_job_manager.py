@@ -543,7 +543,7 @@ class IvertJob:
     def collect_job_files_df(self) -> pandas.DataFrame:
         """From the ivert_files database, collect the status of all files associated with a given job, both inputs and outputs."""
         # Query the database to get the table as a pandas dataframe.
-        files_df = self.jobs_db.read_table_as_pandas_df("files", self.username, self.job_id)
+        return self.jobs_db.read_table_as_pandas_df("files", self.username, self.job_id)
 
     def convert_cmd_args_to_string(self):
         "Convert the command arguments to a string for the purpose of sending a message to the user."
