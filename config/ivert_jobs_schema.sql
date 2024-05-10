@@ -23,18 +23,15 @@ CREATE TABLE IF NOT EXISTS ivert_jobs (
 
     -- The buckets on the import (trusted) directory where the files will be found.
     import_prefix   VARCHAR(1024)   NOT NULL,
-    import_bucket   VARCHAR(64)     NOT NULL,
 
     -- some jobs may have no export needed. In that case, the 'export_prefix' and 'export_bucket' remain null.
     export_prefix   VARCHAR(1024),
-    export_bucket   VARCHAR(64),
 
     -- command will be the primary command being run: 'validate', 'update', 'import'.
     command         VARCHAR(16)     NOT NULL,
 
-    -- the full command-line options of the command, listed in the configfile.
-    command_full    VARCHAR(2048)   NOT NULL,
-
+    -- the full command-line options of the command, as listed in the configfile.
+    command_args    VARCHAR(2048)   NOT NULL,
     -- every job should come with a config .ini file. The name of it goes here.
     configfile      VARCHAR(128)    NOT NULL,
 
@@ -92,7 +89,7 @@ CREATE TABLE IF NOT EXISTS ivert_files (
 
     -- Status of the individual file.
     status              VARCHAR(16)     NOT NULL    DEFAULT 'unknown'
-                            CHECK (status in ('downloaded', 'processing', 'processed',
+                            CHECK (status in ('downloaded', 'timeout', 'processing', 'processed',
                                               'uploaded', 'error', 'quarantined', 'unknown')),
 
     -- The job_id, username, filename tuple should be unique.
