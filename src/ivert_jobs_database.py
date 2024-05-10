@@ -972,7 +972,8 @@ class JobsDatabaseServer(JobsDatabaseClient):
             # If it doesn't exist, just return. Nothing to do here.
             return
 
-        cursor.execute("DELETE FROM sns_subscriptions WHERE user_email = ?;")
+        cursor.execute("DELETE FROM sns_subscriptions WHERE user_email = ?;",
+                       (email,))
 
         if update_vnum:
             self.increment_vnumber(cursor)
