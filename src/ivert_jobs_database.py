@@ -245,7 +245,7 @@ class IvertJobsDatabaseBaseClass:
             if results is None:
                 return False
             else:
-                return results.fetchone()[0]
+                return results
         else:
             cur.execute("SELECT count(*) FROM ivert_jobs WHERE username = ? AND job_id = ?;", (username, job_id))
             count = cur.fetchone()[0]
