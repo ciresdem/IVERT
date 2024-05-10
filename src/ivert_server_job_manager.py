@@ -355,10 +355,7 @@ class IvertJob:
 
         # The logfile to write output text and status messages.
         self.logfile = os.path.join(self.output_dir,
-                                    os.path.basename(self.job_config_local).replace(".ini", "_log.txt"))
-
-        print(self.logfile)
-        foobar
+                                    self.job_config_s3_key.split("/")[-1].replace(".ini", "_log.txt"))
 
         return
 
