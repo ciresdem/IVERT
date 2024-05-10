@@ -160,7 +160,7 @@ class config:
         assert hasattr(self, "s3_bucket_import_trusted")
         assert hasattr(self, "s3_bucket_export")
         if include_sns_arn:
-            assert hasattr(self, "sns_arn")
+            assert hasattr(self, "sns_topic_arn")
 
         if not os.path.exists(self.ivert_setup_paths_file):
             raise FileNotFoundError(f"ivert_setup_paths_file not found: {self.ivert_setup_paths_file}")
@@ -196,9 +196,9 @@ class config:
         if include_sns_arn:
             try:
                 sns_line = [line for line in paths_text_lines if line.lower().startswith("cudem_sns_arn")][0]
-                self.sns_arn = sns_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
+                self.sns_topic_arn = sns_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
             except IndexError:
-                self.sns_arn = None
+                self.sns_topic_arn = None
 
         # Check to see if any of these just reference other variables. If so, fill them in. This could just point
         # to another variable, so keep looping until we've gotten an actual value.
