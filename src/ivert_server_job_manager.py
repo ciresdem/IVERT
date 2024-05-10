@@ -602,6 +602,7 @@ class IvertJob:
         if not os.path.exists(self.logfile):
             return
 
+        self.upload_file_to_export(self.logfile)
 
     def upload_file_to_export(self, fname: str):
         """When exporting a file, upload it here. Also add an entry to the jobs_database for this export."""
@@ -646,6 +647,14 @@ class IvertJob:
                                                            sns_arn)
 
             self.update_job_status("complete")
+
+            self.write_to_logfile(f"Job {self.job_config_object.job_name} log:\n\n"
+                                  f"{job.job_cmd_args["email"]} has been subscribed to IVERT SNS notifications" + \
+                                  (f" using filter '{filter_string}'" if filter_string else "")
+                                  + ".\n"
+                                  "You may run 'ivert unsubscribe', or click the 'unsubscribe' link at the bottom of any of your notification emails, to stop receiving such messages.")
+
+
 
         except KeyboardInterrupt as e:
             self.update_job_status("killed")
