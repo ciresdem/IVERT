@@ -606,7 +606,7 @@ class IvertJob:
             return
 
         f_key = self.ivert_config.s3_export_prefix_base + \
-                "/".join(self.s3_configfile_key.split("/")[-1]).removeprefix(self.ivert_config.s3_import_prefix_base) + \
+                "/".join(self.s3_configfile_key.split("/")[:-1]).removeprefix(self.ivert_config.s3_import_prefix_base) + \
                 "/" + os.path.basename(fname)
 
         print(f_key)
