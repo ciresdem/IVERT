@@ -11,6 +11,7 @@ import argparse
 import multiprocessing as mp
 import numpy
 import os
+import pandas
 import psutil
 import string
 import subprocess
@@ -165,7 +166,7 @@ class IvertJobManager:
         for s3_key in files_in_bucket:
             fname = s3_key.split("/")[-1]
             s3_params = self.jobs_db.get_params_from_s3_path(s3_key, bucket_type=self.input_bucket_type)
-            if not self.jobs_db.is_file_in_database(fname, s3_params['username'], s3_params['job_id']):
+            if not self.jobs_db.file_exists(fname, s3_params['username'], s3_params['job_id']):
                 new_files.append(s3_key)
 
         return new_files
@@ -312,21 +313,22 @@ class IvertJob:
 
         # 7. Run the job!
         # -- Figure out how to monitor the status of the job as it goes along.
+        self.update_job_status("running")
         self.execute_job()
 
         # 8. Upload export files to the S3 bucket (if any). Enter them into the database.
-        # TODO
+        self.upload_export_files()
 
         # 9. Upload the logfile (if exists) and enter in database. (Upload to s3)
         self.export_logfile_if_exists()
 
         # 10. Mark the job as finished in the jobs database. (Upload to s3)
-        # TODO
+        self.update_job_status("complete")
 
         # 11. Send SNS notification that the job has finished.
         self.push_sns_notification(start_or_finish="finish")
 
-        # 12. Delete the local job files & folders.
+        # 12. After exporting output files, delete the local job files & folders.
         self.delete_local_job_folders()
 
     def create_local_job_folders(self):
@@ -530,28 +532,24 @@ class IvertJob:
 
             sns.send_sns_message(subject_line, body, self.job_id, self.username)
 
-
         elif start_or_finish == "finish":
             email_templates = utils.configfile.config(self.ivert_config.ivert_email_templates)
-            # TODO: FINISH THIS FOR A DONE JOB.
-
+            files_df = self.collect_job_file_df()
 
         else:
             raise ValueError(f"parameter 'start_or_finish' must be one of 'start', or 'finish'. '{start_or_finish}' not recoginzed.")
 
-    def collect_job_file_counts(self):
+    def collect_job_file_df(self) -> pandas.DataFrame:
         """From the ivert_files database, collect the status of all files associated with a given job, both inputs and outputs."""
         # Query the database to get the table as a pandas dataframe.
         files_df = self.jobs_db.read_table_as_pandas_df("files", self.username, self.job_id)
-        print(files_df)
-
 
     def convert_cmd_args_to_string(self):
         "Convert the command arguments to a string for the purpose of sending a message to the user."
-        command_str = self.command
-        for key, val in self.job_cmd_args.items():
+        command_str = self.job_config_object.command
+        for key, val in self.job_config_object.cmd_args.items():
             command_str = command_str + f" {key}={val}"
-        for fname in self.job_files:
+        for fname in self.job_config_object.files:
             command_str = command_str + " " + (f'"{fname}"' if self.contains_whitespace(fname) else fname)
 
         return command_str
@@ -584,17 +582,22 @@ class IvertJob:
                 self.run_subscribe_command()
 
             elif sub_command == "unsubscribe":
-                pass
+                self.run_unsubscribe_command()
 
     def write_to_logfile(self, message):
         """Write out to the job's logfile."""
         if os.path.exists(self.logfile):
             f = open(self.logfile, "a")
         else:
+            # Create a database record of the log file.
+            self.jobs_db.create_new_file_record(self.logfile, self.job_id, self.username, import_or_export=1,
+                                                status="processing", skip_database_upload=False, fake_file_stats=True)
+            # Then create the file.
             f = open(self.logfile, "w")
 
         f.write(message)
         # Put a newline at the end of any given message, if it's not already there.
+        # That way the next message will be on a new line.
         if message[-1] != '\n':
             f.write('\n')
 
@@ -606,6 +609,9 @@ class IvertJob:
         Also add an entry to the jobs_database for this logfile export."""
         if not os.path.exists(self.logfile):
             return
+
+        # We're assuming at this point that the log-file is complete. Update the file stats in the database.
+        self.jobs_db.update_file_statistics(self.username, self.job_id, self.logfile)
 
         self.upload_file_to_export_bucket(self.logfile)
 
@@ -625,10 +631,13 @@ class IvertJob:
 
         return
 
-
     def update_job_status(self, status):
         "Update the job status in the database."
         self.jobs_db.update_job_status(self.username, self.job_id, status)
+
+    def update_file_status(self, filename, status):
+        """Update the file status in the database."""
+        self.jobs_db.update_file_status(self.username, self.job_id, filename, status)
 
     def run_subscribe_command(self):
         "Run a 'subscribe' command to subscribe a user to an SNS notification service."
@@ -655,8 +664,11 @@ class IvertJob:
             self.jobs_db.create_or_update_sns_subscription(self.username,
                                                            cmd_args["email"],
                                                            topic_arn,
+                                                           sns_arn,
                                                            filter_string,
-                                                           sns_arn)
+                                                           increment_vnum=False,
+                                                           upload_to_s3=False
+                                                           )
 
             self.update_job_status("complete")
 
@@ -675,11 +687,33 @@ class IvertJob:
             self.update_job_status("error")
             return
 
-
         self.update_job_status("complete")
         return
 
+    def run_unsubscribe_command(self):
+        "Run a 'unsubscribe' command to unsubscribe a user from an SNS notification service."
+        cmd_args = self.job_config_object.cmd_args
 
+        try:
+            assert "sub_command" in cmd_args and cmd_args["sub_command"] == "unsubscribe"
+            assert "email" in cmd_args
+
+            sns_arn = self.jobs_db.get_sns_arn(cmd_args["email"])
+            sns.unsubscribe(sns_arn)
+
+            self.jobs_db.remove_sns_subscription(cmd_args["email"], update_vnum=False, upload_to_s3=False)
+
+        except KeyboardInterrupt as e:
+            self.update_job_status("killed")
+            return
+
+        except Exception as e:
+            self.write_to_logfile("ERROR encountered:\n" + str(e))
+            self.update_job_status("error")
+            return
+
+        # Do the version update and the upload here.
+        self.update_job_status("complete")
 
 def define_and_parse_arguments() -> argparse.Namespace:
     """Defines and parses the command line arguments.
