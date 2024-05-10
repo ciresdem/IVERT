@@ -84,6 +84,22 @@ def subscribe(email: str,
 
     return reply["SubscriptionArn"]
 
+def unsubscribe(subscription_arn: str) -> str:
+    """Unsubscribe an email address from the IVERT AWS SNS topic.
+
+    Args:
+        subscription_arn (str): The subscription ARN to unsubscribe.
+
+    Returns:
+        A string of the subscription ARN of the new subscription just created.
+    """
+    client = boto3.client('sns')
+
+    # Send the message.
+    reply = client.unsubscribe(SubscriptionArn=subscription_arn)
+
+    return reply
+
 
 def topic_arn():
     "Return the currently-used SNS topic arn."
