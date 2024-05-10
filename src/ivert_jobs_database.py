@@ -240,14 +240,39 @@ class IvertJobsDatabaseBaseClass:
         conn = self.get_connection()
         cur = conn.cursor()
         if return_row:
-            results = cur.execute("SELECT * FROM ivert_jobs WHERE username = ? AND job_id = ?",
+            results = cur.execute("SELECT * FROM ivert_jobs WHERE username = ? AND job_id = ?;",
                                   (username, job_id)).fetchone()
             if results is None:
                 return False
             else:
-                return results
+                return results.fetchone()[0]
         else:
-            cur.execute("SELECT count(*) FROM ivert_jobs WHERE username = ? AND job_id = ?", (username, job_id))
+            cur.execute("SELECT count(*) FROM ivert_jobs WHERE username = ? AND job_id = ?;", (username, job_id))
+            count = cur.fetchone()[0]
+            if count == 0:
+                return False
+            else:
+                assert count == 1
+                return True
+
+    def file_exists(self, filename, username, job_id, return_row: bool = False) -> typing.Union[bool, sqlite3.Row]:
+        """Returns True/False whether the (filename, username, job_id) file already exists in the ivert_files table or not.
+
+        If return_row is True, then it returns to the sqlite3.Row object for the file record if it exists."""
+        conn = self.get_connection()
+        cur = conn.cursor()
+        if return_row:
+            results = cur.execute("SELECT * FROM ivert_files WHERE filename = ? AND username = ? AND job_id = ?;",
+                                  (filename, username, job_id))
+
+            if results is None:
+                return False
+            else:
+                return results.fetchone()[0]
+
+        else:
+            cur.execute("SELECT count(*) FROM ivert_files WHERE filename = ? AND username = ? AND job_id = ?;",
+                        (filename, username, job_id))
             count = cur.fetchone()[0]
             if count == 0:
                 return False
@@ -512,7 +537,11 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
 
     def create_new_job(self,
                        job_config_obj: utils.configfile.config,
-                       job_s3_import_config_bucket_type: str = 'trusted',
+                       job_configfile: str,
+                       job_logfile: str,
+                       job_local_dir: str,
+                       job_local_output_dir: str,
+                       job_status: str = "unknown",
                        skip_database_upload: bool = False,
                        ) -> sqlite3.Row:
         """
@@ -522,46 +551,122 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
         No files are created here.
 
         Args:
+            job_config_obj (utils.configfile.config object): A parsed configuraiton object of the job_config.ini file.
+            job_configfile (str): the name of the job configuration file.
+            job_logfile (str): the name of the logfile for this job.
+            job_local_dir (str): the local directory where this job's files will be downloaded.
+            job_local_output_dir (str): the local directory where this job's output files will be written.
+            job_status (str): The status of the job upon creation in the database. Defaults to "unknown."
+            skip_database_upload (bool): Whether to skip uploading the new version of the database after inserting this record. Default: Upload the database.
 
         Returns:
-            The database row (record) of the new job.
+            The database row (record) of the new job, including created fields for the logfile, input_dir_local, output_dir_local, etc.
         """
         # job_config_obj should be a configfile.config object with fields defined in
         # config/ivert_job_config_TEMPLATE.ini
-        assert hasattr(job_config_obj, "username")
-        assert hasattr(job_config_obj, "")
+        jco = job_config_obj
+        assert hasattr(jco, "ivert_command")
+        assert hasattr(jco, "username")
+        assert hasattr(jco, "job_id")
+        assert hasattr(jco, "job_upload_prefix")
+        assert hasattr(jco, "cmd_args")
 
         # Check if the (username, job_id) tuple already exists in the database.
         # If so, just return it.
-        existing_row = self.job_exists(username, job_id, return_row=True)
+        existing_row = self.job_exists(jco.username, jco.job_id, return_row=True)
         if existing_row:
             return existing_row
 
-        # TODO: Finish Implementing
         # Insert the new job into the database
-        c = self.get_connection().cursor()
-        c.execute("INSERT INTO ivert_jobs (command, username, job_id, import_prefix, import_bucket, configfile, ) VALUES (?, ?, ?);", (command, username, job_id))
-        pass
+        conn = self.get_connection()
+        c = conn.cursor()
+        c.execute("INSERT INTO ivert_jobs (command, username, job_id, import_prefix, configfile, "
+                  "command_args, logfile, input_dir_local, output_dir_local, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                 (jco.ivert_command, jco.username, jco.job_id, jco.job_upload_prefix,
+                  os.path.basename(job_configfile),
+                  os.path.basename(job_logfile),
+                  job_local_dir.removeprefix(self.ivert_config.ivert_jobs_directory_local),
+                  job_local_output_dir.removeprefix(self.ivert_config.ivert_jobs_directory_local),
+                  job_status.strip().lower()))
+
+        self.increment_vnumber(c)
+        conn.commit()
+
+        if not skip_database_upload:
+            self.upload_to_s3(only_if_newer=False)
+
+        existing_row = self.job_exists(jco.username, jco.job_id, return_row=True)
+        return existing_row
 
     def create_new_file_record(self,
                                filename: str,
                                job_id: int,
                                username: str,
-                               import_or_export: int):
+                               import_or_export: int,
+                               status: str = "unknown",
+                               skip_database_upload: bool = False,
+                               fake_file_stats: bool = False,
+                               ) -> sqlite3.Row:
         """
         Create a new file record in the database. The (username, job_id) tuple must already exist in the ivert_jobs table.
 
         Args:
-            filename (str): The basename of the file being processed.
+            filename (str): The file name being processed. Only the basename will be saved in the database (directory will be stripped).
+                            The file should already exist locally (have been downloaded).
             job_id (int): The ID of the job in the "ivert_jobs" table.
             username (str): The username of the user who submitted the job.
             import_or_export (int): Whether the file is being imported (0), exported (1), or both (2).
+            status (str): The initial status to assign to the job in the database. Default "unknown". Look in ivert_jobs_schema.sql for other options.
+            skip_database_upload (bool): Whether or not to skip uploading the database after this operation is performed.
+            fake_file_stats (bool): If the file doesn't exist locally, just put blank entries for the file statistics.
+                                    This happens when we're just logging an error message about a file that wasn't downloaded or was quarantined.
 
         Returns:
-            None
+            A sqlite3.Row object of the new row creatd (or the row that exists).
+
+        Raises:
+            ValueError: If a job matching the (job_id, username) pair doesn't exist in the database.
         """
-        # TODO: Implement
-        pass
+        if not self.job_exists(username, job_id):
+            raise ValueError(f"Job '{username}_{job_id} does not exist in the IVERT jobs database.")
+
+        f_basename = os.path.basename(filename)
+
+        existing_row = self.file_exists(f_basename, username, job_id, return_row=True)
+        if existing_row:
+            return existing_row
+
+        if fake_file_stats:
+            file_md5 = "-" * 32
+            file_size = 0
+        else:
+            # Get just the basename of the filename. Strip any directories.
+            file_md5 = self.s3m.compute_md5(filename)
+            file_size = os.stat(filename).st_size
+
+        status = status.strip().lower()
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("INSERT INTO ivert_files (job_id, username, filename, import_or_export, size_bytes, md5, status) "
+                       "VALUES (?, ?, ?, ?, ?, ?, ?);",
+                       (job_id,
+                        username,
+                        f_basename,
+                        import_or_export,
+                        file_size,
+                        file_md5,
+                        status))
+
+        self.increment_vnumber(cursor)
+        conn.commit()
+
+        if not skip_database_upload:
+            self.upload_to_s3(only_if_newer=False)
+
+        existing_row = self.file_exists(f_basename, username, job_id, return_row=True)
+        return existing_row
 
     def increment_vnumber(self, cursor: typing.Union[sqlite3.Cursor, None] = None) -> None:
         """Increment the version number in the database.
@@ -589,7 +694,56 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
         if cursor is None:
             conn.commit()
 
+    def create_or_update_sns_subscription(self,
+                                          username: str,
+                                          email: str,
+                                          topic_arn: str,
+                                          sns_filter_string: typing.Union[str, None],
+                                          sns_arn: str):
+        """Create a record of a new SNS subscription. If this record alredy exists, update it."""
+        # First, see if this subscription already exists or not.
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT count(*) FROM sns_subscriptions WHERE user_email = ? AND topic_arn = ? AND sns_arn = ?;",
+                       (email, topic_arn, sns_arn))
+        count = cursor.fetchone()[0]
+        if count == 0:
+            # The sns subscription doesn't exist. Create a new record.
+            cursor.execute("INSERT INTO sns_subscriptions (username, user_email, topic_arn, sns_filter_string, sns_arn) "
+                           "VALUES (?, ?, ?, ?, ?);",
+                           (username, email, topic_arn, sns_filter_string, sns_arn))
+        else:
+            assert count == 1
+            cursor.execute("UPDATE sns_subscriptions SET username = ?, sns_filter_string = ? "
+                           "WHERE user_email = ? AND topic_arn = ? AND sns_arn = ?;",
+                           (username, sns_filter_string, email, topic_arn, sns_arn))
+
+        conn.commit()
+        self.increment_vnumber()
+        self.upload_to_s3()
+
+    def remove_sns_subscription(self,
+                                email: str,
+                                topic_arn: str,
+                                sns_arn: str):
+        "Remove a record of an SNS subscription from the database."
+        # First, see if this subscription already exists or not.
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT count(*) FROM sns_subscriptions WHERE user_email = ? AND topic_arn = ? AND sns_arn = ?;",
+                       (email, topic_arn, sns_arn))
+        count = cursor.fetchone()[0]
+        if count == 0:
+            # If it doesn't exist, just return. Nothing to do here.
+            return
+
+        cursor.execute("DELETE FROM sns_subscriptions WHERE user_email = ? AND topic_arn = ? AND sns_arn = ?;")
+
+
     def __del__(self):
+        """Destroy the object."""
         super().__del__()
 
     def delete_database(self) -> None:
