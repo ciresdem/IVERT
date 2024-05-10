@@ -431,7 +431,7 @@ class IvertJob:
                                     self.job_dir,
                                     self.output_dir,
                                     job_status="started",
-                                    skip_database_upload=True):
+                                    skip_database_upload=True)
 
         # Generate a new file record for the config file of this job.
         self.jobs_db.create_new_file_record(self.job_config_local, self.job_id, self.username,
@@ -590,7 +590,7 @@ class IvertJob:
 
         f.write(message)
         # Put a newline at the end of any given message, if it's not already there.
-        if message[-1] != '\n'
+        if message[-1] != '\n':
             f.write('\n')
 
         f.close()
@@ -649,7 +649,7 @@ class IvertJob:
             self.update_job_status("complete")
 
             self.write_to_logfile(f"Job {self.job_config_object.job_name} log:\n\n"
-                                  f"{job.job_cmd_args["email"]} has been subscribed to IVERT SNS notifications" + \
+                                  f"{self.job_cmd_args['email']} has been subscribed to IVERT SNS notifications" + \
                                   (f" using filter '{filter_string}'" if filter_string else "")
                                   + ".\n"
                                   "You may run 'ivert unsubscribe', or click the 'unsubscribe' link at the bottom of any of your notification emails, to stop receiving such messages.")
