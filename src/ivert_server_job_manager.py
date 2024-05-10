@@ -617,27 +617,28 @@ class IvertJob:
 
     def run_subscribe_command(self):
         "Run a 'subscribe' command to subscribe a user to an SNS notification service."
-        assert "subscribe_to_sns" in self.job_cmd_args
+        cmd_args = self.job_config_object
+        assert "subscribe_to_sns" in cmd_args
         # If for some reason we get a 'subscribe' command where we've opted *not* to create the subscription, then just
         # quietly quit and call it a day.
         self.update_job_status("running")
 
         try:
-            if not self.job_cmd_args["subscribe_to_sns"]:
+            if not jco.cmd_args["subscribe_to_sns"]:
                 self.update_job_status("complete")
                 return
 
-            assert "email" in self.job_cmd_args
-            assert "filter_sns" in self.job_cmd_args
+            assert "email" in cmd_args
+            assert "filter_sns" in cmd_args
 
-            filter_string = self.username if self.job_cmd_args["filter_sns"] else None
-            sns_arn = sns.subscribe(self.job_cmd_args["email"],
+            filter_string = self.username if cmd_args["filter_sns"] else None
+            sns_arn = sns.subscribe(cmd_args["email"],
                                     filter_string)
 
             # Add this arn to the database. If it's already in there, update it.
             topic_arn = self.ivert_config.sns_topic_arn
             self.jobs_db.create_or_update_sns_subscription(self.username,
-                                                           self.job_cmd_args["email"],
+                                                           cmd_args["email"],
                                                            topic_arn,
                                                            filter_string,
                                                            sns_arn)
@@ -645,12 +646,10 @@ class IvertJob:
             self.update_job_status("complete")
 
             self.write_to_logfile(f"Job {self.job_config_object.job_name} log:\n\n"
-                                  f"{self.job_cmd_args['email']} has been subscribed to IVERT SNS notifications" + \
+                                  f"{cmd_args['email']} has been subscribed to IVERT SNS notifications" + \
                                   (f" using filter '{filter_string}'" if filter_string else "")
                                   + ".\n"
                                   "You may run 'ivert unsubscribe', or click the 'unsubscribe' link at the bottom of any of your notification emails, to stop receiving such messages.")
-
-
 
         except KeyboardInterrupt as e:
             self.update_job_status("killed")
