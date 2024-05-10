@@ -265,10 +265,11 @@ class IvertJobsDatabaseBaseClass:
             results = cur.execute("SELECT * FROM ivert_files WHERE filename = ? AND username = ? AND job_id = ?;",
                                   (filename, username, job_id))
 
+            print(results)
             if results is None:
                 return False
             else:
-                return results.fetchone()[0]
+                return results.fetchone()
 
         else:
             cur.execute("SELECT count(*) FROM ivert_files WHERE filename = ? AND username = ? AND job_id = ?;",

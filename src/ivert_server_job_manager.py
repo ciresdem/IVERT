@@ -260,10 +260,6 @@ class IvertJob:
         self.job_config_s3_key = job_config_s3_key
         self.job_config_s3_bucket_type = job_config_s3_bucket_type
 
-        # Parameters read from the config file.
-        self.job_files = []
-        self.job_cmd_args = {}
-
         self.pid = os.getpid()
 
         # The directory where the job will be run and files stored. This will be populated and created in
@@ -443,7 +439,7 @@ class IvertJob:
     def download_job_files(self):
         """Download all other job files from the S3 bucket and add their entries to the jobs database."""
         # It may take some time for all the files to pass quarantine and be available in the trusted bucket.
-        files_to_download = self.job_files.copy()
+        files_to_download = self.job_config_object.files.copy()
         files_downloaded = []
 
         time_start = time.time()
@@ -507,10 +503,10 @@ class IvertJob:
                 files_to_download.remove(fname)
                 files_downloaded.append(fname)
 
-        assert len(files_to_download) == 0 and len(files_downloaded) == len(self.job_files)
+        assert len(files_to_download) == 0 and len(files_downloaded) == len(self.job_config_object.files)
         return
 
-    def push_sns_notification(self, start_or_finish: str, job_status):
+    def push_sns_notification(self, start_or_finish: str):
         """Push a SNS notification for a started or finished job.
 
         This notifies the IVERT user that the job has finished and that they can download the results.
@@ -518,8 +514,8 @@ class IvertJob:
         # Certain jobs, we don't want to send a notification.
         # For instance "subscribe" or "unsubscribe", just let AWS do the notifying.
         if (self.command == "update") and \
-                ("sub_command" in self.job_cmd_args) and \
-                (self.job_cmd_args["sub_command"] in ("subscribe", "unsubscribe")):
+                ("sub_command" in self.job_config_object.cmd_args) and \
+                (self.job_config_object.cmd_args["sub_command"] in ("subscribe", "unsubscribe")):
             return
 
         start_or_finish = start_or_finish.strip().lower()
@@ -572,8 +568,8 @@ class IvertJob:
 
         elif self.command == "update":
             # For update, look for a particular sub-command under the args.
-            assert "sub_command" in self.job_cmd_args
-            sub_command = self.job_cmd_args["sub_command"]
+            assert "sub_command" in self.cmd_args
+            sub_command = self.cmd_args["sub_command"]
 
             if sub_command == "subscribe":
                 self.run_subscribe_command()
