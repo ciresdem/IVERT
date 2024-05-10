@@ -568,8 +568,8 @@ class IvertJob:
 
         elif self.command == "update":
             # For update, look for a particular sub-command under the args.
-            assert "sub_command" in self.cmd_args
-            sub_command = self.cmd_args["sub_command"]
+            assert "sub_command" in self.job_config_object.cmd_args
+            sub_command = self.job_config_object.cmd_args["sub_command"]
 
             if sub_command == "subscribe":
                 self.run_subscribe_command()
