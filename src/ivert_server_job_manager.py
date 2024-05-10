@@ -357,6 +357,9 @@ class IvertJob:
         self.logfile = os.path.join(self.output_dir,
                                     os.path.basename(self.job_config_local).replace(".ini", "_log.txt"))
 
+        print(self.logfile)
+        foobar
+
         return
 
     def delete_local_job_folders(self):
