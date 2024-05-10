@@ -610,6 +610,7 @@ class IvertJob:
                 "/" + os.path.basename(fname)
 
         print(f_key)
+        FOOBAR
 
     def update_job_status(self, status):
         "Update the job status in the database."
