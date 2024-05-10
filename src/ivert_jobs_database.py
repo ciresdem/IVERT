@@ -498,7 +498,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
                           job_username: str,
                           job_id: typing.Union[int, str],
                           status: str,
-                          increment_vnumber: bool = True,
+                          increment_vnum: bool = True,
                           upload_to_s3: bool = True):
         """
         Updates a job record in the existing database.
@@ -507,7 +507,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
             job_username (str): The username of the job.
             job_id (int or str): The ID of the job.
             status (str): The new status of the job.
-            increment_vnumber (bool): Whether to increment the database version number. This may be set to false if
+            increment_vnum (bool): Whether to increment the database version number. This may be set to false if
                                       several changes are being made at once, including this one.
                                       If this is set to False, then the database version number will not be incremented
                                       and the change will not be committed.
@@ -544,7 +544,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
         cursor.execute(update_stmt, (status, job_username, job_id))
 
         # Increment the database version number
-        if increment_vnumber:
+        if increment_vnum:
             self.increment_vnumber(cursor)
 
         conn.commit()
@@ -560,7 +560,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
                            job_id: typing.Union[int, str],
                            filename: str,
                            status: str,
-                           increment_vnumber: bool = True,
+                           increment_vnum: bool = True,
                            upload_to_s3: bool = True) -> None:
         """
         Updates a file record in the existing database.
@@ -570,7 +570,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
             job_id (int or str): The ID of the job.
             filename (str): The name of the file.
             status (str): The new status of the file. Look in ivert_jobs_schema.sql::ivert_files::status for the possible statuses.
-            increment_vnumber (bool): Whether to increment the database version number. This may be set to false if we're making other sequential changes.
+            increment_vnum (bool): Whether to increment the database version number. This may be set to false if we're making other sequential changes.
             upload_to_s3 (bool): Whether to upload the database to the S3 bucket. Default True.
 
         Returns:
@@ -603,7 +603,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
         cursor.execute(update_stmt, (status, username, job_id, file_basename))
 
         # Increment the database version number
-        if increment_vnumber:
+        if increment_vnum:
             self.increment_vnumber(cursor)
 
         # Commit the changes

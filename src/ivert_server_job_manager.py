@@ -681,11 +681,11 @@ class IvertJob:
 
     def update_job_status(self, status):
         "Update the job status in the database."
-        self.jobs_db.update_job_status(self.username, self.job_id, status)
+        self.jobs_db.update_job_status(self.username, self.job_id, status, increment_vnum=True, upload_to_s3=True)
 
     def update_file_status(self, filename, status):
         """Update the file status in the database."""
-        self.jobs_db.update_file_status(self.username, self.job_id, filename, status)
+        self.jobs_db.update_file_status(self.username, self.job_id, filename, status, increment_vnum=True, upload_to_s3=True)
 
     def run_subscribe_command(self):
         "Run a 'subscribe' command to subscribe a user to an SNS notification service."
@@ -709,8 +709,8 @@ class IvertJob:
                                                            topic_arn,
                                                            sns_arn,
                                                            filter_string,
-                                                           increment_vnum=False,
-                                                           upload_to_s3=False
+                                                           increment_vnum=True,
+                                                           upload_to_s3=True
                                                            )
 
             self.update_job_status("complete")
@@ -738,7 +738,7 @@ class IvertJob:
             sns_arn = self.jobs_db.get_sns_arn(cmd_args["email"])
             sns.unsubscribe(sns_arn)
 
-            self.jobs_db.remove_sns_subscription(cmd_args["email"], update_vnum=False, upload_to_s3=False)
+            self.jobs_db.remove_sns_subscription(cmd_args["email"], update_vnum=True, upload_to_s3=True)
 
         except KeyboardInterrupt as e:
             self.update_job_status("killed")
