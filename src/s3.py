@@ -17,6 +17,7 @@ import warnings
 import utils.query_yes_no
 import utils.bcolors
 import utils.configfile
+import utils.progress_bar
 
 ivert_config = utils.configfile.config()
 
@@ -195,6 +196,7 @@ class S3Manager:
                  delete_original: bool = False,
                  recursive: bool = False,
                  fail_quietly: bool = True,
+                 progress_bar: bool = False,
                  include_metadata: bool = False) -> list:
         """Download a file from the S3 to the local file system.
 
@@ -223,7 +225,7 @@ class S3Manager:
             s3_keys_to_download = [s3_key]
 
         files_downloaded = []
-        for s3k in s3_keys_to_download:
+        for i, s3k in enuemrate(s3_keys_to_download):
             # If the 'filename' given is a directory, use the same filename as the key, put the file in that directory.
             if os.path.isdir(filename):
                 filename_to_download = os.path.join(filename, s3k.split("/")[-1])
@@ -250,6 +252,10 @@ class S3Manager:
             # Delete the original file from the s3 if requested (such as in a 'mv' command)
             if delete_original:
                 client.delete_object(Bucket=bucket_name, Key=s3k)
+
+            if progress_bar:
+                utils.progress_bar.ProgressBar(i + 1, len(s3_keys_to_download),
+                                               suffix=f"{i + 1}/{len(s3_keys_to_download)}", decimals=0)
 
         return files_downloaded
 
