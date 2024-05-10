@@ -14,7 +14,7 @@ import s3
 
 # TODO: Add support for reading/writing to an sqlite3 file.
 
-class IvertJobsDatabaseBaseClass:
+class JobsDatabaseClient:
     """Base class for common operations on the IVERT jobs database.
 
     Consists of methods used both by the EC2-server and the IVERT client.
@@ -429,7 +429,7 @@ class IvertJobsDatabaseBaseClass:
         cursor.execute(f"SELECT sns_arn FROM sns_subscriptions WHERE user_email = '{email}';")
         return cursor.fetchone()[0]
 
-class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
+class JobsDatabaseServer(JobsDatabaseClient):
     """Class for managing the IVERT jobs database on the EC2 (server).
 
     The base class can only read and query the database. The server class can write to the database and upload it."""
@@ -977,7 +977,7 @@ def define_and_parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = define_and_parse_args()
-    idb = IvertJobsDatabaseServer()
+    idb = JobsDatabaseServer()
     if args.command == "create":
         idb.create_new_database(only_if_not_exists_in_s3=True, overwrite=args.overwrite)
     elif args.command == "upload":

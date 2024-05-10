@@ -25,7 +25,7 @@ def create_new_job_params(username: str = None) -> tuple[str, int]:
         int: New job number
     """
     # Since this is running on the client, we only get the functionality of the base class, not the server.
-    dbo = ivert_jobs_database.IvertJobsDatabaseBaseClass()
+    dbo = ivert_jobs_database.JobsDatabaseClient()
     last_job_number = dbo.fetch_latest_job_number_from_s3_metadata()
 
     if last_job_number is None:

@@ -63,7 +63,7 @@ class IvertJobManager:
         self.input_prefix = self.ivert_config.s3_import_prefix_base
 
         # The jobs database object. We assume this is running on the S3 server (it doesn't make sense otherwise).
-        self.jobs_db = ivert_jobs_database.IvertJobsDatabaseServer()
+        self.jobs_db = ivert_jobs_database.JobsDatabaseServer()
         self.running_jobs: list[mp.Process] = []
 
         self.s3m = s3.S3Manager()
@@ -248,7 +248,7 @@ class IvertJob:
         self.s3_configfile_key = job_config_s3_key
         self.s3_configfile_bucket_type = job_config_s3_bucket_type
 
-        self.jobs_db = ivert_jobs_database.IvertJobsDatabaseServer()
+        self.jobs_db = ivert_jobs_database.JobsDatabaseServer()
 
         # Assign the job ID and username.
         params_dict = self.jobs_db.get_params_from_s3_path(self.s3_configfile_key,
