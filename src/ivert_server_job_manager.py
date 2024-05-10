@@ -541,6 +541,9 @@ class IvertJob:
 
     def collect_job_file_counts(self):
         """From the ivert_files database, collect the status of all files associated with a given job, both inputs and outputs."""
+        # Query the database to get the table as a pandas dataframe.
+        files_df = self.jobs_db.read_table_as_pandas_df("files", self.username, self.job_id)
+        print(files_df)
 
 
     def convert_cmd_args_to_string(self):
