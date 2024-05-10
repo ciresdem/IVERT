@@ -584,6 +584,7 @@ class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
                   "command_args, logfile, input_dir_local, output_dir_local, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                  (jco.ivert_command, jco.username, jco.job_id, jco.job_upload_prefix,
                   os.path.basename(job_configfile),
+                  str(job_config_obj.cmd_args),
                   os.path.basename(job_logfile),
                   job_local_dir.removeprefix(self.ivert_config.ivert_jobs_directory_local),
                   job_local_output_dir.removeprefix(self.ivert_config.ivert_jobs_directory_local),
