@@ -966,7 +966,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
         cursor = conn.cursor()
 
         cursor.execute("SELECT count(*) FROM sns_subscriptions WHERE user_email = ?;",
-                       (email))
+                       (email,))
         count = cursor.fetchone()[0]
         if count == 0:
             # If it doesn't exist, just return. Nothing to do here.
