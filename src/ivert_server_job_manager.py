@@ -362,7 +362,7 @@ class IvertJob:
     def delete_local_job_folders(self):
         """Remove all the job files and delete any otherwise-unused directories."""
         rm_cmd = f"rm -rf {self.job_dir}"
-        subprocess.run(rm_cmd)
+        subprocess.run(rm_cmd, shell=True)
 
         # Then peruse up the parent directories, deleting them *if* no other jobs are using that directory, there are no
         # other files present there, and it's not the top "jobs" directory that we obviously don't want to delete.
