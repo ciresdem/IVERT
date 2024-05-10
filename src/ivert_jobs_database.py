@@ -801,7 +801,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
         export_prefix = export_base_prefix + self.ivert_config.s3_ivert_job_subdirs_template \
                                                 .replace("[command]", job_row["command"]) \
                                                 .replace("[username]", job_row["username"]) \
-                                                .replace("[job_id]", job_row["job_id"]) + "/"
+                                                .replace("[job_id]", str(job_row["job_id"])) + "/"
 
         conn = self.get_connection()
         c = conn.cursor()

@@ -288,8 +288,6 @@ class IvertJob:
 
     def start(self):
         """Start the job."""
-        # TODO: Finish implementing this.
-
         # 1. Create local folders to store the job input files
         self.create_local_job_folders()
 
