@@ -377,6 +377,13 @@ class IvertJobsDatabaseBaseClass:
         count = cursor.execute(f"SELECT COUNT(*) FROM {table_name};").fetchone()[0]
         return count
 
+    def read(self, table_name: str,
+             username: typing.Union[str, None] = None,
+             job_id: typing.Union[str, None] = None
+             ) -> pandas.DataFrame:
+        """Shorthand for read_table_as_pandas_df."""
+        return self.read_table_as_pandas_df(table_name, username, job_id)
+
     def read_table_as_pandas_df(self,
                                 table_name: str,
                                 username: typing.Union[str, None] = None,
