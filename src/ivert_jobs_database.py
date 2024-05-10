@@ -369,6 +369,26 @@ class IvertJobsDatabaseBaseClass:
             assert count == 1
             return True
 
+    def len(self, table_name: str) -> int:
+        """Return how many rows exist in the given table.
+
+        Some table shortnames are accepted such as "jobs", "files", "subscritions" or "messages".
+        """
+        table_name = table_name.strip().lower()
+        if table_name == "jobs":
+            table_name = "ivert_jobs"
+        elif table_name == "files":
+            table_name = "ivert_files"
+        elif table_name == "subscriptions":
+            table_name = "sns_subscriptions"
+        elif table_name == "messages":
+            table_name = "sns_messages"
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        count = cursor.execute(f"SELECT COUNT(*) FROM {table_name};").fetchone()[0]
+        return count
+
 
 class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
     """Class for managing the IVERT jobs database on the EC2 (server).
