@@ -207,6 +207,7 @@ class S3Manager:
             delete_original (bool): Whether to delete the original file after downloading.
             recursive (bool): Whether to download recursively.
             fail_quietly (bool): Whether to fail quietly if the file doesn't exist.
+            progress_bar (bool): Whether to show a progress bar.
             include_metadata (bool): Whether to include the metadata in the downloaded file. In this case, the list of files will be a list of (filename, metadata_dict) tuples."""
         bucket_type = self.convert_btype(bucket_type)
 
@@ -225,7 +226,7 @@ class S3Manager:
             s3_keys_to_download = [s3_key]
 
         files_downloaded = []
-        for i, s3k in enuemrate(s3_keys_to_download):
+        for i, s3k in enumerate(s3_keys_to_download):
             # If the 'filename' given is a directory, use the same filename as the key, put the file in that directory.
             if os.path.isdir(filename):
                 filename_to_download = os.path.join(filename, s3k.split("/")[-1])
