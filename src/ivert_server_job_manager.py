@@ -315,11 +315,13 @@ class IvertJob:
         self.execute_job()
 
         # 8. Upload export files to the S3 bucket (if any). Enter them into the database.
+        # TODO
 
         # 9. Upload the logfile (if exists) and enter in database. (Upload to s3)
         self.export_logfile_if_exists()
 
         # 10. Mark the job as finished in the jobs database. (Upload to s3)
+        # TODO
 
         # 11. Send SNS notification that the job has finished.
         self.push_sns_notification(start_or_finish="finish")
@@ -536,6 +538,10 @@ class IvertJob:
 
         else:
             raise ValueError(f"parameter 'start_or_finish' must be one of 'start', or 'finish'. '{start_or_finish}' not recoginzed.")
+
+    def collect_job_file_counts(self):
+        """From the ivert_files database, collect the status of all files associated with a given job, both inputs and outputs."""
+
 
     def convert_cmd_args_to_string(self):
         "Convert the command arguments to a string for the purpose of sending a message to the user."

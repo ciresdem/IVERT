@@ -3,6 +3,7 @@
 import argparse
 import botocore.exceptions
 import os
+import pandas
 import re
 import sqlite3
 import typing
@@ -388,6 +389,45 @@ class IvertJobsDatabaseBaseClass:
         cursor = conn.cursor()
         count = cursor.execute(f"SELECT COUNT(*) FROM {table_name};").fetchone()[0]
         return count
+
+    def read_table_as_pandas_df(self,
+                                table_name: str,
+                                username: typing.Union[str, None] = None,
+                                job_id: typing.Union[str, None] = None) -> pandas.DataFrame:
+        """Read a table and return as a pandas dataframe.
+
+        Args:
+            table_name (str): The name of the table to read. Can also be a shortname such as "jobs", "files", "subscriptions" or "messages".
+            username (str): The username to filter on. Defaults to None, which means no filter.
+            job_id (str): The job ID to filter on. Defaults to None, which means no filter.
+
+        Returns:
+            A pandas dataframe.
+        """
+        table_name = table_name.strip().lower()
+        if table_name == "jobs":
+            table_name = "ivert_jobs"
+        elif table_name == "files":
+            table_name = "ivert_files"
+        elif table_name == "subscriptions":
+            table_name = "sns_subscriptions"
+        elif table_name == "messages":
+            table_name = "sns_messages"
+
+        # Build the query
+        query = f"SELECT * FROM {table_name}"
+        if username is not None:
+            query += f" WHERE username = '{username}'"
+        if job_id is not None:
+            if username is None:
+                query += f" WHERE job_id = '{job_id}'"
+            else:
+                query += f" AND job_id = '{job_id}'"
+        query += ";"
+
+        conn = self.get_connection()
+        return pandas.read_sql_query(query, conn)
+
 
 
 class IvertJobsDatabaseServer(IvertJobsDatabaseBaseClass):
