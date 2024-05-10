@@ -598,9 +598,9 @@ class IvertJob:
         if not os.path.exists(self.logfile):
             return
 
-        self.upload_file_to_export(self.logfile)
+        self.upload_file_to_export_bucket(self.logfile)
 
-    def upload_file_to_export(self, fname: str):
+    def upload_file_to_export_bucket(self, fname: str):
         """When exporting a file, upload it here. Also add an entry to the jobs_database for this export."""
         if not os.path.exists(fname):
             return
@@ -609,8 +609,13 @@ class IvertJob:
                 "/".join(self.s3_configfile_key.split("/")[:-1]).removeprefix(self.ivert_config.s3_import_prefix_base) + \
                 "/" + os.path.basename(fname)
 
-        print(f_key)
-        FOOBAR
+        # Upload the file.
+        self.s3m.upload(fname, f_key, bucket_type=self.export_bucket_type)
+        # Add an export file entry into the database for this job.
+        self.jobs_db.create_new_file_record(fname, self.job_id, self.username, 1, status="uploaded")
+
+        return
+
 
     def update_job_status(self, status):
         "Update the job status in the database."
