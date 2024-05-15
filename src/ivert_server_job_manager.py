@@ -828,7 +828,7 @@ def define_and_parse_arguments() -> argparse.Namespace:
                              "Run 'python s3.py list_buckets' to see all available bucket types.")
     parser.add_argument("-j", "--job_id", type=int, dest="job_id", default=-1,
                         help="Run processing on a single job with this ID. For testing purposes only. Ignores the '-t' option.")
-    parser.add_argument("-p", "--populate", action="store_true", default=False, type=bool,
+    parser.add_argument("-p", "--populate", action="store_true", default=False,
                         help="Quietly enter all new jobs into the database without running anything. Useful if we've reset the database.")
 
     return parser.parse_args()
