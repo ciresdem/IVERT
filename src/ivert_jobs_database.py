@@ -1049,7 +1049,7 @@ def define_and_parse_args() -> argparse.Namespace:
                         help="Overwrite the existing database. (For create command only) Default: False")
     parser.add_argument("-t", "--table", dest="table",
                         help="Name of the table to print to the screen. Only used for the 'print' command.")
-    parser.add_argument("-a", "--all", dest="all", action="store_true", default=False, type=bool,
+    parser.add_argument("-a", "--all", dest="all", action="store_true", default=False,
                         help="Print all the columns of the table. Used only with 'print -t' command.")
     parser.add_argument("-v", "--version", dest="version", default="",
                         help="Print the version of the database, from the 'database'/'d' or 'server'/'s'. Used only with the print command.")
