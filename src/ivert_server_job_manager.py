@@ -176,7 +176,6 @@ class IvertJobManager:
         # 2. Filter out any files already in the database.
         # 3. Return the remaining file list.
         files_in_bucket = self.s3m.listdir(self.input_prefix, bucket_type=self.input_bucket_type, recursive=True)
-        # print(files_in_bucket)
 
         if not new_only:
             return files_in_bucket
@@ -819,6 +818,8 @@ def define_and_parse_arguments() -> argparse.Namespace:
                              "Run 'python s3.py list_buckets' to see all available bucket types.")
     parser.add_argument("-j", "--job_id", type=int, dest="job_id", default=-1,
                         help="Run processing on a single job with this ID. For testing purposes only. Ignores the '-t' option.")
+    parser.add_argument("-p", "--populate", action="store_true", default=False, type=bool,
+                        help="Quietly enter all new jobs into the database without running anything. Useful if we've reset the database.")
 
     return parser.parse_args()
 
