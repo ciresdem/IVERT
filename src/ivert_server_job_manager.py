@@ -808,7 +808,7 @@ def define_and_parse_arguments() -> argparse.Namespace:
     parser.add_argument("-b", "--bucket", type=str, dest="bucket", default="trusted",
                         help="The S3 bucket type to search for incoming job files. Default: 'trusted'. "
                              "Run 'python s3.py list_buckets' to see all available bucket types.")
-    parser.add_argument("-j", "job_id", type=typing.Union[int, None], dest="job_id", default=None,
+    parser.add_argument("-j", "--job_id", type=typing.Union[int, None], dest="job_id", default=None,
                         help="Run processing on a single job with this ID. For testing purposes only. Ignores the '-t' option.")
 
     return parser.parse_args()
@@ -825,5 +825,5 @@ if __name__ == "__main__":
     args = define_and_parse_arguments()
 
     # Start the job manager
-    JM = IvertJobManager(time_interval_s=args.time_interval_s, )
+    JM = IvertJobManager(time_interval_s=args.time_interval_s, job_id=args.job_id)
     JM.start()
