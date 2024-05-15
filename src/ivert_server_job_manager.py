@@ -803,12 +803,12 @@ def define_and_parse_arguments() -> argparse.Namespace:
         An argparse.Namespace object containing the parsed arguments.
     """
     parser = argparse.ArgumentParser(description="Ivert Job Manager... for detecting, running, and managing IVERT jobs on an EC2 instance.")
-    parser.add_argument("-t", "--time_interval_s", type=int, target="time_interval_s", default=120,
+    parser.add_argument("-t", "--time_interval_s", type=int, dest="time_interval_s", default=120,
                         help="The time interval in seconds between checking for new IVERT jobs. Default: 120.")
-    parser.add_argument("-b", "--bucket", type=str, target="bucket", default="trusted",
+    parser.add_argument("-b", "--bucket", type=str, dest="bucket", default="trusted",
                         help="The S3 bucket type to search for incoming job files. Default: 'trusted'. "
                              "Run 'python s3.py list_buckets' to see all available bucket types.")
-    parser.add_argument("-j", "job_id", type=typing.Union[int, None], target="job_id", default=None,
+    parser.add_argument("-j", "job_id", type=typing.Union[int, None], dest="job_id", default=None,
                         help="Run processing on a single job with this ID. For testing purposes only. Ignores the '-t' option.")
 
     return parser.parse_args()
