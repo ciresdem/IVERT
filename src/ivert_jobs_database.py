@@ -1044,9 +1044,11 @@ class JobsDatabaseServer(JobsDatabaseClient):
 def define_and_parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Manipulate the ivert_jobs database.")
     parser.add_argument("command", type=str,
-                        help="The command to execute. Choices: create, upload, download, delete")
+                        help="The command to execute. Choices: create, upload, download, delete, print")
     parser.add_argument("-o", "--overwrite", dest="overwrite", action="store_true",
                         help="Overwrite the existing database. (For create command only) Default: False")
+    parser.add_argument("-t", "--table", dest="table",
+                        help="Name of the table to print to the screen. Only used for the 'print' command.")
 
     return parser.parse_args()
 
@@ -1062,3 +1064,5 @@ if __name__ == "__main__":
         idb.download_from_s3()
     elif args.command == "delete":
         idb.delete_database()
+    elif args.command == "print":
+        print(idb.read_table_as_pandas_df(args.table))
