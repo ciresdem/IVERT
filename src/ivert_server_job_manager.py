@@ -195,6 +195,12 @@ class IvertJobManager:
 
         # If we're running this to only execute one specific job, then just do that here.
         if self.specific_job_id:
+            # DEBUG -- TODO: Remove later.
+            print(new_ini_files)
+            print(self.specific_job_id)
+            sys.exit(0)
+            # / DEBUG
+
             new_ini_files = [fn for fn in new_ini_files if fn.split("/")[-1].find(str(self.specific_job_id)) >= -1]
 
         return new_ini_files
