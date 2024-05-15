@@ -88,6 +88,7 @@ class IvertJobManager:
         """
         # Check to see if another instance of this script is already running
         if is_another_manager_running():
+            print("Another instance of ivert_server_job_manager.py is already running. Exiting.")
             return
 
         self.sync_database_with_s3()
@@ -825,5 +826,7 @@ if __name__ == "__main__":
     args = define_and_parse_arguments()
 
     # Start the job manager
-    JM = IvertJobManager(time_interval_s=args.time_interval_s, job_id=args.job_id)
+    JM = IvertJobManager(input_bucket_type=args.bucket,
+                         time_interval_s=args.time_interval_s,
+                         job_id=args.job_id)
     JM.start()
