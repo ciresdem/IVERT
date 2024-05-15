@@ -201,15 +201,9 @@ class IvertJobManager:
         # If we're looking for a specific job, don't filter by new jobs only.
         new_ini_files = [fn for fn in self.check_for_new_files(new_only=not bool(self.specific_job_id)) if fn.lower().endswith('.ini')]
 
-        print("self.specific_job_id", self.specific_job_id)
-        print("before filtering:", new_ini_files)
-
         # If we're running this to only execute one specific job, then just do that here.
         if self.specific_job_id:
             new_ini_files = [fn for fn in new_ini_files if (fn.split("/")[-1].find(str(self.specific_job_id)) > -1)]
-
-        print("After filtering:", new_ini_files)
-        sys.exit(0)
 
         return new_ini_files
 
