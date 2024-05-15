@@ -17,6 +17,7 @@ import string
 import subprocess
 import sys
 import time
+import traceback
 import typing
 
 import ivert_jobs_database
@@ -593,7 +594,7 @@ class IvertJob:
         elif start_or_finish == "finish":
             email_templates = utils.configfile.config(self.ivert_config.ivert_email_templates)
             files_df = self.collect_job_files_df()
-            job_status = self.
+            job_status = self.jobs_db.job_status(self.username, self.job_id)
             # TODO: FINISH
 
         else:
@@ -780,8 +781,8 @@ class IvertJob:
             self.update_job_status("killed")
             return
 
-        except Exception as e:
-            self.write_to_logfile("ERROR encountered:\n" + str(e))
+        except RuntimeError:
+            self.write_to_logfile(traceback.format_exc())
             self.update_job_status("error")
             return
 
@@ -805,8 +806,8 @@ class IvertJob:
             self.update_job_status("killed")
             return
 
-        except Exception as e:
-            self.write_to_logfile("ERROR encountered:\n" + str(e))
+        except RuntimeError:
+            self.write_to_logfile(traceback.format_exc())
             self.update_job_status("error")
             return
 
