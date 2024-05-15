@@ -1049,6 +1049,8 @@ def define_and_parse_args() -> argparse.Namespace:
                         help="Overwrite the existing database. (For create command only) Default: False")
     parser.add_argument("-t", "--table", dest="table",
                         help="Name of the table to print to the screen. Only used for the 'print' command.")
+    parser.add_argument("-v", "--version", dest="version", default="",
+                        help="Print the version of the database, from the 'database'/'d' or 'server'/'s'. Used only with the print command.")
 
     return parser.parse_args()
 
@@ -1065,4 +1067,11 @@ if __name__ == "__main__":
     elif args.command == "delete":
         idb.delete_database()
     elif args.command == "print":
-        print(idb.read_table_as_pandas_df(args.table))
+        if args.version:
+            if args.version[0].lower() == "d":
+                print(idb.fetch_latest_db_vnum_from_database())
+            else:
+                print(idb.fetch_latest_db_vnum_from_s3_metadata())
+
+        else:
+            print(idb.read_table_as_pandas_df(args.table))
