@@ -166,13 +166,20 @@ class IvertJobManager:
 
         return
 
-    def check_for_new_files(self) -> list[str]:
-        """Return a list of new files in the trusted bucket that haven't yet been added to the database."""
+    def check_for_new_files(self, new_only: bool = True) -> list[str]:
+        """Return a list of new files in the trusted bucket that haven't yet been added to the database.
+
+        Args:
+            new_only (bool, optional): If False, don't filter, and just return all the files.
+            """
         # 1. Get a list of all files in the trusted bucket.
         # 2. Filter out any files already in the database.
         # 3. Return the remaining file list.
         files_in_bucket = self.s3m.listdir(self.input_prefix, bucket_type=self.input_bucket_type, recursive=True)
         # print(files_in_bucket)
+
+        if not new_only:
+            return files_in_bucket
 
         new_files = []
         for s3_key in files_in_bucket:
@@ -191,16 +198,11 @@ class IvertJobManager:
         # Call check_for_new_files() and get list of any new files incoming.
         # When one of these is a .ini file, kick off an IvertJob object to handle it.
         # Add it to the list of running jobs.
-        new_ini_files = [fn for fn in self.check_for_new_files() if fn.lower().endswith('.ini')]
+        # If we're looking for a specific job, don't filter by new jobs only.
+        new_ini_files = [fn for fn in self.check_for_new_files(new_only=not bool(self.specific_job_id)) if fn.lower().endswith('.ini')]
 
         # If we're running this to only execute one specific job, then just do that here.
         if self.specific_job_id:
-            # DEBUG -- TODO: Remove later.
-            print(new_ini_files)
-            print(self.specific_job_id)
-            sys.exit(0)
-            # / DEBUG
-
             new_ini_files = [fn for fn in new_ini_files if fn.split("/")[-1].find(str(self.specific_job_id)) >= -1]
 
         return new_ini_files
