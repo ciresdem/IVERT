@@ -396,14 +396,14 @@ class JobsDatabaseClient:
             job_id (str): The job ID to filter on. Defaults to None, which means no filter.
 
         Returns:
-            A pandas dataframe.
+            A pandas dataframe of the table in question.
         """
         table_name = table_name.strip().lower()
         if table_name == "jobs":
             table_name = "ivert_jobs"
         elif table_name == "files":
             table_name = "ivert_files"
-        elif table_name == "subscriptions":
+        elif table_name in ("subscriptions", "subs"):
             table_name = "sns_subscriptions"
         elif table_name == "messages":
             table_name = "sns_messages"
@@ -423,11 +423,33 @@ class JobsDatabaseClient:
         return pandas.read_sql_query(query, conn)
 
     def get_sns_arn(self, email: str) -> str:
-        """Get the SNS ARN for the given email address."""
+        """Get the SNS ARN for the given email address.
+
+        This assumes there is only on ARN per email address. If there are multiple ARNs, this will return the first one.
+
+        Args:
+            email (str): The email address to get the ARN for.
+
+        Returns:
+            The SNS ARN for the given email address.
+        """
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute(f"SELECT sns_arn FROM sns_subscriptions WHERE user_email = '{email}';")
         return cursor.fetchone()[0]
+
+    def get_job_from_pid(self, pid: int) -> sqlite3.Row:
+        """Get the job from the pid.
+
+        Args:
+            pid (int): The pid of the job.
+
+        Returns:
+            The ivert_jobs row for the job from the pid."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT * FROM ivert_jobs WHERE pid = {pid};")
+        return cursor.fetchone()
 
 class JobsDatabaseServer(JobsDatabaseClient):
     """Class for managing the IVERT jobs database on the EC2 (server).
@@ -960,7 +982,19 @@ class JobsDatabaseServer(JobsDatabaseClient):
                                 email: str,
                                 update_vnum: bool = True,
                                 upload_to_s3: bool = True) -> None:
-        "Remove a record of an SNS subscription from the database."
+        """Remove a record of an SNS subscription from the database.
+
+        Note: this does not actually unsubscribe the user from the SNS topic. It just deletes the record.
+        Use sns.py-->unsubscribe() to actually unsubscribe the user from the SNS topic.
+
+        Args:
+            email (str): The email address of the user to remove.
+            update_vnum (bool, optional): Whether to update the version number in the database. Defaults to True.
+            upload_to_s3 (bool, optional): Whether to upload the database to S3. Defaults to True.
+
+        Returns:
+            None
+        """
         # First, see if this subscription already exists or not.
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -982,7 +1016,6 @@ class JobsDatabaseServer(JobsDatabaseClient):
 
         if upload_to_s3:
             self.upload_to_s3(only_if_newer=False)
-
 
     def __del__(self):
         """Destroy the object."""

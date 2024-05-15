@@ -47,20 +47,31 @@ class IvertJobManager:
     This will be initialized by the ivert_setup.sh script in the ivert_setup repository, using a supervisord process."""
 
     def __init__(self,
-                 input_bucket_type: str = "trusted"):
+                 input_bucket_type: str = "trusted",
+                 time_interval_s: typing.Union[int, float, None] = None,
+                 job_id: typing.Union[int, None] = None):
         """
         Initializes a new instance of the IvertJobManager class.
 
         Args:
             input_bucket_type (str, optional): The type of S3 bucket to use for input. Defaults to "trusted".
+            time_interval_s (int, float, or None, optional): Time between iterations of checking for new jobs.
+                Default: Just pick up the value from the ivert_config.ini file.
+            job_id (int, or None, optional): The job_id of one specific job we want to process. Ignore all others.
+                Used just for testing.
 
         Returns:
             None
         """
         self.ivert_config = utils.configfile.config()
-        self.time_interval_s = self.ivert_config.ivert_server_job_check_interval_s
+        if time_interval_s is None:
+            self.time_interval_s = self.ivert_config.ivert_server_job_check_interval_s
+        else:
+            self.time_interval_s = time_interval_s
+
         self.input_bucket_type = input_bucket_type
         self.input_prefix = self.ivert_config.s3_import_prefix_base
+        self.specific_job_id = job_id
 
         # The jobs database object. We assume this is running on the S3 server (it doesn't make sense otherwise).
         self.jobs_db = ivert_jobs_database.JobsDatabaseServer()
@@ -180,34 +191,66 @@ class IvertJobManager:
         # When one of these is a .ini file, kick off an IvertJob object to handle it.
         # Add it to the list of running jobs.
         new_ini_files = [fn for fn in self.check_for_new_files() if fn.lower().endswith('.ini')]
+
+        # If we're running this to only execute one specific job, then just do that here.
+        if self.specific_job_id:
+            new_ini_files = [fn for fn in new_ini_files if fn.split("/")[-1].find(str(self.specific_job_id)) >= -1]
+
         return new_ini_files
 
     def check_on_running_jobs(self):
         """Check on all running jobs to see if they are still running.
 
         Any jobs that aren't, clean them up."""
-        # TODO: Implement this.
         # Go through the list of running jobs and check if they're still running.
         # If they're not running, see if they finished successfully.
         # If so, just delete them from the list. We assume the user was already notified that the job finished.
         # If not, grab the existing log file (if exists), append any stdout/stderr from the job, and export it.
         #   Also update the job status in the database.
         #   Then send a notification to the user that the job finished unsuccessfully.
+        for job in self.running_jobs:
+            if not job.is_alive():
+                pid = job.pid
+                job.join()
+                exitcode = job.exitcode
+                job.close()
+
+                if exitcode != 0:
+                    self.clean_up_terminated_job(pid, exitcode)
+
+                # Remove the job from the list of running jobs.
+                self.running_jobs.remove(job)
+
+                # If we're just running one job_id (testing mode), exit after that job is complete.
+                if self.specific_job_id:
+                    print("Job", self.specific_job_id, "is finished. Exiting.")
+                    sys.exit(0)
+
+        return
 
     def start_new_job(self, ini_s3_key: str):
         """Start a new job."""
         subproc = IvertJob
         proc_args = (ini_s3_key, self.input_bucket_type)
+        # TODO: Look into logging the stdout of the job, if we want to do that.
         job = mp.Process(target=subproc, args=proc_args)
         job.start()
 
         self.running_jobs.append(job)
 
-    def clean_up_terminated_job(self, pid: int):
+        return
+
+    def clean_up_terminated_job(self, pid: int, exitcode: int) -> None:
         """If a job is no longer running, clean it up, including its files.
 
         Fetch the job details from the database."""
         # TODO: Implement this.
+
+        # TODO: Get the ivert_job database record using the PID.
+        # TODO: Check to see if an SNS message was sent to the user at the end of this job.
+        # TODO: Look for the job's log file and upload it to the export bucket (if not there already).
+        # TODO: If no SNS message was already sent, send one.
+        # TODO: Delete the job's local file directory.
 
     def __del__(self):
         """Clean up any running jobs."""
@@ -218,10 +261,11 @@ class IvertJobManager:
                 for child in parent.children(recursive=True):
                     child.kill()
                 job.kill()
+
             if not job.is_alive():
                 job.close()
 
-            self.clean_up_terminated_job(job.pid)
+            self.clean_up_terminated_job(job.pid, job.exitcode)
 
         self.running_jobs = []
         return
@@ -764,6 +808,8 @@ def define_and_parse_arguments() -> argparse.Namespace:
     parser.add_argument("-b", "--bucket", type=str, target="bucket", default="trusted",
                         help="The S3 bucket type to search for incoming job files. Default: 'trusted'. "
                              "Run 'python s3.py list_buckets' to see all available bucket types.")
+    parser.add_argument("-j", "job_id", type=typing.Union[int, None], target="job_id", default=None,
+                        help="Run processing on a single job with this ID. For testing purposes only. Ignores the '-t' option.")
 
     return parser.parse_args()
 
@@ -779,5 +825,5 @@ if __name__ == "__main__":
     args = define_and_parse_arguments()
 
     # Start the job manager
-    JM = IvertJobManager(time_interval_s=args.time_interval_s)
+    JM = IvertJobManager(time_interval_s=args.time_interval_s, )
     JM.start()
