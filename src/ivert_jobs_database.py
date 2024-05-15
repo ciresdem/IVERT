@@ -1049,8 +1049,12 @@ def define_and_parse_args() -> argparse.Namespace:
                         help="Overwrite the existing database. (For create command only) Default: False")
     parser.add_argument("-t", "--table", dest="table",
                         help="Name of the table to print to the screen. Only used for the 'print' command.")
+    parser.add_argument("-a", "--all", dest="all", action="store_true", default=False, type=bool,
+                        help="Print all the columns of the table. Used only with 'print -t' command.")
     parser.add_argument("-v", "--version", dest="version", default="",
                         help="Print the version of the database, from the 'database'/'d' or 'server'/'s'. Used only with the print command.")
+    parser.add_argument("-j", "--job_id", dest="job_id", type=int, default=None,
+                        help="Print only records from the given job_id. Default: Print all records.")
 
     return parser.parse_args()
 
@@ -1074,4 +1078,6 @@ if __name__ == "__main__":
                 print(idb.fetch_latest_db_vnum_from_s3_metadata())
 
         else:
-            print(idb.read_table_as_pandas_df(args.table))
+            if args.all:
+                pandas.set_option('display.max_columns', None)
+            print(idb.read_table_as_pandas_df(args.table, job_id=args.job_id))
