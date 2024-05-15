@@ -451,6 +451,24 @@ class JobsDatabaseClient:
         cursor.execute(f"SELECT * FROM ivert_jobs WHERE pid = {pid};")
         return cursor.fetchone()
 
+    def job_status(self, username: str, job_id: int) -> str:
+        """Fetch the job status from the database.
+
+        Args:
+            username (str): The username associated with the job.
+            job_id (int): The job_id associated with the job.
+
+        Returns:
+            str: The status from the ivert_jobs table.
+        """
+        query = """SELECT status FROM ivert_jobs
+                WHERE username = ?
+                AND job_id = ?"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(query, (username, job_id))
+        return cursor.fetchone()
+
 class JobsDatabaseServer(JobsDatabaseClient):
     """Class for managing the IVERT jobs database on the EC2 (server).
 

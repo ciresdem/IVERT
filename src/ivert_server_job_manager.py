@@ -443,8 +443,16 @@ class IvertJob:
         self.job_config_object = utils.configfile.config(self.job_config_local)
 
         if not self.is_valid_job_config(self.job_config_object):
-            raise ValueError(f"Configfile {os.path.basename(self.job_config_local)} is not formatted correctly. "
-                             "Does the IVERT code need to be updated?")
+            # If the logfile is not validly formatted, print an error message to the log file, upload the log file,
+            # and exit the job.
+            error_msg = f"""Configfile {os.path.basename(self.job_config_local)} is not formatted correctly.
+            Adding error to logfile '{os.path.basename(self.logfile)}' and exiting job.
+            Does the IVERT client code need to be updated?"""
+            self.write_to_logfile(error_msg)
+            self.export_logfile_if_exists()
+            self.update_job_status("error")
+            self.push_sns_notification(start_or_finish="finish")
+            raise ValueError(error_msg)
 
         return
 
@@ -585,6 +593,7 @@ class IvertJob:
         elif start_or_finish == "finish":
             email_templates = utils.configfile.config(self.ivert_config.ivert_email_templates)
             files_df = self.collect_job_files_df()
+            job_status = self.
             # TODO: FINISH
 
         else:
