@@ -3,7 +3,7 @@
 import argparse
 import os
 
-import ivert_new_user_setup
+import new_user_setup
 import ivert_client_subscriptions
 
 def define_and_parse_args(return_parser: bool = False):
@@ -47,9 +47,9 @@ def define_and_parse_args(return_parser: bool = False):
                       "Run this once before using IVERT. Re-run again to change settings."
                       " Note: It is recommended to get the ivert_s3_credentials.ini file and put it the ~/.ivert/creds/ "
                       "directory. It will save you from having to copy-paste each credential from that file.")
-    # Use the parent parser from ivert_new_user_setup.py to define the arguments for the subparser
+    # Use the parent parser from new_user_setup.py to define the arguments for the subparser
     parser_setup = subparsers.add_parser("setup",
-                                         parents=[ivert_new_user_setup.define_and_parse_args(just_return_parser=True)],
+                                         parents=[new_user_setup.define_and_parse_args(just_return_parser=True)],
                                          add_help=False,
                                          help=setup_help_msg, description=setup_help_msg)
 
@@ -180,7 +180,7 @@ def ivert_client_cli():
 
     # Set up the IVERT client on a new system
     if args.command == "setup":
-        ivert_new_user_setup.setup_new_user(args)
+        new_user_setup.setup_new_user(args)
 
     # Subscribe to IVERT email notifications
     elif args.command == "subscribe":

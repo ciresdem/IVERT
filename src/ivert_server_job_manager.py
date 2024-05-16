@@ -20,7 +20,7 @@ import time
 import traceback
 import typing
 
-import ivert_jobs_database
+import jobs_database
 import quarantine_manager
 import s3
 import sns
@@ -264,15 +264,20 @@ class IvertJobManager:
     def __del__(self):
         """Clean up any running jobs."""
         for job in self.running_jobs:
-            if job.is_alive():
-                # Kill the IVERT job and all its children. Kinda morbid terminoligy I know, but it's what's needed here.
-                parent = psutil.Process(job.pid)
-                for child in parent.children(recursive=True):
-                    child.kill()
-                job.kill()
+            try:
+                if job.is_alive():
+                    # Kill the IVERT job and all its children. Kinda morbid terminoligy I know, but it's what's needed here.
+                    parent = psutil.Process(job.pid)
+                    for child in parent.children(recursive=True):
+                        child.kill()
+                    job.kill()
 
-            if not job.is_alive():
-                job.close()
+                if not job.is_alive():
+                    job.close()
+            except ValueError:
+                # If we try to close or kill an already-closed process, a ValueError is raised.
+                # In this case, just move on.
+                pass
 
             self.clean_up_terminated_job(job.pid, job.exitcode)
 
@@ -821,8 +826,8 @@ def define_and_parse_arguments() -> argparse.Namespace:
         An argparse.Namespace object containing the parsed arguments.
     """
     parser = argparse.ArgumentParser(description="Ivert Job Manager... for detecting, running, and managing IVERT jobs on an EC2 instance.")
-    parser.add_argument("-t", "--time_interval_s", type=int, dest="time_interval_s", default=120,
-                        help="The time interval in seconds between checking for new IVERT jobs. Default: 120.")
+    parser.add_argument("-t", "--time_interval_s", type=int, dest="time_interval_s", default=5,
+                        help="The time interval in seconds between checking for new IVERT jobs. Default: 5 seconds (for CLI testing purposes).")
     parser.add_argument("-b", "--bucket", type=str, dest="bucket", default="trusted",
                         help="The S3 bucket type to search for incoming job files. Default: 'trusted'. "
                              "Run 'python s3.py list_buckets' to see all available bucket types.")

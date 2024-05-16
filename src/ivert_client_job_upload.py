@@ -5,7 +5,7 @@ import datetime
 import glob
 import os
 
-import ivert_jobs_database
+import jobs_database
 import s3
 import utils.configfile
 import utils.progress_bar
