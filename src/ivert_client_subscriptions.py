@@ -3,6 +3,7 @@
 import argparse
 
 import ivert_client_job_upload
+from utils.bcolors import bcolors
 
 
 def run_subscribe_command(args: argparse.Namespace) -> None:
@@ -41,6 +42,6 @@ def run_unsubscribe_command(args: argparse.Namespace) -> None:
     ivert_client_job_upload.upload_new_job(args_for_server)
 
     print("\nYour unsubscribe request has been sent to the IVERT server.")
-    print("You will not get a notification back when the job is done (that's kind of the nature of this request, right?).")
-    print("You may resubscribe at any time using the 'subscribe' command.")
+    print(f"You will {bcolors.BOLD}not{bcolors.ENDC} get a notification back when the job is done (that's kind of the nature of this request, right?).")
+    print("You may resubscribe at any time using the 'ivert subscribe <email>' command.")
     return
