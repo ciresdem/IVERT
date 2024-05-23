@@ -156,9 +156,9 @@ def define_and_parse_args(return_parser: bool = False):
     parser_subscribe.add_argument("email", type=str,
                                   help="Enter an email address to subscribe to IVERT email notifications.")
     parser_subscribe.add_argument("-a", "--all", dest="all", default=False, action="store_true",
-                                  help="Subscribe to all IVERT email notifications. Default: False (only get the ones that are produced for your account).")
+                                  help="Subscribe to all IVERT email notifications. Default: Only get notified for jobs coming from your username.")
     parser_subscribe.add_argument("-u", "--username", dest="username", type=str, default=None,
-                                  help="The username of the IVERT user upon which to filter the sns notificaions, if different from the default. Default: Derives it from the email (before the '@' symbol). Ignored if -a is set.")
+                                  help="The username of the IVERT user upon which to filter the sns notificaions, if different from the default. Default: Username is derived from your email (before the '@' symbol). You usually shouldn't need this option. Ignored if --all is set.")
 
     ###############################################################
     # Create the "unsubscribe" subparser

@@ -85,6 +85,7 @@ def subscribe(email: str,
 
     return reply["SubscriptionArn"]
 
+
 def unsubscribe(subscription_arn: str) -> str:
     """Unsubscribe an email address from the IVERT AWS SNS topic.
 
