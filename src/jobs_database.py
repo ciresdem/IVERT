@@ -467,7 +467,7 @@ class JobsDatabaseClient:
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute(query, (username, job_id))
-        return cursor.fetchone()
+        return cursor.fetchone()[0]
 
 class JobsDatabaseServer(JobsDatabaseClient):
     """Class for managing the IVERT jobs database on the EC2 (server).
