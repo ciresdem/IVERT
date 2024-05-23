@@ -266,6 +266,45 @@ class IvertJobManager:
         # TODO: If no SNS message was already sent, send one.
         # TODO: Delete the job's local file directory.
 
+    def quietly_populate_database(self):
+        """Populate the database without executing anything.
+
+        Useful if we've rebuilt the database and there are exiting files in the trusted bucket that we want to populate.
+
+        NOTE: Do not do this while new jobs are coming in. It may skip a new job that has just come in.
+        """
+        ini_keys = self.check_for_new_jobs()
+        for ini_fn in ini_keys:
+            # Check whether a job already exists with this job's parameters.
+            params_dict = self.jobs_db.get_params_from_s3_path(ini_fn, bucket_type=self.input_bucket_type)
+            job_id, username, command = params_dict['job_id'], params_dict['username'], params_dict['command']
+
+            if not self.jobs_db.job_exists(username, job_id):
+                job_obj = IvertJob(ini_fn, self.input_bucket_type, auto_start=False)
+                """Start the job."""
+                # 1. Create local folders to store the job input files
+                job_obj.create_local_job_folders()
+
+                # 2. Download the job configuration file from the S3 bucket.
+                job_obj.download_job_config_file()
+
+                # 3. Parse the job configuration file.
+                job_obj.parse_job_config_ini()
+
+                # 4. Create a new job entry in the jobs database.
+                # -- also creates an ivert_files entry for the logfile, and uploads the new database version.
+                job_obj.create_new_job_entry()
+
+                # Create database entries for the job files
+                job_obj.download_job_files(only_create_databse_entries=True, upload_to_s3=False)
+
+                job_obj.update_job_status("unknown", upload_to_s3=False)
+
+                job_obj.delete_local_job_folders()
+
+                del job_obj
+        return
+
     def __del__(self):
         """Clean up any running jobs."""
         for job in self.running_jobs:
@@ -504,7 +543,7 @@ class IvertJob:
 
         return True
 
-    def create_new_job_entry(self):
+    def create_new_job_entry(self, upload_to_s3=True):
         """Create a new job entry in the jobs database.
 
         The new version of the database will be immediately uploaded."""
@@ -516,16 +555,16 @@ class IvertJob:
                                     self.job_dir,
                                     self.output_dir,
                                     job_status="started",
-                                    skip_database_upload=True)
+                                    upload_to_s3=upload_to_s3)
 
         # Generate a new file record for the config file of this job.
         self.jobs_db.create_new_file_record(self.job_config_local, self.job_id, self.username,
                                             import_or_export=0, status="processed",
-                                            skip_database_upload=False)
+                                            upload_to_s3=upload_to_s3)
 
         return
 
-    def download_job_files(self):
+    def download_job_files(self, only_create_databse_entries=False, upload_to_s3=True):
         """Download all other job files from the S3 bucket and add their entries to the jobs database."""
         # It may take some time for all the files to pass quarantine and be available in the trusted bucket.
         files_to_download = self.job_config_object.files.copy()
@@ -542,7 +581,9 @@ class IvertJob:
 
                 if self.s3m.exists(f_key, bucket_type=self.s3_configfile_bucket_type):
                     # Download from the s3 bucket.
-                    self.s3m.download(f_key, local_fname, bucket_type=self.s3_configfile_bucket_type)
+                    if not only_create_databse_entries:
+                        self.s3m.download(f_key, local_fname, bucket_type=self.s3_configfile_bucket_type)
+
                     # Update our list of files to go.
                     files_to_download.remove(fname)
                     files_downloaded.append(fname)
@@ -552,8 +593,9 @@ class IvertJob:
                                                         self.job_id,
                                                         self.username,
                                                         import_or_export=0,
-                                                        status="downloaded",
-                                                        skip_database_upload=False)
+                                                        status="unknown" if only_create_databse_entries else "downloaded",
+                                                        fake_file_stats=True if only_create_databse_entries else False,
+                                                        upload_to_s3=False)
 
                 elif quarantine_manager.is_quarantined(f_key):
                     self.jobs_db.create_new_file_record(local_fname,
@@ -561,7 +603,7 @@ class IvertJob:
                                                         self.username,
                                                         import_or_export=0,
                                                         status="quarantined",
-                                                        skip_database_upload=False,
+                                                        upload_to_s3=False,
                                                         fake_file_stats=True)
                     files_to_download.remove(fname)
                     files_downloaded.append(fname)
@@ -586,13 +628,17 @@ class IvertJob:
                                                     self.username,
                                                     import_or_export=0,
                                                     status="timeout",
-                                                    skip_database_upload=False,
+                                                    upload_to_s3=False,
                                                     fake_file_stats=True)
 
                 files_to_download.remove(fname)
                 files_downloaded.append(fname)
 
         assert len(files_to_download) == 0 and len(files_downloaded) == len(self.job_config_object.files)
+
+        if upload_to_s3:
+            self.jobs_db.upload_to_s3(only_if_newer=True)
+
         return
 
     def push_sns_notification(self, start_or_finish: str, upload_to_s3: bool = True):
@@ -918,6 +964,7 @@ class IvertJob:
         # Do the version update and the upload here.
         self.update_job_status("complete")
 
+
 def define_and_parse_arguments() -> argparse.Namespace:
     """Defines and parses the command line arguments.
 
@@ -947,6 +994,12 @@ if __name__ == "__main__":
 
     # Parse the command line arguments
     args = define_and_parse_arguments()
+
+    if args.populate:
+        JM = IvertJobManager(input_bucket_type=args.bucket,
+                             time_interval_s=args.time_interval_s,
+                             job_id=None if args.job_id == -1 else args.job_id)
+        JM.quietly_populate_database()
 
     # Start the job manager
     JM = IvertJobManager(input_bucket_type=args.bucket,

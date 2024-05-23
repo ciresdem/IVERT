@@ -769,7 +769,8 @@ class JobsDatabaseServer(JobsDatabaseClient):
                        job_local_output_dir: str,
                        job_export_prefix: typing.Union[str, None] = None,
                        job_status: str = "unknown",
-                       skip_database_upload: bool = False,
+                       update_vnum: bool = True,
+                       upload_to_s3: bool = True,
                        ) -> sqlite3.Row:
         """
         Given the prefix of a job in the S3 bucket, create a new job in the "ivert_jobs" table of the database.
@@ -823,10 +824,12 @@ class JobsDatabaseServer(JobsDatabaseClient):
                   os.getpid(),
                   job_status.strip().lower()))
 
-        self.increment_vnumber(c)
+        if update_vnum:
+            self.increment_vnumber(c)
+
         conn.commit()
 
-        if not skip_database_upload:
+        if upload_to_s3:
             self.upload_to_s3(only_if_newer=False)
 
         existing_row = self.job_exists(jco.username, jco.job_id, return_row=True)
@@ -874,7 +877,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
                                username: str,
                                import_or_export: int,
                                status: str = "unknown",
-                               skip_database_upload: bool = False,
+                               upload_to_s3: bool = True,
                                fake_file_stats: bool = False,
                                ) -> sqlite3.Row:
         """
@@ -940,7 +943,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
         self.increment_vnumber(cursor)
         conn.commit()
 
-        if not skip_database_upload:
+        if upload_to_s3:
             self.upload_to_s3(only_if_newer=False)
 
         existing_row = self.file_exists(f_basename, username, job_id, return_row=True)
