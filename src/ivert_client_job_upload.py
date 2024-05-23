@@ -25,7 +25,7 @@ def create_new_job_params(username: str = None) -> tuple[str, int]:
         int: New job number
     """
     # Since this is running on the client, we only get the functionality of the base class, not the server.
-    dbo = ivert_jobs_database.JobsDatabaseClient()
+    dbo = jobs_database.JobsDatabaseClient()
     last_job_number = dbo.fetch_latest_job_number_from_s3_metadata()
 
     if last_job_number is None:
@@ -55,7 +55,7 @@ def create_new_job_params(username: str = None) -> tuple[str, int]:
 
 def wrap_fname_in_quotes_if_needed(fn: str) -> str:
     """If a filename has spaces, or is empty, wrap it in quotes."""
-    return fn if (" " not in f and len(fn) > 0) else f'"{fn}"'
+    return fn if (" " not in fn and len(fn) > 0) else f'"{fn}"'
 
 
 def create_new_job_config(ivert_args: argparse.Namespace,
