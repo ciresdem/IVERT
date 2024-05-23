@@ -25,6 +25,7 @@ import quarantine_manager
 import s3
 import sns
 import utils.configfile
+import utils.sizeof_format as sizeof
 
 
 def is_another_manager_running() -> typing.Union[bool, psutil.Process]:
@@ -58,8 +59,8 @@ class IvertJobManager:
             input_bucket_type (str, optional): The type of S3 bucket to use for input. Defaults to "trusted".
             time_interval_s (int, float, or None, optional): Time between iterations of checking for new jobs.
                 Default: Just pick up the value from the ivert_config.ini file.
-            job_id (int, or None, optional): The job_id of one specific job we want to process. Ignore all others.
-                Used just for testing.
+            job_id (int, or None, optional): The job_id of one specific job we want to process. Ignore all others and
+                exit after this one job is done. Used for testing.
 
         Returns:
             None
@@ -75,7 +76,7 @@ class IvertJobManager:
         self.specific_job_id = job_id
 
         # The jobs database object. We assume this is running on the S3 server (it doesn't make sense otherwise).
-        self.jobs_db = ivert_jobs_database.JobsDatabaseServer()
+        self.jobs_db = jobs_database.JobsDatabaseServer()
         self.running_jobs: list[mp.Process] = []
 
         self.s3m = s3.S3Manager()
@@ -101,11 +102,15 @@ class IvertJobManager:
 
                 # If there are new jobs, start them in the background
                 for ini_name in new_ini_keys:
-                    self.start_new_job(ini_name)
+                    # Either look for any new jobs, or if specific_job_id is set, look for just that job.
+                    if (not self.specific_job_id) or str(self.specific_job_id) in ini_name.split("/")[-1]:
+                        self.start_new_job(ini_name)
 
                 # Loop throug the list of running jobs and clean them up if they're finished.
+                # If specific_job_id is set, the program will terminate (successfully) after that job is done.
                 self.check_on_running_jobs()
 
+                # If no jobs are running, sleep and try again.
                 time.sleep(self.time_interval_s)
 
             except Exception as e:
@@ -306,7 +311,7 @@ class IvertJob:
         self.s3_configfile_key = job_config_s3_key
         self.s3_configfile_bucket_type = job_config_s3_bucket_type
 
-        self.jobs_db = ivert_jobs_database.JobsDatabaseServer()
+        self.jobs_db = jobs_database.JobsDatabaseServer()
 
         # Assign the job ID and username.
         params_dict = self.jobs_db.get_params_from_s3_path(self.s3_configfile_key,
@@ -337,7 +342,8 @@ class IvertJob:
         # The threshold time to wait for files to arrive in the trusted bucket before erroring them out and moving along.
         self.download_timeout_s = self.ivert_config.ivert_server_job_file_download_timeout_mins * 60
 
-        # The status of the job. Generally reflected in the ivert_jobs status database.
+        # The configfile for the email templates. Left blank at first until needed.
+        self.email_templates = None
 
         # These jobs are run as a subprocess, so after initialization they automatically start the processing.
         # Start the job.
@@ -361,7 +367,7 @@ class IvertJob:
 
         # 5. Send SNS notification that the job has started.
         #  --- Insert SNS record in database (upload to s3)
-        self.push_sns_notification(start_or_finish="start")
+        self.push_sns_notification(start_or_finish="start", upload_to_s3=False)
 
         # 6. Download all other job files.
         #  --- Enter them each in database. (Upload to s3)
@@ -379,13 +385,20 @@ class IvertJob:
         self.export_logfile_if_exists()
 
         # 10. Mark the job as finished in the jobs database. (Upload to s3)
-        self.update_job_status("complete")
+        self.update_job_status("complete", upload_to_s3=False)
 
         # 11. Send SNS notification that the job has finished.
-        self.push_sns_notification(start_or_finish="finish")
+        self.push_sns_notification(start_or_finish="finish", upload_to_s3=True)
 
         # 12. After exporting output files, delete the local job files & folders.
         self.delete_local_job_folders()
+
+    def get_email_templates(self) -> utils.configfile.config:
+        """Get the email templates."""
+        if not self.email_templates:
+            self.email_templates = utils.configfile.config(self.ivert_config.ivert_email_templates)
+
+        return self.email_templates
 
     def create_local_job_folders(self):
         """Create a local folder to store the job input files and write output files."""
@@ -574,36 +587,108 @@ class IvertJob:
         assert len(files_to_download) == 0 and len(files_downloaded) == len(self.job_config_object.files)
         return
 
-    def push_sns_notification(self, start_or_finish: str):
+    def push_sns_notification(self, start_or_finish: str, upload_to_s3: bool = True):
         """Push a SNS notification for a started or finished job.
 
         This notifies the IVERT user that the job has finished and that they can download the results.
         """
         # Certain jobs, we don't want to send a notification.
-        # For instance "subscribe" or "unsubscribe", just let AWS do the notifying.
+        # For instance, "unsubscribe" commands send no notifications. "subscribe" only send a notification at
+        # job completion.
         if (self.command == "update") and \
-                ("sub_command" in self.job_config_object.cmd_args) and \
-                (self.job_config_object.cmd_args["sub_command"] in ("subscribe", "unsubscribe")):
+           ("sub_command" in self.job_config_object.cmd_args) and \
+           ((self.job_config_object.cmd_args["sub_command"] == "unsubscribe") or \
+            (self.job_config_object.cmd_args["sub_command"] == "subscribe" and start_or_finish == "start")):
             return
 
         start_or_finish = start_or_finish.strip().lower()
         if start_or_finish == "start":
             # Produce a job started notification
 
-            email_templates = utils.configfile.config(self.ivert_config.ivert_email_templates)
-            subject_line = email_templates.subject_template_job_submitted.format(self.username, self.job_id)
-            body = email_templates.email_template_job_submitted.format(self.username, self.job_id, self.convert_cmd_args_to_string())
+            email_templates = self.get_email_templates()
+            subject_line = email_templates.subject_job_submitted.format(self.username, self.job_id)
+            body = email_templates.email_intro + \
+                email_templates.email_job_submitted.format(self.username, self.job_id,
+                                                                       self.convert_cmd_args_to_string())
 
-            sns.send_sns_message(subject_line, body, self.job_id, self.username)
+            # Send the SNS notification
+            sns_response = sns.send_sns_message(subject_line, body, self.job_id, self.username)
+            # Log the SNS notification in the database.
+            self.jobs_db.create_new_sns_message(self.username, self.job_id, subject_line, sns_response,
+                                                update_vnum=True, upload_to_s3=upload_to_s3)
 
         elif start_or_finish == "finish":
-            email_templates = utils.configfile.config(self.ivert_config.ivert_email_templates)
+            email_templates = self.get_email_templates()
+            # By default, this will get the files (input and output) only associated with this particular job.
             files_df = self.collect_job_files_df()
             job_status = self.jobs_db.job_status(self.username, self.job_id)
-            # TODO: FINISH
+
+            # Loop through the files, mark as successful vs not-successful, input vs output.
+            input_files = []
+            output_files = []
+            num_inputs_successful = 0
+            num_inputs_unsuccessful = 0
+            num_outputs_successful = 0
+            num_outputs_unsuccessful = 0
+            for index, frow in files_df.iterrows():
+                if frow["import_or_export"] in (0, 2):
+                    input_files.append(frow)
+                    if frow["status"] in ("downloaded", "processed", "uploaded"):
+                        num_inputs_successful += 1
+                    else:
+                        num_inputs_unsuccessful += 1
+
+                if frow["import_or_export"] in (1, 2):
+                    output_files.append(frow)
+                    if frow["status"] in ("downloaded", "processed", "uploaded"):
+                        num_outputs_successful += 1
+                    else:
+                        num_outputs_unsuccessful += 1
+
+            # Produce the email subject and message.
+            subject_line = email_templates.subject_job_finished.format(self.username, self.job_id, job_status)
+
+            body = email_templates.email_intro + \
+                   email_templates.email_job_finished_start.format(self.username, self.job_id, job_status)
+
+            if len(input_files) > 0:
+                # List the input files.
+                body += email_templates.email_job_finished_input_files_addendum.format(len(input_files),
+                                                                                       num_inputs_successful,
+                                                                                       num_inputs_unsuccessful)
+
+                for ifile in input_files:
+                    body += email_templates.file_item.formate(ifile["filename"],
+                                                              sizeof.sizeof_fmt(ifile["size_bytes"]),
+                                                              ifile["status"])
+
+            if len(output_files) > 0:
+                # List the output files.
+                body += email_templates.email_job_finished_output_files_addendum.format(len(output_files),
+                                                                                        num_outputs_successful,
+                                                                                        num_outputs_unsuccessful)
+
+                for ofile in output_files:
+                    body += email_templates.file_item.formate(ofile["filename"],
+                                                              sizeof.sizeof_fmt(ofile["size_bytes"]),
+                                                              ofile["status"])
+
+                body += email_templates.email_output_files_download_notification
+
+            if job_status != "complete":
+                body += email_templates.email_job_finished_unsuccessful_addendum
+
+            # Send the email message.
+            sns_response = sns.send_sns_message(subject_line, body, self.job_id, self.username)
+            # Log the SNS notification in the database.
+            self.jobs_db.create_new_sns_message(self.username, self.job_id, subject_line, sns_response,
+                                                update_vnum=True, upload_to_s3=upload_to_s3)
+
 
         else:
             raise ValueError(f"parameter 'start_or_finish' must be one of 'start', or 'finish'. '{start_or_finish}' not recoginzed.")
+
+        return
 
     def collect_job_files_df(self) -> pandas.DataFrame:
         """From the ivert_files database, collect the status of all files associated with a given job, both inputs and outputs."""
@@ -661,7 +746,9 @@ class IvertJob:
             # Then create the file.
             f = open(self.logfile, "w")
 
+        # write the message in there.
         f.write(message)
+
         # Put a newline at the end of any given message, if it's not already there.
         # That way the next message will be on a new line.
         if message[-1] != '\n':
@@ -677,7 +764,11 @@ class IvertJob:
             return
 
         # We're assuming at this point that the log-file is complete. Update the file stats in the database.
-        self.jobs_db.update_file_statistics(self.username, self.job_id, self.logfile)
+        self.jobs_db.update_file_statistics(self.username,
+                                            self.job_id,
+                                            self.logfile,
+                                            increment_vnumber=False,
+                                            upload_to_s3=False)
 
         self.upload_file_to_export_bucket(self.logfile)
 
@@ -746,13 +837,15 @@ class IvertJob:
 
         return
 
-    def update_job_status(self, status):
+    def update_job_status(self, status, upload_to_s3=True):
         "Update the job status in the database."
-        self.jobs_db.update_job_status(self.username, self.job_id, status, increment_vnum=True, upload_to_s3=True)
+        self.jobs_db.update_job_status(self.username, self.job_id, status,
+                                       increment_vnum=True, upload_to_s3=upload_to_s3)
 
-    def update_file_status(self, filename, status):
+    def update_file_status(self, filename, status, upload_to_s3=True):
         """Update the file status in the database."""
-        self.jobs_db.update_file_status(self.username, self.job_id, filename, status, increment_vnum=True, upload_to_s3=True)
+        self.jobs_db.update_file_status(self.username, self.job_id, filename, status,
+                                        increment_vnum=True, upload_to_s3=upload_to_s3)
 
     def run_subscribe_command(self):
         "Run a 'subscribe' command to subscribe a user to an SNS notification service."
@@ -791,8 +884,8 @@ class IvertJob:
             self.update_job_status("error")
             return
 
-        self.update_job_status("complete")
         return
+
 
     def run_unsubscribe_command(self):
         "Run a 'unsubscribe' command to unsubscribe a user from an SNS notification service."

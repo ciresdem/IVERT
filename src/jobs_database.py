@@ -659,6 +659,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
                                username: str,
                                job_id: typing.Union[int, str],
                                filename: str,
+                               new_status: typing.Union[str, None] = None,
                                increment_vnumber: bool = True,
                                upload_to_s3: bool = True) -> None:
         """
@@ -671,6 +672,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
             username (str): The username of the job.
             job_id (int or str): The ID of the job.
             filename (str): The name of the file.
+            new_status (str): A new status for the job. Default: do not change the status.
             increment_vnumber (bool): Whether to increment the database version number. This may be set to false if we're making other sequential changes.
             upload_to_s3 (bool): Whether to upload the database to the S3 bucket. Default True.
 
@@ -694,11 +696,19 @@ class JobsDatabaseServer(JobsDatabaseClient):
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        update_query = """UPDATE ivert_files
-                          SET md5 = ?, size_bytes = ?
-                          WHERE username = ? AND job_id = ? AND filename = ?;"""
+        if new_status:
+            update_query = """UPDATE ivert_files
+                              SET md5 = ?, size_bytes = ?, status = ?
+                              WHERE username = ? AND job_id = ? AND filename = ?;"""
 
-        cursor.execute(update_query, (md5, size_bytes, username, job_id, file_basename))
+            cursor.execute(update_query, (md5, size_bytes, new_status, username, job_id, file_basename))
+
+        else:
+            update_query = """UPDATE ivert_files
+                              SET md5 = ?, size_bytes = ?
+                              WHERE username = ? AND job_id = ? AND filename = ?;"""
+
+            cursor.execute(update_query, (md5, size_bytes, username, job_id, file_basename))
 
         # Increment the database version number
         if increment_vnumber:
@@ -1026,6 +1036,30 @@ class JobsDatabaseServer(JobsDatabaseClient):
 
         cursor.execute("DELETE FROM sns_subscriptions WHERE user_email = ?;",
                        (email,))
+
+        if update_vnum:
+            self.increment_vnumber(cursor)
+
+        conn.commit()
+
+        if upload_to_s3:
+            self.upload_to_s3(only_if_newer=False)
+
+    def create_new_sns_message(self,
+                               username: str,
+                               job_id: typing.Union[str, int],
+                               subject: str,
+                               sns_response: str,
+                               update_vnum: bool = True,
+                               upload_to_s3: bool = True) -> None:
+        """Create a new record of an SNS message sent to an SNS topic."""
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("INSERT INTO sns_messages (username, job_id, subject, response) "
+                       "VALUES (?, ?, ?, ?);",
+                       (username, job_id, subject, sns_response))
 
         if update_vnum:
             self.increment_vnumber(cursor)
