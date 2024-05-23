@@ -2,6 +2,7 @@
 
 import argparse
 import boto3
+import botocore
 import json
 import typing
 
@@ -28,8 +29,8 @@ def send_sns_message(subject: str,
     """
     client = boto3.client('sns')
 
-    topic_arn = ivert_config.sns_topic_arn
-    assert topic_arn is not None
+    topic_arn_str = topic_arn()
+    assert topic_arn_str is not None
 
     # We could send "job_id" as a "Number" datatype but they max it out at 10^9 and our job_ids are 12 digits.
     # So, it's a string datatype.
@@ -38,7 +39,7 @@ def send_sns_message(subject: str,
                       }
 
     # Send the message.
-    reply = client.publish(TopicArn=topic_arn,
+    reply = client.publish(TopicArn=topic_arn_str,
                            Subject=subject,
                            Message=message,
                            MessageAttributes=msg_attributes)
@@ -125,24 +126,8 @@ def define_and_parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = define_and_parse_args()
 
-    subject = f"IVERT: Job \"{args.username}_{args.job_id}\" has been created."
-
-    message = f"""This is an automated message from the ICESat-2 Validation of Elevations Reporting Tool (IVERT).
-Do not reply to this message.
-
-Your job "{args.username}_{args.job_id}" has been created and is being started.
-You can monitor the status of your job at any time by running "ivert status {args.username}_{args.job_id}" at the command line.
-
-The following options are assigned to this job:
-[Insert stuff here for message options.]
-
-If you wish to cancel your job, run "ivert kill {args.username}_{args.job_id}" at the command line and it will be terminated when the EC2 receives the notification. All files uploaded with the job will be deleted.
-
-[Insert this bit only if results will be generated.]
-You will get another email when the job is complete and your results are ready to download."""
-
-    response = send_sns_message(subject,
-                                message,
+    response = send_sns_message(args.subject,
+                                args.message,
                                 args.job_id,
                                 args.username)
 
