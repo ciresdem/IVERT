@@ -508,7 +508,7 @@ class IvertJob:
 
         self.job_config_object = utils.configfile.config(self.job_config_local)
 
-        if not self.is_valid_job_config(self.job_config_object):
+        if not self.is_valid_job_config(self.job_config_object) and not dry_run_only:
             # If the logfile is not validly formatted, print an error message to the log file, upload the log file,
             # and exit the job.
             error_msg = f"""Configfile {os.path.basename(self.job_config_local)} is not formatted correctly.
@@ -518,9 +518,8 @@ class IvertJob:
             self.export_logfile_if_exists()
             self.update_job_status("error", upload_to_s3=not dry_run_only)
 
-            if not dry_run_only:
-                self.push_sns_notification(start_or_finish="finish")
-                raise ValueError(error_msg)
+            self.push_sns_notification(start_or_finish="finish")
+            raise ValueError(error_msg)
 
         return
 
@@ -569,7 +568,12 @@ class IvertJob:
     def download_job_files(self, only_create_databse_entries=False, upload_to_s3=True):
         """Download all other job files from the S3 bucket and add their entries to the jobs database."""
         # It may take some time for all the files to pass quarantine and be available in the trusted bucket.
-        files_to_download = self.job_config_object.files.copy()
+        try:
+            files_to_download = self.job_config_object.files.copy()
+        except AttributeError:
+            # No files to download.
+            files_to_download = []
+
         files_downloaded = []
 
         time_start = time.time()
@@ -636,7 +640,7 @@ class IvertJob:
                 files_to_download.remove(fname)
                 files_downloaded.append(fname)
 
-        assert len(files_to_download) == 0 and len(files_downloaded) == len(self.job_config_object.files)
+        assert len(files_to_download) == 0 and (len(files_downloaded) == len(self.job_config_object.files))
 
         if upload_to_s3:
             self.jobs_db.upload_to_s3(only_if_newer=True)
