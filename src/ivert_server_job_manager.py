@@ -501,7 +501,7 @@ class IvertJob:
         self.job_config_local = os.path.join(self.job_dir, self.s3_configfile_key.split("/")[-1])
         self.s3m.download(self.job_config_s3_key, self.job_config_local, bucket_type=self.job_config_s3_bucket_type)
 
-    def parse_job_config_ini(self):
+    def parse_job_config_ini(self, dry_run_only: bool = False):
         """Parse the job configuration file, defining the IVERT job parameters."""
         # The job configfile is a .ini configuration file.
         assert os.path.exists(self.job_config_local)
@@ -516,9 +516,11 @@ class IvertJob:
             Does the IVERT client code need to be updated?"""
             self.write_to_logfile(error_msg)
             self.export_logfile_if_exists()
-            self.update_job_status("error")
-            self.push_sns_notification(start_or_finish="finish")
-            raise ValueError(error_msg)
+            self.update_job_status("error", upload_to_s3=not dry_run_only)
+
+            if not dry_run_only:
+                self.push_sns_notification(start_or_finish="finish")
+                raise ValueError(error_msg)
 
         return
 
@@ -788,14 +790,14 @@ class IvertJob:
             elif sub_command == "unsubscribe":
                 self.run_unsubscribe_command()
 
-    def write_to_logfile(self, message):
+    def write_to_logfile(self, message, upload_to_s3=True):
         """Write out to the job's logfile."""
         if os.path.exists(self.logfile):
             f = open(self.logfile, "a")
         else:
             # Create a database record of the log file.
             self.jobs_db.create_new_file_record(self.logfile, self.job_id, self.username, import_or_export=1,
-                                                status="processing", skip_database_upload=False, fake_file_stats=True)
+                                                status="processing", upload_to_s3=upload_to_s3, fake_file_stats=True)
             # Then create the file.
             f = open(self.logfile, "w")
 
