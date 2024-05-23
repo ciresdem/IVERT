@@ -289,7 +289,7 @@ class IvertJobManager:
                 job_obj.download_job_config_file()
 
                 # 3. Parse the job configuration file.
-                job_obj.parse_job_config_ini()
+                job_obj.parse_job_config_ini(dry_run_only=True)
 
                 # 4. Create a new job entry in the jobs database.
                 # -- also creates an ivert_files entry for the logfile, and uploads the new database version.
