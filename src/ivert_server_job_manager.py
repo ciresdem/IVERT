@@ -273,7 +273,7 @@ class IvertJobManager:
                 if job.is_alive():
                     # Kill the IVERT job and all its children. Kinda morbid terminoligy I know, but it's what's needed here.
                     parent = psutil.Process(job.pid)
-                    for child in parent.children(recursive=True):
+                    for child in parent.children(recursive=True) and child.is_alive():
                         child.kill()
                     job.kill()
 
@@ -686,16 +686,11 @@ class IvertJob:
             if job_status != "complete":
                 body += email_templates.email_job_finished_unsuccessful_addendum
 
-            print("SUBJECT:", subject_line)
-            print("BODY:", body)
-            sys.exit(0)
-
             # Send the email message.
             sns_response = sns.send_sns_message(subject_line, body, self.job_id, self.username)
             # Log the SNS notification in the database.
             self.jobs_db.create_new_sns_message(self.username, self.job_id, subject_line, sns_response,
                                                 update_vnum=True, upload_to_s3=upload_to_s3)
-
 
         else:
             raise ValueError(f"parameter 'start_or_finish' must be one of 'start', or 'finish'. '{start_or_finish}' not recoginzed.")
@@ -843,7 +838,7 @@ class IvertJob:
                 continue
             else:
                 # Otherwise, change the status to 'error'. Something's wrong if we can't find the file.
-                self.jobs_db.update_file_status(self.username, self.job_id, f_basename, "error")
+                self.jobs_db.update_file_status(self.username, self.job_id, f_basename, "error", upload_to_s3=False)
                 # Also put a message in the logfile.
                 self.write_to_logfile("Error: File not found: " + f_path)
 
@@ -881,11 +876,11 @@ class IvertJob:
                                                            topic_arn,
                                                            sns_arn,
                                                            filter_string,
-                                                           increment_vnum=True,
-                                                           upload_to_s3=True
+                                                           increment_vnum=False,
+                                                           upload_to_s3=False
                                                            )
 
-            self.update_job_status("complete")
+            self.update_job_status("complete", upload_to_s3=True)
 
         except KeyboardInterrupt as e:
             self.update_job_status("killed")
@@ -898,7 +893,6 @@ class IvertJob:
 
         return
 
-
     def run_unsubscribe_command(self):
         "Run a 'unsubscribe' command to unsubscribe a user from an SNS notification service."
         cmd_args = self.job_config_object.cmd_args
@@ -910,7 +904,7 @@ class IvertJob:
             sns_arn = self.jobs_db.get_sns_arn(cmd_args["email"])
             sns.unsubscribe(sns_arn)
 
-            self.jobs_db.remove_sns_subscription(cmd_args["email"], update_vnum=True, upload_to_s3=True)
+            self.jobs_db.remove_sns_subscription(cmd_args["email"], update_vnum=False, upload_to_s3=False)
 
         except KeyboardInterrupt as e:
             self.update_job_status("killed")
