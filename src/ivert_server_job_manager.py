@@ -277,14 +277,22 @@ class IvertJobManager:
                         child.kill()
                     job.kill()
 
-                if not job.is_alive():
-                    job.close()
+                job_pid = job.pid
+                job_exitcode = job.exitcode
+                job.close()
+
             except ValueError:
                 # If we try to close or kill an already-closed process, a ValueError is raised.
                 # In this case, just move on.
-                pass
+                try:
+                    job_pid = job.pid
+                    job_exitcode = job.exitcode
+                    job.close()
+                except RuntimeError:
+                    job_pid = 0
+                    job_exitcode = 1
 
-            self.clean_up_terminated_job(job.pid, job.exitcode)
+            self.clean_up_terminated_job(job_pid, job_exitcode)
 
         self.running_jobs = []
         return
@@ -658,9 +666,9 @@ class IvertJob:
                                                                                        num_inputs_unsuccessful)
 
                 for ifile in input_files:
-                    body += email_templates.file_item.formate(ifile["filename"],
-                                                              sizeof.sizeof_fmt(ifile["size_bytes"]),
-                                                              ifile["status"])
+                    body += email_templates.file_item.format(ifile["filename"],
+                                                             sizeof.sizeof_fmt(ifile["size_bytes"]),
+                                                             ifile["status"])
 
             if len(output_files) > 0:
                 # List the output files.
@@ -669,9 +677,9 @@ class IvertJob:
                                                                                         num_outputs_unsuccessful)
 
                 for ofile in output_files:
-                    body += email_templates.file_item.formate(ofile["filename"],
-                                                              sizeof.sizeof_fmt(ofile["size_bytes"]),
-                                                              ofile["status"])
+                    body += email_templates.file_item.format(ofile["filename"],
+                                                             sizeof.sizeof_fmt(ofile["size_bytes"]),
+                                                             ofile["status"])
 
                 body += email_templates.email_output_files_download_notification
 
