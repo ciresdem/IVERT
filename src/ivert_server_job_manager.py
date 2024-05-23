@@ -686,6 +686,10 @@ class IvertJob:
             if job_status != "complete":
                 body += email_templates.email_job_finished_unsuccessful_addendum
 
+            print("SUBJECT:", subject_line)
+            print("BODY:", body)
+            sys.exit(0)
+
             # Send the email message.
             sns_response = sns.send_sns_message(subject_line, body, self.job_id, self.username)
             # Log the SNS notification in the database.
