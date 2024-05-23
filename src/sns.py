@@ -28,7 +28,7 @@ def send_sns_message(subject: str,
     """
     client = boto3.client('sns')
 
-    topic_arn = ivert_config.sns_arn
+    topic_arn = ivert_config.sns_topic_arn
     assert topic_arn is not None
 
     # We could send "job_id" as a "Number" datatype but they max it out at 10^9 and our job_ids are 12 digits.
