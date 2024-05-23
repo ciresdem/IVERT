@@ -123,7 +123,9 @@ CREATE TABLE IF NOT EXISTS sns_messages (
     job_id          INTEGER         NOT NULL,
     username        VARCHAR(128)    NOT NULL,
     subject         VARCHAR(256)    NOT NULL,
-    messages        VARCHAR(8192)   NOT NULL,
+    -- message         VARCHAR(8192)   NOT NULL,
+    -- We've decided *not* to keep full-text copies of all the messsages.
+    -- This could blow up the database size pretty quickly.
     response        VARCHAR(2048),  -- The full response returned by the call to aws.sns.publish in JSON format. This
                                     -- includes the date it was sent, the size, and the MessageID.
     FOREIGN KEY(job_id, username)
