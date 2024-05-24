@@ -9,7 +9,8 @@ import utils.configfile
 
 ivert_config = utils.configfile.config()
 
-def run_download_command(args: argparse.Namespace) -> None:
+
+def run_download_command(args: argparse.Namespace) -> list[str]:
     """Run the ivert_client download command."""
     assert hasattr(args, "job_id")
     assert hasattr(args, "username")
@@ -32,7 +33,8 @@ def run_download_command(args: argparse.Namespace) -> None:
 
     # Download the job.
     job_name = f"{args.username}_{args.job_id}"
-    download_job(job_name, args.output_dir)
+    return download_job(job_name, args.output_dir)
+
 
 def find_most_recent_job_dir_from_this_machine() -> str:
     """Find the most recent job directory on this machine."""

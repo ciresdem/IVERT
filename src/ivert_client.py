@@ -22,13 +22,18 @@ def define_and_parse_args(return_parser: bool = False):
     parser_validate = subparsers.add_parser("validate", help=validate_help_msg, description=validate_help_msg)
     parser_validate.add_argument("files_or_directory", type=str, nargs="+",
                                  help="Enter a file, list of files, or a directory."
-                                      " May use bash-style wildcards such as 'dirname/ncei*.tif'")
+                                      " May use bash-style wildcards such as 'dirname/ncei*.tif'. "
+                                      "If 'TEST' is given, run a test job with no calculations "
+                                      "(same thing as 'ivert test').")
     parser_validate.add_argument("-ivd", "--input_vdatum", dest="input_vdatum", type=str, default="egm2008",
                                  help="Input DEM vertical datum. (Default: 'egm2008')"
                                       " Other options are: [TODO: FILL IN SOON]")
     parser_validate.add_argument("-ovd", "--output_vdatum", dest="output_vdatum", type=str, default="egm2008",
                                  help="Output DEM vertical datum. (Default: 'egm2008')"
                                       " Other options are: [TODO: FILL IN SOON]")
+    parser_validate.add_argument("-n", "--name", dest="region_name", type=str, default="DEMs",
+                                 help="The name of the region being validated. Will appear in the validation summary "
+                                      "plot if more than one file is being validated. (Default: 'DEMs')")
     parser_validate.add_argument("-w", "--wait", dest="wait", default=False, action="store_true",
                                  help="Wait to exit until the results are finished and downloaded. Default:"
                                       " just upload the data and exit. You can then run 'ivert_client.py check <job_id>' to check the status"

@@ -4,8 +4,16 @@ It creates and empty .tif file, uploads it to do a validation but uses the --emp
 
 import argparse
 import os
-import tempfile
+
+import utils.configfile
+import utils.create_empty_tiff
 
 def run_test_commend(args: argparse.Namespace) -> None:
     """Run an end-to-end test job of the IVERT system, without having it actually process any data."""
-    # Create a temporary .tif file
+
+    ivert_config = utils.configfile.config()
+    empty_tiff = ivert_config.empty_tiff
+
+    if not os.path.exists(empty_tiff):
+        utils.create_empty_tiff.create_empty_tiff()
+
