@@ -427,10 +427,13 @@ class IvertJob:
         # 7. Run the job!
         # -- Figure out how to monitor the status of the job as it goes along.
         self.update_job_status("running")
+
+        # See execute_job() for the logic of parsing out the work to individual jobs.
         self.execute_job()
 
         # 8. Upload export files to the S3 bucket (if any). Enter them into the database.
-        self.upload_export_files()
+        # Exclude the logfile because we may still be writing to it if any of these files have errors.
+        self.upload_export_files(exclude_logfile=True)
 
         # 9. Upload the logfile (if exists) and enter in database. (Upload to s3)
         self.export_logfile_if_exists()
@@ -777,26 +780,44 @@ class IvertJob:
         """Execute the job as a multiprocess sub-process. The meat of the matter.
 
         Monitor files that are being output."""
-        if self.command == "validate":
-            # RUN A VALIDATION COMMAND
-            # TODO: Implement
-            pass
+        try:
 
-        elif self.command == "import":
-            # RUN AN IMPORT COMMAND
-            # TODO: Implement
-            pass
+            # THIS IS THE LOGIC FOR DETERMINING WHICH COMMAND TO RUN ON THE SERVER.
 
-        elif self.command == "update":
-            # For update, look for a particular sub-command under the args.
-            assert "sub_command" in self.job_config_object.cmd_args
-            sub_command = self.job_config_object.cmd_args["sub_command"]
+            if self.command == "validate":
+                # If EMPTY_TEST is set in the config file, don't actually do a validation. Just print a confirm message to
+                # the logfile and upload it, then we're done.
+                if "EMPTY_TEST" in self.job_config_object.cmd_args:
+                    self.run_test_command()
+                else:
+                    # RUN A VALIDATION COMMAND
+                    # TODO: Implement
+                    pass
 
-            if sub_command == "subscribe":
-                self.run_subscribe_command()
+            elif self.command == "import":
+                # RUN AN IMPORT COMMAND
+                # TODO: Implement
+                pass
 
-            elif sub_command == "unsubscribe":
-                self.run_unsubscribe_command()
+            elif self.command == "update":
+                # For update, look for a particular sub-command under the args.
+                assert "sub_command" in self.job_config_object.cmd_args
+                sub_command = self.job_config_object.cmd_args["sub_command"]
+
+                if sub_command == "subscribe":
+                    self.run_subscribe_command()
+
+                elif sub_command == "unsubscribe":
+                    self.run_unsubscribe_command()
+
+        except KeyboardInterrupt as e:
+            self.update_job_status("killed")
+            return
+
+        except RuntimeError:
+            self.write_to_logfile(traceback.format_exc())
+            self.update_job_status("error")
+            return
 
     def write_to_logfile(self, message, upload_to_s3=True):
         """Write out to the job's logfile."""
@@ -859,12 +880,12 @@ class IvertJob:
 
         return
 
-    def upload_export_files(self):
+    def upload_export_files(self, exclude_logfile: bool = True):
         """Upload any files that are set to the exported to the export bucket."""
         # Get a list of all the job files associated with this job.
         job_files_df = self.collect_job_files_df()
         # Filter the list to only include files that are marked for export.
-        export_files_df = job_files_df[job_files_df["import_or_export"] >= 1]
+        export_files_df = job_files_df[job_files_df["import_or_export"].isin((1, 2))]
 
         # If there are no files to export, do nothing.
         if len(export_files_df) == 0:
@@ -875,10 +896,15 @@ class IvertJob:
         assert job_row
         job_local_path = job_row["input_dir_local"]
         job_output_path = job_row["output_dir_local"]
+        job_logfile = job_row["logfile"]
 
         # Iterate over each file.
         for index, row in export_files_df.iterrows():
             f_basename = row["filename"]
+
+            # Skip the logfile if we've opted to exclude it.
+            if exclude_logfile and (f_basename == job_logfile):
+                continue
 
             f_path = os.path.join(job_output_path, f_basename)
             f_path_other = os.path.join(job_local_path, f_basename)
@@ -913,66 +939,58 @@ class IvertJob:
     def run_subscribe_command(self):
         "Run a 'subscribe' command to subscribe a user to an SNS notification service."
         cmd_args = self.job_config_object.cmd_args
-        # If for some reason we get a 'subscribe' command where we've opted *not* to create the subscription, then just
-        # quietly quit and call it a day.
-        self.update_job_status("running")
 
-        try:
-            assert "email" in cmd_args
-            assert "all" in cmd_args
+        assert "email" in cmd_args
+        assert "all" in cmd_args
 
-            filter_string = None if cmd_args["all"] else self.username
-            sns_arn = sns.subscribe(cmd_args["email"],
-                                    filter_string)
+        filter_string = None if cmd_args["all"] else self.username
+        sns_arn = sns.subscribe(cmd_args["email"],
+                                filter_string)
 
-            # Add this arn to the database. If it's already in there, update it.
-            topic_arn = self.ivert_config.sns_topic_arn
-            self.jobs_db.create_or_update_sns_subscription(self.username,
-                                                           cmd_args["email"],
-                                                           topic_arn,
-                                                           sns_arn,
-                                                           filter_string,
-                                                           increment_vnum=False,
-                                                           upload_to_s3=False
-                                                           )
-
-            self.update_job_status("complete", upload_to_s3=True)
-
-        except KeyboardInterrupt as e:
-            self.update_job_status("killed")
-            return
-
-        except RuntimeError:
-            self.write_to_logfile(traceback.format_exc())
-            self.update_job_status("error")
-            return
-
+        # Add this arn to the database. If it's already in there, update it.
+        topic_arn = self.ivert_config.sns_topic_arn
+        self.jobs_db.create_or_update_sns_subscription(self.username,
+                                                       cmd_args["email"],
+                                                       topic_arn,
+                                                       sns_arn,
+                                                       filter_string,
+                                                       increment_vnum=False,
+                                                       upload_to_s3=False
+                                                       )
         return
 
     def run_unsubscribe_command(self):
         "Run a 'unsubscribe' command to unsubscribe a user from an SNS notification service."
         cmd_args = self.job_config_object.cmd_args
 
-        try:
-            assert "sub_command" in cmd_args and cmd_args["sub_command"] == "unsubscribe"
-            assert "email" in cmd_args
+        assert "sub_command" in cmd_args and cmd_args["sub_command"] == "unsubscribe"
+        assert "email" in cmd_args
 
-            sns_arn = self.jobs_db.get_sns_arn(cmd_args["email"])
-            sns.unsubscribe(sns_arn)
+        sns_arn = self.jobs_db.get_sns_arn(cmd_args["email"])
+        sns.unsubscribe(sns_arn)
 
-            self.jobs_db.remove_sns_subscription(cmd_args["email"], update_vnum=False, upload_to_s3=False)
+        self.jobs_db.remove_sns_subscription(cmd_args["email"], update_vnum=False, upload_to_s3=False)
+        return
 
-        except KeyboardInterrupt as e:
-            self.update_job_status("killed")
-            return
+    def run_test_command(self):
+        # One (small) empty test .tif file would have been uploaded with this test job. If we can find it, mark it as processed.
+        job_row = self.jobs_db.job_exists(self.username, self.job_id, return_row=True)
+        assert job_row
+        job_local_path = job_row["input_dir_local"]
 
-        except RuntimeError:
-            self.write_to_logfile(traceback.format_exc())
-            self.update_job_status("error")
-            return
+        for fname in self.job_config_object.files:
+            f_path = os.path.join(job_local_path, fname)
+            if os.path.exists(f_path):
+                self.jobs_db.update_file_status(self.username, self.job_id, fname, "processed", upload_to_s3=False)
+            else:
+                # If we can't find the file and its status is not some type of error, mark it as 'error'.
+                if self.jobs_db.file_exists(fname, self.username, self.job_id, return_row=True)["status"] not in \
+                        ("error", "timeout", "quarantined", "unknown"):
+                    self.jobs_db.update_file_status(self.username, self.job_id, fname, "error", upload_to_s3=False)
 
-        # Do the version update and the upload here.
-        self.update_job_status("complete")
+        # Write a message to the logfile, which will be exported. This tests the output functionality as well.
+        self.write_to_logfile(f"Test job {self.job_name} has completed.")
+        return
 
 
 def define_and_parse_arguments() -> argparse.Namespace:

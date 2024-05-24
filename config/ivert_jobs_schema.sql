@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS ivert_jobs (
     -- every job should come with a config .ini file. The name of it goes here.
     configfile      VARCHAR(128)    NOT NULL,
 
-    -- every job generates a logfile with outputs that the user can download. It is placed in the export_bucket under
+    -- Many jobs generate a logfile with outputs that the user can download. It is placed in the export_bucket under
     -- the export_prefix folder.
     logfile         VARCHAR(128)    NOT NULL,
 
