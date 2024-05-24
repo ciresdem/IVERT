@@ -266,10 +266,11 @@ class IvertJobManager:
         # TODO: If no SNS message was already sent, send one.
         # TODO: Delete the job's local file directory.
 
-    def quietly_populate_database(self):
+    def quietly_populate_database(self, new_vnum: int = 0):
         """Populate the database without executing anything.
 
-        Useful if we've rebuilt the database and there are exiting files in the trusted bucket that we want to populate.
+        Useful if we've rebuilt the database and there are exiting files in the trusted bucket that we want to populate
+        with records, but not kick off any jobs from it.
 
         NOTE: Do not do this while new jobs are coming in. It may skip a new job that has just come in.
         """
@@ -303,6 +304,9 @@ class IvertJobManager:
                 job_obj.delete_local_job_folders()
 
                 del job_obj
+
+        if new_vnum > 0:
+            self.jobs_db.set_vnumber(new_vnum)
         return
 
     def __del__(self):
@@ -987,17 +991,13 @@ def define_and_parse_arguments() -> argparse.Namespace:
                         help="Run processing on a single job with this ID. For testing purposes only. Ignores the '-t' option.")
     parser.add_argument("-p", "--populate", action="store_true", default=False,
                         help="Quietly enter all new jobs into the database without running anything. Useful if we've reset the database.")
+    parser.add_argument("-r", "--reset_database", dest="reset_database", action="store_true", default=False,
+                        help="Reset and then quietly populate the database. Useful to rebuild we've reset the database schema.")
 
     return parser.parse_args()
 
 
 if __name__ == "__main__":
-    # If another instance of this script is already running, exit.
-    other_manager = is_another_manager_running()
-    if other_manager:
-        print(f"Process {other_manager.pid}: '{other_manager.name()} {other_manager.cmdline()}' is already running.")
-        exit(0)
-
     # Parse the command line arguments
     args = define_and_parse_arguments()
 
@@ -1007,9 +1007,33 @@ if __name__ == "__main__":
                              time_interval_s=args.time_interval_s,
                              job_id=None if args.job_id == -1 else args.job_id)
         JM.quietly_populate_database()
+        sys.exit(0)
+
+    elif args.reset_database:
+        JM = IvertJobManager(input_bucket_type=args.bucket,
+                             time_interval_s=args.time_interval_s,
+                             job_id=None if args.job_id == -1 else args.job_id)
+
+        database = JM.jobs_db
+        database.download_from_s3(only_if_newer=True)
+        # Get the old vnumber, and make the new vnum one greater than that. This will ensure client copies get
+        # overwritten with the newest database.
+        old_vnum = database.fetch_latest_db_vnum_from_database()
+        database.delete_database()
+        database.create_new_database(only_if_not_exists_in_s3=True)
+        new_vnum = JM.jobs_db.fetch_latest_db_vnum_from_database()
+        JM.quietly_populate_database(new_vnum=old_vnum + 1)
+        sys.exit(0)
 
     # Otherwise, start up the manager and keep it running, looking for new files.
     else:
+        # If another instance of this script is already running, exit.
+        other_manager = is_another_manager_running()
+        if other_manager:
+            print(
+                f"Process {other_manager.pid}: '{other_manager.name()} {other_manager.cmdline()}' is already running.")
+            exit(0)
+
         # Start the job manager
         JM = IvertJobManager(input_bucket_type=args.bucket,
                              time_interval_s=args.time_interval_s,

@@ -12,8 +12,6 @@ import utils.configfile
 import s3
 
 
-# TODO: Add support for reading/writing to an sqlite3 file.
-
 class JobsDatabaseClient:
     """Base class for common operations on the IVERT jobs database.
 
@@ -120,6 +118,18 @@ class JobsDatabaseClient:
             conn.commit()
             self.conn = conn
 
+        else:
+            # Test to make sure the database is valid and still open. This can be false if the database was reset.
+            test_query = "SELECT name FROM sqlite_master WHERE type='table' AND name='ivert_jobs' LIMIT 1;"
+            try:
+                self.conn.execute(test_query)
+            except sqlite3.ProgrammingError:
+                # If the database was reset, close the connection and reset it
+                self.conn.close()
+                self.conn = None
+                return self.get_connection()
+
+        # Return the connection
         return self.conn
 
     def exists(self,
@@ -972,6 +982,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
         Returns:
             None
         """
+        conn = None
         if cursor is None:
             conn = self.get_connection()
             cursor_to_use = conn.cursor()
@@ -982,6 +993,16 @@ class JobsDatabaseServer(JobsDatabaseClient):
 
         if cursor is None:
             conn.commit()
+        return
+
+    def set_vnumber(self, vnum: int) -> None:
+        """Manually set the version number in the database."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE vnumber SET vnum = ?;", (vnum,))
+
+        conn.commit()
+        return
 
     def create_or_update_sns_subscription(self,
                                           username: str,
@@ -1100,7 +1121,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
                 else:
                     raise e
 
-        # Delete the database locally using the IvertJobsDatabaseBaseClass::delete_database() method.
+        # Delete the database locally using the JobsDatabaseClient::delete_database() method.
         super().delete_database()
 
 

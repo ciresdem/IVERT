@@ -9,7 +9,7 @@ import re
 import sys
 # import textwrap
 
-import ivert_client_job_upload
+import client_job_upload
 from utils.bcolors import bcolors
 import utils.configfile
 import utils.is_email
@@ -98,7 +98,7 @@ def subscribe_user_to_sns_notifications(args: argparse.Namespace) -> None:
     del args_copy.prompt
 
     # Send the command to the IVERT cloud tool.
-    ivert_client_job_upload.upload_new_job(args_copy)
+    client_job_upload.upload_new_job(args_copy)
 
     return
 

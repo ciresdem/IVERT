@@ -4,7 +4,8 @@ import argparse
 import os
 
 import new_user_setup
-import ivert_client_subscriptions
+import client_subscriptions
+import client_job_download
 
 def define_and_parse_args(return_parser: bool = False):
     parser = argparse.ArgumentParser(description="The ICESat-2 Validation of Elevations Reporting Tool (IVERT)")
@@ -21,7 +22,7 @@ def define_and_parse_args(return_parser: bool = False):
     parser_validate = subparsers.add_parser("validate", help=validate_help_msg, description=validate_help_msg)
     parser_validate.add_argument("files_or_directory", type=str, nargs="+",
                                  help="Enter a file, list of files, or a directory."
-                                      " May use bash-style wildcards such as ncei*.tif")
+                                      " May use bash-style wildcards such as 'dirname/ncei*.tif'")
     parser_validate.add_argument("-ivd", "--input_vdatum", dest="input_vdatum", type=str, default="egm2008",
                                  help="Input DEM vertical datum. (Default: 'egm2008')"
                                       " Other options are: [TODO: FILL IN SOON]")
@@ -66,8 +67,6 @@ def define_and_parse_args(return_parser: bool = False):
                                   " just upload the data and exit. You can run 'ivert_client.py check <job_id>' to check the status"
                                   " of the job and 'ivert_client.py download <job_id> --local_dir <dirname>' to download results."
                                   " Default: False")
-    parser_test.add_argument("-p", "--prompt", dest="prompt", default=False, action="store_true",
-                             help="Prompt the user to verify settings before uploading files to IVERT. Default: False")
 
     ###############################################################
     # Create the "status" subparser
@@ -91,16 +90,13 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     download_help_msg = "Download the results of an IVERT job."
     parser_download = subparsers.add_parser("download", help=download_help_msg, description=download_help_msg)
-    parser_download.add_argument("job_id", type=str, default="LATEST",
+    parser_download.add_argument("job_id", type=str, default="LATEST", required=False,
                                  help="Enter the job ID to download, typically a 12-digit number in YYYYMMDDNNNN format."
                                       " Default: Download the latest job submitted by this user.")
     parser_download.add_argument("-u", "--user", "--username", dest="username", type=str, default="",
                                  help="Manually specify the IVERT username. Default: Use the username of the current "
                                       "user saved in ~/.ivert/creds/ivert_user_config.ini.")
-    parser_download.add_argument("-w", "--wait", dest="wait", default=False, action="store_true",
-                                 help="Wait to exit until the results are finished, then downloaded them. "
-                                      "Default: Print the job status and exit immediately.")
-    parser_download.add_argument("-ld", "--local_dir", dest="local_dir", type=str, default=".",
+    parser_download.add_argument("-o", "--output_dir", dest="output_dir", type=str, default=".",
                                  help="Specify the local directory to download results. Default: '.'")
 
     ###############################################################
@@ -184,11 +180,11 @@ def ivert_client_cli():
 
     # Subscribe to IVERT email notifications
     elif args.command == "subscribe":
-        ivert_client_subscriptions.run_subscribe_command(args)
+        client_subscriptions.run_subscribe_command(args)
 
     # Unsubscribe from IVERT email notifications
     elif args.command == "unsubscribe":
-        ivert_client_subscriptions.run_unsubscribe_command(args)
+        client_subscriptions.run_unsubscribe_command(args)
 
     # Validate a set of DEMs
     elif args.command == "validate":
@@ -198,9 +194,7 @@ def ivert_client_cli():
 
     # Download results from IVERT
     elif args.command == "download":
-        # TODO: Implement this
-        raise NotImplementedError("Command 'download' not yet implemented.")
-        pass
+        client_job_download.run_download_command(args)
 
     # Update part of the IVERT database.
     elif args.command == "update":

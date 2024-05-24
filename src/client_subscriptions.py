@@ -2,7 +2,7 @@
 
 import argparse
 
-import ivert_client_job_upload
+import client_job_upload
 from utils.bcolors import bcolors
 
 
@@ -20,7 +20,7 @@ def run_subscribe_command(args: argparse.Namespace) -> None:
     if args.username is None:
         args_for_server.username = args.email.split("@")[0]
 
-    ivert_client_job_upload.upload_new_job(args_for_server)
+    client_job_upload.upload_new_job(args_for_server)
 
     print("\nYour subscribe request has been sent to the IVERT server.")
     print("You should receive an email shortly from Amazon Nofications to confirm your subscription.")
@@ -39,7 +39,7 @@ def run_unsubscribe_command(args: argparse.Namespace) -> None:
 
     args_for_server.username = args.email.split("@")[0]
 
-    ivert_client_job_upload.upload_new_job(args_for_server)
+    client_job_upload.upload_new_job(args_for_server)
 
     print("\nYour unsubscribe request has been sent to the IVERT server.")
     print(f"You will {bcolors.BOLD}not{bcolors.ENDC} get a notification back when the job is done (that's kind of the nature of this request, right?).")

@@ -9,6 +9,30 @@ import utils.configfile
 
 ivert_config = utils.configfile.config()
 
+def run_download_command(args: argparse.Namespace) -> None:
+    """Run the ivert_client download command."""
+    assert hasattr(args, "job_id")
+    assert hasattr(args, "username")
+    assert hasattr(args, "output_dir")
+
+    # If the username wasn't provided, get it from the config file (which gets it from the IVERT user profile.)
+    if not args.username:
+        args.username = ivert_config.username
+
+    # Get the absolute path of the output directory.
+    args.output_dir = os.path.abspath(os.path.expanduser(args.output_dir))
+
+    # If we set it (by default) to just get the last job from the user, go find what the last job was.
+    if args.job_id.lower() == "latest":
+        db = jobs_database.JobsDatabaseClient()
+        db.download_from_s3(only_if_newer=True)
+        # Read the jobs table, filterd by this username, and get the most recent job.
+        df = db.read_table_as_pandas_df("jobs", username=args.username)
+        args.job_id = df["job_id"].max()
+
+    # Download the job.
+    job_name = f"{args.username}_{args.job_id}"
+    download_job(job_name, args.output_dir)
 
 def find_most_recent_job_dir_from_this_machine() -> str:
     """Find the most recent job directory on this machine."""
@@ -29,7 +53,7 @@ def find_matching_job_dir(job_name: str) -> str:
 
 
 def download_job(job_name: str,
-                 dest: str) -> None:
+                 dest: str) -> list[str]:
     """Download the job results from the S3 bucket."""
     # Parse the job name in the format username_jobid
     assert job_name.find("_") != -1
@@ -38,8 +62,8 @@ def download_job(job_name: str,
     job_id = int(job_name[job_name.rfind("_") + 1:])
 
     # First, grab the database from the s3 bucket.
-    db = ivert_jobs_database.JobsDatabaseClient()
-    db.download_from_s3(only_if_newer=True)
+    db = jobs_database.JobsDatabaseClient()
+    db.download_from_s3(only_if_newer=True) # only_if_newer ensures we only download it if there's a newer version in the s3 bucket.
 
     # Get the s3 prefix for downloaded files from the database
     job_row = db.job_exists(username, job_id, return_row=True)
@@ -47,12 +71,14 @@ def download_job(job_name: str,
         raise ValueError(f"Could not find job with name {job_name} in the IVERT jobs database.")
 
     export_prefix = job_row["export_prefix"]
+    if export_prefix is None:
+        return []
 
     export_glob_str = export_prefix + ("*" if export_prefix[-1] == "/" else "/*")
 
     # Download the results
     s3m = s3.S3Manager()
-    s3m.download(export_glob_str, dest, bucket_type="export", progress_bar=True)
+    return s3m.download(export_glob_str, dest, bucket_type="export", progress_bar=True)
 
 
 def define_and_parse_args() -> argparse.Namespace:
