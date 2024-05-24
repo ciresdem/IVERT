@@ -783,25 +783,26 @@ class JobsDatabaseServer(JobsDatabaseClient):
             job_configfile (str): the name of the job configuration file.
             job_logfile (str): the name of the logfile for this job.
             job_local_dir (str): the local directory where this job's files will be downloaded.
+            job_export_prefix (str): the prefix of the job's files in the S3 export bucket.
             job_local_output_dir (str): the local directory where this job's output files will be written.
             job_status (str): The status of the job upon creation in the database. Defaults to "unknown."
-            skip_database_upload (bool): Whether to skip uploading the new version of the database after inserting this record. Default: Upload the database.
+            update_vnum (bool): Whether to update the database version number. Defaults to True.
+            upload_to_s3 (bool): Whether to upload the database to the S3 bucket. Defaults to True.
 
         Returns:
-            The database row (record) of the new job, including created fields for the logfile, input_dir_local, output_dir_local, etc.
+            The database row (record) of the new job in the "ivert_jobs" table.
         """
         # job_config_obj should be a configfile.config object with fields defined in
         # config/ivert_job_config_TEMPLATE.ini
         jco = job_config_obj
-        assert hasattr(jco, "ivert_command")
-        assert hasattr(jco, "username")
-        assert hasattr(jco, "job_id")
-        assert hasattr(jco, "job_upload_prefix")
-        assert hasattr(jco, "cmd_args")
 
         # Check if the (username, job_id) tuple already exists in the database.
         # If so, just return it.
-        existing_row = self.job_exists(jco.username, jco.job_id, return_row=True)
+        if hasattr(jco, "job_id") and hasattr(jco, "username"):
+            existing_row = self.job_exists(jco.username, jco.job_id, return_row=True)
+        else:
+            existing_row = None
+
         if existing_row:
             return existing_row
 
@@ -811,13 +812,15 @@ class JobsDatabaseServer(JobsDatabaseClient):
         c.execute("INSERT INTO ivert_jobs (command, username, job_id, import_prefix, export_prefix, configfile, "
                   "command_args, logfile, input_dir_local, output_dir_local, job_pid, status) "
                   "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                 (jco.ivert_command,
-                  jco.username,
-                  jco.job_id,
-                  jco.job_upload_prefix,
-                  job_export_prefix,
+                 (jco.ivert_command if hasattr(jco, "ivert_command") else
+                                                        self.get_params_from_s3_path(job_configfile)["command"],
+                  jco.username if hasattr(jco, "username") else
+                                                        self.get_params_from_s3_path(job_configfile)["username"],
+                  jco.job_id if hasattr(jco, "job_id") else self.get_params_from_s3_path(job_configfile)["job_id"],
+                  jco.job_upload_prefix if hasattr(jco, "job_upload_prefix") else "",
+                  job_export_prefix if job_export_prefix else "",
                   os.path.basename(job_configfile),
-                  str(job_config_obj.cmd_args),
+                  str(jco.cmd_args) if hasattr(jco, "cmd_args") else "",
                   os.path.basename(job_logfile),
                   job_local_dir.removeprefix(self.ivert_config.ivert_jobs_directory_local),
                   job_local_output_dir.removeprefix(self.ivert_config.ivert_jobs_directory_local),
