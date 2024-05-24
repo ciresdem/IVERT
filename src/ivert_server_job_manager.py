@@ -296,7 +296,7 @@ class IvertJobManager:
                 job_obj.create_new_job_entry()
 
                 # Create database entries for the job files
-                job_obj.download_job_files(only_create_databse_entries=True, upload_to_s3=False)
+                job_obj.download_job_files(only_create_database_entries=True, upload_to_s3=False)
 
                 job_obj.update_job_status("unknown", upload_to_s3=False)
 
@@ -565,7 +565,7 @@ class IvertJob:
 
         return
 
-    def download_job_files(self, only_create_databse_entries=False, upload_to_s3=True):
+    def download_job_files(self, only_create_database_entries=False, upload_to_s3=True):
         """Download all other job files from the S3 bucket and add their entries to the jobs database."""
         # It may take some time for all the files to pass quarantine and be available in the trusted bucket.
         try:
@@ -587,7 +587,7 @@ class IvertJob:
 
                 if self.s3m.exists(f_key, bucket_type=self.s3_configfile_bucket_type):
                     # Download from the s3 bucket.
-                    if not only_create_databse_entries:
+                    if not only_create_database_entries:
                         self.s3m.download(f_key, local_fname, bucket_type=self.s3_configfile_bucket_type)
 
                     # Update our list of files to go.
@@ -599,8 +599,8 @@ class IvertJob:
                                                         self.job_id,
                                                         self.username,
                                                         import_or_export=0,
-                                                        status="unknown" if only_create_databse_entries else "downloaded",
-                                                        fake_file_stats=True if only_create_databse_entries else False,
+                                                        status="unknown" if only_create_database_entries else "downloaded",
+                                                        fake_file_stats=True if only_create_database_entries else False,
                                                         upload_to_s3=False)
 
                 elif quarantine_manager.is_quarantined(f_key):
@@ -1001,14 +1001,17 @@ if __name__ == "__main__":
     # Parse the command line arguments
     args = define_and_parse_arguments()
 
+    # If we're populating the database, then do that and exit.
     if args.populate:
         JM = IvertJobManager(input_bucket_type=args.bucket,
                              time_interval_s=args.time_interval_s,
                              job_id=None if args.job_id == -1 else args.job_id)
         JM.quietly_populate_database()
 
-    # Start the job manager
-    JM = IvertJobManager(input_bucket_type=args.bucket,
-                         time_interval_s=args.time_interval_s,
-                         job_id=None if args.job_id == -1 else args.job_id)
-    JM.start()
+    # Otherwise, start up the manager and keep it running, looking for new files.
+    else:
+        # Start the job manager
+        JM = IvertJobManager(input_bucket_type=args.bucket,
+                             time_interval_s=args.time_interval_s,
+                             job_id=None if args.job_id == -1 else args.job_id)
+        JM.start()
