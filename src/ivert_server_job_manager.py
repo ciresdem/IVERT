@@ -51,7 +51,8 @@ class IvertJobManager:
     def __init__(self,
                  input_bucket_type: str = "trusted",
                  time_interval_s: typing.Union[int, float, None] = None,
-                 job_id: typing.Union[int, None] = None):
+                 job_id: typing.Union[int, None] = None,
+                 verbose: bool = False):
         """
         Initializes a new instance of the IvertJobManager class.
 
@@ -80,6 +81,8 @@ class IvertJobManager:
         self.running_jobs: list[mp.Process] = []
 
         self.s3m = s3.S3Manager()
+
+        self.verbose = verbose
 
     def start(self):
         """Start the job manager.
@@ -235,9 +238,11 @@ class IvertJobManager:
                 # Remove the job from the list of running jobs.
                 self.running_jobs.remove(job)
 
+                if self.verbose:
+                    print("Job", self.specific_job_id, "is finished.")
+
                 # If we're just running one job_id (testing mode), exit after that job is complete.
                 if self.specific_job_id:
-                    print("Job", self.specific_job_id, "is finished. Exiting.")
                     sys.exit(0)
 
         return
@@ -248,6 +253,9 @@ class IvertJobManager:
         proc_args = (ini_s3_key, self.input_bucket_type)
         # TODO: Look into logging the stdout of the job, if we want to do that.
         job = mp.Process(target=subproc, args=proc_args)
+        if self.verbose:
+            print(f"Starting job {ini_s3_key[ini_s3_key.rfind('/') + 1: ini_s3_key.rfind('.')]}.")
+
         job.start()
 
         self.running_jobs.append(job)
@@ -1011,6 +1019,8 @@ def define_and_parse_arguments() -> argparse.Namespace:
                         help="Quietly enter all new jobs into the database without running anything. Useful if we've reset the database.")
     parser.add_argument("-r", "--reset_database", dest="reset_database", action="store_true", default=False,
                         help="Reset and then quietly populate the database. Useful to rebuild we've reset the database schema.")
+    parser.add_argument("-v", "--verbose", dest="verbose", action="store_true", default=False,
+                        help="Print verbose output while running.")
 
     return parser.parse_args()
 
@@ -1055,5 +1065,6 @@ if __name__ == "__main__":
         # Start the job manager
         JM = IvertJobManager(input_bucket_type=args.bucket,
                              time_interval_s=args.time_interval_s,
-                             job_id=None if args.job_id == -1 else args.job_id)
+                             job_id=None if args.job_id == -1 else args.job_id,
+                             verbose=args.verbose)
         JM.start()
