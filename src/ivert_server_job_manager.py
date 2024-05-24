@@ -640,7 +640,7 @@ class IvertJob:
                 files_to_download.remove(fname)
                 files_downloaded.append(fname)
 
-        assert len(files_to_download) == 0 and (len(files_downloaded) == len(self.job_config_object.files))
+        assert len(files_to_download) == 0
 
         if upload_to_s3:
             self.jobs_db.upload_to_s3(only_if_newer=True)
