@@ -162,16 +162,18 @@ def grab_job_config_template() -> str:
     return open(job_template_file, 'r').read()
 
 
-def upload_new_job(args: argparse.Namespace, verbose=True):
+def upload_new_job(args: argparse.Namespace, verbose=True) -> str:
     """Upload a new job to the S3 bucket.
 
     Will create a local config file and upload it to the S3 bucket along with all the files associated with the job.
     """
     new_job_config_fname, upload_prefix, list_of_other_files = create_new_job_config(args, verbose=verbose)
 
-    N = len(list_of_other_files) + 1
+    job_name = os.path.splitext(os.path.basename(new_job_config_fname))[0]
+
+    numfiles = len(list_of_other_files) + 1
     if verbose:
-        print(f"Uploading {N} files to the S3 bucket at {upload_prefix}/")
+        print(f"Uploading {numfiles} files to the S3 bucket at {upload_prefix}/")
 
     # Upload the config file to the S3 bucket.
     s3m = s3.S3Manager()
@@ -180,7 +182,7 @@ def upload_new_job(args: argparse.Namespace, verbose=True):
                bucket_type="untrusted")
 
     if verbose:
-        utils.progress_bar.ProgressBar(1, N, decimals=0, suffix=f"1/{N}")
+        utils.progress_bar.ProgressBar(1, numfiles, decimals=0, suffix=f"1/{numfiles}")
 
     # Upload the other files to the S3 bucket.
     for i, f in enumerate(list_of_other_files):
@@ -189,9 +191,9 @@ def upload_new_job(args: argparse.Namespace, verbose=True):
                    bucket_type="untrusted")
 
         if verbose:
-            utils.progress_bar.ProgressBar(2 + i, N, decimals=0, suffix=f"{2 + i}/{N}")
+            utils.progress_bar.ProgressBar(2 + i, numfiles, decimals=0, suffix=f"{2 + i}/{numfiles}")
 
-    return
+    return job_name
 
 
 if __name__ == "__main__":

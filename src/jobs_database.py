@@ -396,13 +396,13 @@ class JobsDatabaseClient:
     def read_table_as_pandas_df(self,
                                 table_name: str,
                                 username: typing.Union[str, None] = None,
-                                job_id: typing.Union[str, None] = None) -> pandas.DataFrame:
+                                job_id: typing.Union[str, int, None] = None) -> pandas.DataFrame:
         """Read a table and return as a pandas dataframe.
 
         Args:
             table_name (str): The name of the table to read. Can also be a shortname such as "jobs", "files", "subscriptions" or "messages".
             username (str): The username to filter on. Defaults to None, which means no filter.
-            job_id (str): The job ID to filter on. Defaults to None, which means no filter.
+            job_id (str, int): The job ID to filter on. Defaults to None, which means no filter.
 
         Returns:
             A pandas dataframe of the table in question.
@@ -1163,5 +1163,7 @@ if __name__ == "__main__":
 
         else:
             if args.all:
-                pandas.set_option('display.max_columns', None)
-            print(idb.read_table_as_pandas_df(args.table, job_id=args.job_id))
+                with pandas.option_context('display.max_columns', None):
+                    print(idb.read_table_as_pandas_df(args.table, job_id=args.job_id))
+            else:
+                print(idb.read_table_as_pandas_df(args.table, job_id=args.job_id))

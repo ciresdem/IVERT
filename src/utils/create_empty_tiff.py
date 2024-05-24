@@ -1,6 +1,10 @@
 # Quick utility to creatwe an empty .tif file to use for the IVERT test utility.
 
-import configfile
+try:
+    import configfile
+except ModuleNotFoundError:
+    import utils.configfile as configfile
+
 import os
 from osgeo import gdal
 
