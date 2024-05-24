@@ -50,6 +50,9 @@ def is_run_from_command_line():
 
 
 def get_terminal_width(default=120):
+    if not sys.stdout.isatty():
+        return default
+
     if is_run_from_command_line():
         h, w, hp, wp = struct.unpack("HHHH", fcntl.ioctl(sys.stdin.fileno(),
                                                          termios.TIOCGWINSZ,
@@ -81,6 +84,10 @@ def ProgressBar(iteration,
         fill        - Optional  : bar fill character (Str)
         printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
     """
+    # Only run this if we are running in a terminal.
+    if not sys.stdout.isatty():
+        return
+
     percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
     bar_length = width - (len(prefix) + 2 + 2 + len(percent) + 1 + len(suffix) + 2)
     filled_length = int(bar_length * iteration // total)
