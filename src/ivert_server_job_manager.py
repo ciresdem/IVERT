@@ -771,7 +771,7 @@ class IvertJob:
 
     def convert_cmd_args_to_string(self):
         "Convert the command arguments to a string for the purpose of sending a message to the user."
-        command_str = self.job_config_object.command
+        command_str = self.command
         for key, val in self.job_config_object.cmd_args.items():
             command_str = command_str + f" {key}={val}"
         for fname in self.job_config_object.files:

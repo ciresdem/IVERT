@@ -30,13 +30,15 @@ def run_test_command(args: argparse.Namespace,
 
     assert hasattr(args, "wait") # The 'wait' command should already be set by the test argparser.
     wait_opt = args.wait
+    files = [empty_tiff]
 
     # Turn this into a validate command.
     val_args = argparse.Namespace(**vars(args))
     # The wait option is a local setting. Not needed for upload to the server.
     del val_args.wait
+    del val_args.files_or_directory # This is ignored from the setting.
+    val_args.files = files
     val_args.command = "validate"
-    val_args.files_or_directory = [empty_tiff]
     val_args.input_vdatum = ""
     val_args.output_vdatum = ""
     val_args.region_name = ""
