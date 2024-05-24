@@ -36,7 +36,6 @@ def run_test_command(args: argparse.Namespace,
     val_args = argparse.Namespace(**vars(args))
     # The wait option is a local setting. Not needed for upload to the server.
     del val_args.wait
-    del val_args.files_or_directory # This is ignored from the setting.
     val_args.files = files
     val_args.command = "validate"
     val_args.input_vdatum = ""

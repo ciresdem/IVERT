@@ -109,13 +109,15 @@ def create_new_job_config(ivert_args: argparse.Namespace,
             if s3.S3Manager.contains_glob_flags(fn):
                 matching_fnames = glob.glob(os.path.expanduser(fn))
                 files_out.extend(matching_fnames)
+            else:
+                files_out.append(os.path.abspath(os.path.expanduser(fn)))
 
         del args.files
 
     else:
         files_out = []
 
-    files_text = repr(files_out)
+    files_text = repr([os.path.basename(fn) for fn in files_out])
 
     # These variables are stored elsewhere in the config file. Remove them from the namespace of "extra arguments"
     if hasattr(args, "command"):

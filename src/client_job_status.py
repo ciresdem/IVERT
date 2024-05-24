@@ -59,6 +59,9 @@ def get_most_recent_job_by_this_user(jobs_db: typing.Union[jobs_database.JobsDat
 
     # Read the jobs table, filterd by this username, and get the most recent job.
     df = jobs_db.read_table_as_pandas_df("jobs", username=username)
+
+    # TODO: Also check if a more recent job was submitted by the user (check the job local directory) that may have not
+    #   yet been picked up by the IVERT server.
     return f"{username}_{df['job_id'].max()}"
 
 

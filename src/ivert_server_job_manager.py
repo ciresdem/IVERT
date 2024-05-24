@@ -997,7 +997,7 @@ class IvertJob:
                     self.jobs_db.update_file_status(self.username, self.job_id, fname, "error", upload_to_s3=False)
 
         # Write a message to the logfile, which will be exported. This tests the output functionality as well.
-        self.write_to_logfile(f"Test job {self.job_name} has completed.")
+        self.write_to_logfile(f"Test job {self.username}_{self.job_id} has completed.")
         return
 
 
