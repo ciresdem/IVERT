@@ -806,17 +806,23 @@ class JobsDatabaseServer(JobsDatabaseClient):
         if existing_row:
             return existing_row
 
+        if not (hasattr(jco, "job_id") and hasattr(jco, "username") and hasattr(jco, "ivert_command")):
+            # If we have an imcompliete job config ini file, then populate these fields with values from the S3 path.
+            # This can be the case if we're backfilling the database with old files from the S3 bucket.
+            params_dict = self.get_params_from_s3_path(job_configfile)
+            jco.job_id = params_dict["job_id"]
+            jco.username = params_dict["username"]
+            jco.ivert_command = params_dict["command"]
+
         # Insert the new job into the database
         conn = self.get_connection()
         c = conn.cursor()
         c.execute("INSERT INTO ivert_jobs (command, username, job_id, import_prefix, export_prefix, configfile, "
                   "command_args, logfile, input_dir_local, output_dir_local, job_pid, status) "
                   "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                 (jco.ivert_command if hasattr(jco, "ivert_command") else
-                                                        self.get_params_from_s3_path(job_configfile)["command"],
-                  jco.username if hasattr(jco, "username") else
-                                                        self.get_params_from_s3_path(job_configfile)["username"],
-                  jco.job_id if hasattr(jco, "job_id") else self.get_params_from_s3_path(job_configfile)["job_id"],
+                 (jco.ivert_command,
+                  jco.username,
+                  jco.job_id,
                   jco.job_upload_prefix if hasattr(jco, "job_upload_prefix") else "",
                   job_export_prefix if job_export_prefix else "",
                   os.path.basename(job_configfile),
