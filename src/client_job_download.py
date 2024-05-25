@@ -4,6 +4,7 @@ import argparse
 import os
 
 import jobs_database
+import client_job_status
 import s3
 import utils.configfile
 
@@ -12,28 +13,33 @@ ivert_config = utils.configfile.config()
 
 def run_download_command(args: argparse.Namespace) -> list[str]:
     """Run the ivert_client download command."""
-    assert hasattr(args, "job_id")
-    assert hasattr(args, "username")
+    assert hasattr(args, "job_id_or_name")
     assert hasattr(args, "output_dir")
 
-    # If the username wasn't provided, get it from the config file (which gets it from the IVERT user profile.)
-    if not args.username:
-        args.username = ivert_config.username
+    # If we set it (by default) to just get the last job from the user, go find what the last job was.
+    if args.job_id_or_name.lower() == "latest":
+        args.job_id_or_name = client_job_status.find_latest_job_submitted(ivert_config.username)
+
+    if args.job_id_or_name.find("_") == -1:
+        # If it's just a numeric job ID, use that and get the username from the config file.
+        job_id = int(args.job_id_or_name)
+        username = ivert_config.username
+
+    else:
+        # Otherwise, pull out the username and job_id from the job name.
+        job_id = int(args.job_id_or_name[args.job_id_or_name.rfind("_") + 1:])
+        username = args.job_id_or_name[0:args.job_id_or_name.rfind("_")]
 
     # Get the absolute path of the output directory.
-    args.output_dir = os.path.abspath(os.path.expanduser(args.output_dir))
+    output_dir = os.path.abspath(os.path.expanduser(args.output_dir))
 
-    # If we set it (by default) to just get the last job from the user, go find what the last job was.
-    if args.job_id.lower() == "latest":
-        db = jobs_database.JobsDatabaseClient()
-        db.download_from_s3(only_if_newer=True)
-        # Read the jobs table, filterd by this username, and get the most recent job.
-        df = db.read_table_as_pandas_df("jobs", username=args.username)
-        args.job_id = df["job_id"].max()
+    # Create the output directory if it doesn't exist.
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
     # Download the job.
-    job_name = f"{args.username}_{args.job_id}"
-    return download_job(job_name, args.output_dir)
+    job_name = f"{username}_{job_id}"
+    return download_job(job_name, output_dir)
 
 
 def find_most_recent_job_dir_from_this_machine() -> str:
@@ -88,7 +94,7 @@ def define_and_parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Download job results files from IVERT.")
     parser.add_argument("-n", "--job_name", dest="job_name", default=None,
                         help="The name of the job to download results for. Usually in the format 'username_jobid'. Default: Download whatever the latest job was that you submitted from this machine.")
-    parser.add_argument("-d" "--dest", dest="dest", default=None,
+    parser.add_argument("-o" "--output_dir", dest="output_dir", default=None,
                         help="The directory to download the results to. Default: Download to the .ivert/jobs sub-directory where the job was submitted.")
 
     return parser.parse_args()

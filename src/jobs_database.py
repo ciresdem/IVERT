@@ -460,7 +460,7 @@ class JobsDatabaseClient:
         cursor.execute(f"SELECT * FROM ivert_jobs WHERE pid = {pid};")
         return cursor.fetchone()
 
-    def job_status(self, username: str, job_id: int) -> str:
+    def job_status(self, username: str, job_id: int) -> typing.Union[str, None]:
         """Fetch the job status from the database.
 
         Args:
@@ -468,7 +468,7 @@ class JobsDatabaseClient:
             job_id (int): The job_id associated with the job.
 
         Returns:
-            str: The status from the ivert_jobs table.
+            str, or None: The status from the ivert_jobs table. None if no job of that id exists.
         """
         query = """SELECT status FROM ivert_jobs
                 WHERE username = ?
@@ -476,8 +476,11 @@ class JobsDatabaseClient:
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute(query, (username, job_id))
-        return cursor.fetchone()[0]
-
+        result = cursor.fetchone()
+        if result:
+            return result[0]
+        else:
+            return None
 class JobsDatabaseServer(JobsDatabaseClient):
     """Class for managing the IVERT jobs database on the EC2 (server).
 

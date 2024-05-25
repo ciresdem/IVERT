@@ -1,6 +1,7 @@
 """Utilities for checking on the status of a server-side job from the IVERT client, using the jobs_database."""
 
 import argparse
+import os
 import pandas
 import typing
 
@@ -11,6 +12,40 @@ import utils.bcolors as bcolors
 ivert_config = utils.configfile.config()
 
 
+def find_latest_job_submitted(username: str,
+                              jobs_db: typing.Union[jobs_database.JobsDatabaseClient, None] = None) -> str:
+    """Find the most recent job submitted by this user, from either the jobs database or the local jobs directory.
+
+    Args:
+        username (str): The username to search for.
+        jobs_db (jobs_database.JobsDatabaseClient or None, optional): The jobs database to use. Defaults to None.
+
+    Returns:
+        str: The most recent job name submitted by this user, from either the jobs database or the local jobs directory.
+    """
+    if jobs_db is None:
+        jobs_db = jobs_database.JobsDatabaseClient()
+
+    jobs_db.download_from_s3(only_if_newer=True)
+    # Read the table of all the jobs submitted by this user.
+    df = jobs_db.read_table_as_pandas_df("jobs", username=username)
+    job_id_from_db = df["job_id"].max()
+    job_name_from_db = f"{username}_{job_id_from_db}"
+
+    # Now look in the local jobs folder to see if there's a more recent job there that was submitted, but isn't yet in
+    # the server's jobs database. (Perhaps it just hasn't been picked up by the server yet.)
+    local_jobs_dir = ivert_config.ivert_jobs_directory_local
+    job_folders = [fn for fn in os.listdir(local_jobs_dir)
+                   if os.path.isdir(os.path.join(local_jobs_dir, fn)) and (username in fn)]
+    if len(job_folders) > 0:
+        job_name_from_folders = max(job_folders)
+    else:
+        job_name_from_folders = ""
+
+    # Return whichever job name is greater.
+    return max(job_name_from_db, job_name_from_folders)
+
+
 def run_job_status_command(args: argparse.Namespace) -> None:
     """Run the job status command from the ivert_client."""
     assert hasattr(args, "job_name")
@@ -19,9 +54,10 @@ def run_job_status_command(args: argparse.Namespace) -> None:
 
     jobs_db = None
 
-    if args.job_name.lower() == "latest":
+    if args.job_name is None or args.job_name.lower() == "latest":
         jobs_db = jobs_database.JobsDatabaseClient()
-        args.job_name = get_most_recent_job_by_this_user(jobs_db)
+        username = ivert_config.username
+        args.job_name = find_latest_job_submitted(username, jobs_db)
 
     if args.detailed:
         job_df, files_df = detailed_job_info(args.job_name, jobs_db)
@@ -46,26 +82,14 @@ def run_job_status_command(args: argparse.Namespace) -> None:
             print(f"There are currently {len(export_files)} export files processed for this job.")
 
     else:
-        print(f"Job {args.job_name} is {repr(get_simple_job_status(args.job_name, jobs_db))}.")
+        status = get_simple_job_status(args.job_name, jobs_db)
+        if status is None:
+            print (f"Job {args.job_name} does not exist on the IVERT server yet.")
+        else:
+            print(f"Job {args.job_name} is {repr(status)}.")
 
 
-def get_most_recent_job_by_this_user(jobs_db: typing.Union[jobs_database.JobsDatabaseClient, None] = None) -> str:
-    if jobs_db is None:
-        jobs_db = jobs_database.JobsDatabaseClient()
-
-    jobs_db.download_from_s3(only_if_newer=True)
-
-    username = ivert_config.username
-
-    # Read the jobs table, filterd by this username, and get the most recent job.
-    df = jobs_db.read_table_as_pandas_df("jobs", username=username)
-
-    # TODO: Also check if a more recent job was submitted by the user (check the job local directory) that may have not
-    #   yet been picked up by the IVERT server.
-    return f"{username}_{df['job_id'].max()}"
-
-
-def get_simple_job_status(job_name, jobs_db: typing.Union[jobs_database.JobsDatabaseClient, None] = None) -> str:
+def get_simple_job_status(job_name, jobs_db: typing.Union[jobs_database.JobsDatabaseClient, None] = None) -> typing.Union[str, None]:
     if jobs_db is None:
         jobs_db = jobs_database.JobsDatabaseClient()
 
@@ -88,7 +112,7 @@ def is_job_finished(job_name, jobs_db: typing.Union[jobs_database.JobsDatabaseCl
     if status in ('complete', 'error', 'killed', 'unknown'):
         return True
     else:
-        assert status in ('started', 'running')
+        assert status in ('started', 'running', None)
         return False
 
 

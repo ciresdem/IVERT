@@ -38,9 +38,6 @@ def run_test_command(args: argparse.Namespace,
     del val_args.wait
     val_args.files = files
     val_args.command = "validate"
-    val_args.input_vdatum = ""
-    val_args.output_vdatum = ""
-    val_args.region_name = ""
     # This is the "special" flag that the validate command will get on the other side to tell it to do just a test and
     # not actually validate anything.
     val_args.EMPTY_TEST = True
