@@ -801,7 +801,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
             job_configfile (str): the name of the job configuration file.
             job_logfile (str): the name of the logfile for this job.
             job_local_dir (str): the local directory where this job's files will be downloaded.
-            job_export_prefix (str): the prefix of the job's files in the S3 export bucket.
+            job_export_prefix (str): the prefix of the job's files in the S3 export bucket. If None, use the same prefix as the import prefix.
             job_local_output_dir (str): the local directory where this job's output files will be written.
             job_status (str): The status of the job upon creation in the database. Defaults to "unknown."
             update_vnum (bool): Whether to update the database version number. Defaults to True.
@@ -842,7 +842,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
                   jco.username,
                   jco.job_id,
                   jco.job_upload_prefix if hasattr(jco, "job_upload_prefix") else "",
-                  job_export_prefix if job_export_prefix else "",
+                  job_export_prefix if job_export_prefix else jco.job_upload_prefix,
                   os.path.basename(job_configfile),
                   str(jco.cmd_args) if hasattr(jco, "cmd_args") else "",
                   os.path.basename(job_logfile),

@@ -600,8 +600,11 @@ class IvertJob:
                                     upload_to_s3=upload_to_s3)
 
         # Generate a new file record for the config file of this job.
-        self.jobs_db.create_new_file_record(self.job_config_local, self.job_id, self.username,
-                                            import_or_export=0, status="processed",
+        self.jobs_db.create_new_file_record(self.job_config_local,
+                                            self.job_id,
+                                            self.username,
+                                            import_or_export=0,
+                                            status="processed",
                                             upload_to_s3=upload_to_s3)
 
         return
