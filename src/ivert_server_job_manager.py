@@ -375,6 +375,9 @@ class IvertJob:
 
         self.jobs_db = jobs_database.JobsDatabaseServer()
 
+        self.job_config_s3_key = job_config_s3_key
+        self.job_config_s3_bucket_type = job_config_s3_bucket_type
+
         # Assign the job ID and username.
         params_dict = self.jobs_db.get_params_from_s3_path(self.job_config_s3_key,
                                                            bucket_type=self.job_config_s3_bucket_type)
@@ -382,9 +385,6 @@ class IvertJob:
         self.job_id = params_dict["job_id"]
         self.username = params_dict["username"]
         self.command = params_dict["command"]
-
-        self.job_config_s3_key = job_config_s3_key
-        self.job_config_s3_bucket_type = job_config_s3_bucket_type
 
         self.pid = os.getpid()
 
