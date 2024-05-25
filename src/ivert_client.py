@@ -8,6 +8,7 @@ import client_subscriptions
 import client_job_download
 import client_test_job
 import client_job_status
+import utils.query_yes_no as yes_no
 
 def define_and_parse_args(return_parser: bool = False):
     parser = argparse.ArgumentParser(description="The ICESat-2 Validation of Elevations Reporting Tool (IVERT)")
@@ -26,26 +27,55 @@ def define_and_parse_args(return_parser: bool = False):
     # field names.
     parser_validate = subparsers.add_parser("validate", help=validate_help_msg, description=validate_help_msg)
     parser_validate.add_argument("files_or_directory", type=str, nargs="+",
-                                 help="Enter a file, list of files, or a directory."
-                                      " May use bash-style wildcards such as 'dirname/ncei*.tif'.")
+                                 help="Enter a file, list of files, or a directory. "
+                                      "May use bash-style wildcards such as 'dirname/ncei*.tif'. If a directory is "
+                                      "given, all *.tif files in that directory will be sent for validation.")
     parser_validate.add_argument("-ivd", "--input_vdatum", dest="input_vdatum", type=str, default="egm2008",
                                  help="Input DEM vertical datum. (Default: 'egm2008')"
-                                      " Other options are: [TODO: FILL IN SOON]")
+                                      " Type 'vdatums -list-epsg' to see a list of available options.")
     parser_validate.add_argument("-ovd", "--output_vdatum", dest="output_vdatum", type=str, default="egm2008",
                                  help="Output DEM vertical datum. (Default: 'egm2008')"
-                                      " Other options are: [TODO: FILL IN SOON]")
-    parser_validate.add_argument("-n", "--name", dest="region_name", type=str, default="DEMs",
+                                      " Type 'vdatums -list-epsg' to see a list of available options.")
+    parser_validate.add_argument("-n", "--name", "--region_name", dest="region_name", type=str, default="DEMs",
                                  help="The name of the region being validated. Will appear in the validation summary "
                                       "plot if more than one file is being validated. (Default: 'DEMs')")
     parser_validate.add_argument("-w", "--wait", dest="wait", default=False, action="store_true",
-                                 help="Wait to exit until the results are finished and downloaded. Default:"
-                                      " just upload the data and exit. You can then run 'ivert_client.py check <job_id>' to check the status"
-                                      " of the job and 'ivert_client.py download <job_id> --local_dir <dirname>' to download results."
-                                      " Default: False")
+                                 help="Wait to exit until the results are finished and downloaded. If False, just "
+                                      "upload the job, exit, and wait for a response notification from IVERT. You can "
+                                      "then use the 'ivert status' and 'ivert download' commands to monitor the job. "
+                                      "Default: False")
     parser_validate.add_argument("-p", "--prompt", dest="prompt", default=False, action="store_true",
                                  help="Print the command options and prompt the user to verify settings before uploading"
                                       " files to IVERT. Useful if you want to manually double-check the settings"
                                       " before sending it off. Default: False")
+    parser_validate.add_argument("-mc", "--measure_coverage", dest="measure_coverage",
+                                 default=False, action="store_true",
+                                 help="Measure the coverage of the region as a field in the h5 results. "
+                                      "(Measures how may of the 225 sub-regions within each grid cell contain photons, "
+                                      "allowing to post-process filter only higher-coverage grid cells in "
+                                      "course-resolution DEMs. Typically not used for high-res DEMs. Default: False")
+    parser_validate.add_argument("-bn", "--band_num", dest="band_num", type=int, default=1,
+                                 help="The raster band number to validate. Other bands are ignored. (Default: 1)")
+    parser_validate.add_argument("-co", "--coastlines_only", dest="coastlines_only", default=False,
+                                 action="store_true",
+                                 help="Return only the coastline masks. Skip the rest of the validation. Default: False")
+    parser_validate.add_argument("-mb", "--mask_buildings", dest="buildings", type=yes_no.interpret_yes_no,
+                                 default=True,
+                                 help="Whether to mask out building footprints in the coastline mask. Must be followed "
+                                      "by 'True', 'False', 'Yes', 'No', or any abbreviation thereof (case-insensitive). "
+                                      "(Default: True)")
+    parser_validate.add_argument("-mu", "--mask_urban", dest="urban", type=yes_no.interpret_yes_no,
+                                 default=False,
+                                 help="Whether to mask out World-Settlement-Footprint heavy urban areas in the "
+                                      "coastline mask. Typically used instead of building footprints for DEMs coarser"
+                                      "than typical building sizes (~20-ish m). Must be followed by 'True', 'False', "
+                                      "'Yes', 'No', or any abbreviation thereof (case-insensitive). (Default: False)")
+    parser_validate.add_argument("-sd", "--outlier_sd_threshold", dest="outlier_sd_threshold", type=float,
+                                 default=2.5,
+                                 help="The standard deviation threshold for outlier detection. Any errors "
+                                      "outside this threshold of the mean-of-errors will be removed as noise. "
+                                      "-1 (or any negative number) will disable outlier filtering. Don't use 0 here, "
+                                      "that'd filter everything out. (Default: 2.5 s.d.)")
     # TODO: Parse the "files_or_directory" argument and replace it with a "files" argument listing all the files.
 
     ###############################################################

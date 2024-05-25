@@ -1039,7 +1039,7 @@ class IvertJob:
 
         for fname in self.job_config_object.files:
             f_path = os.path.join(self.job_dir, fname)
-            print(fname, f_path)
+
             if os.path.exists(f_path):
                 self.jobs_db.update_file_status(self.username, self.job_id, fname, "processed", upload_to_s3=False)
             else:

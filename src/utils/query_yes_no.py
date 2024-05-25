@@ -1,7 +1,7 @@
 import sys
 
 
-def query_yes_no(question, default="yes"):
+def query_yes_no(question: str, default: str = "yes") -> bool:
     """Ask a yes/no question via raw_input() and return their answer.
 
     "question" is a string that is presented to the user.
@@ -30,3 +30,20 @@ def query_yes_no(question, default="yes"):
             return valid[choice]
         else:
             sys.stdout.write("Please respond with 'yes' or 'no' " "(or 'y' or 'n').\n")
+
+
+def interpret_yes_no(input_str: str) -> bool:
+    """Interpret a yes/no or true/false input string as a boolean."""
+    instr = input_str.strip().lower()
+    # "" or None will be interpreted as False
+    if not instr:
+        return False
+    # Yes, True, Si, Y, T, S, etc will be intrepreted as True
+    elif instr[0] in ("y", "t", "s"):
+        return True
+    # No, False, N, F, etc will be intrepreted as False
+    elif instr[0] in ("n", "f"):
+        return False
+    # Anything else is invalid
+    else:
+        raise ValueError("invalid boolean input: '%s'" % input_str)
