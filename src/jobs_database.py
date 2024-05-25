@@ -842,12 +842,13 @@ class JobsDatabaseServer(JobsDatabaseClient):
                   jco.username,
                   jco.job_id,
                   jco.job_upload_prefix if hasattr(jco, "job_upload_prefix") else "",
-                  job_export_prefix if job_export_prefix else jco.job_upload_prefix,
+                  job_export_prefix if job_export_prefix else
+                        (jco.job_upload_prefix if hasattr(jco, "job_upload_prefix") else ""),
                   os.path.basename(job_configfile),
                   str(jco.cmd_args) if hasattr(jco, "cmd_args") else "",
                   os.path.basename(job_logfile),
-                  job_local_dir.removeprefix(self.ivert_config.ivert_jobs_directory_local),
-                  job_local_output_dir.removeprefix(self.ivert_config.ivert_jobs_directory_local),
+                  job_local_dir.removeprefix(self.ivert_config.ivert_jobs_directory_local).lstrip("/"),
+                  job_local_output_dir.removeprefix(self.ivert_config.ivert_jobs_directory_local).lstrip("/"),
                   os.getpid(),
                   job_status.strip().lower()))
 
