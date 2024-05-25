@@ -1038,7 +1038,7 @@ class IvertJob:
         job_local_subdir = job_row["input_dir_local"]
 
         for fname in self.job_config_object.files:
-            f_path = os.path.join(ivert_config.ivert_jobs_directory_local, job_local_subdir, fname)
+            f_path = os.path.join(self.ivert_config.ivert_jobs_directory_local, job_local_subdir, fname)
             if os.path.exists(f_path):
                 self.jobs_db.update_file_status(self.username, self.job_id, fname, "processed", upload_to_s3=False)
             else:
