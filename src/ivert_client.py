@@ -122,7 +122,7 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     download_help_msg = "Download the results of an IVERT job."
     parser_download = subparsers.add_parser("download", help=download_help_msg, description=download_help_msg)
-    parser_download.add_argument("job_id_or_name", type=str, default="LATEST",
+    parser_download.add_argument("job_id_or_name", type=str, nargs='?', default="LATEST",
                                  help="Enter the job ID to download, typically a 12-digit number in YYYYMMDDNNNN"
                                       " format or a 'username_YYYYMMMDDNNNN' format. Either one is valid. If the"
                                       " username isn't given, it will be looked up from the user_config.ini file on"
