@@ -474,8 +474,6 @@ class IvertJob:
     def create_local_job_folders(self):
         """Create a local folder to store the job input files and write output files."""
         data_basedir = self.ivert_config.ivert_jobs_directory_local
-        # Make sure there's a trailing slash.
-        data_basedir = data_basedir if data_basedir[-1] == "/" else data_basedir + "/"
 
         self.job_dir = os.path.join(data_basedir, self.ivert_config.s3_ivert_job_subdirs_template
                                                       .replace('[command]', self.command)
@@ -485,7 +483,7 @@ class IvertJob:
         # Create the job directory if it doesn't exist.
         if not os.path.exists(self.job_dir):
             if self.verbose:
-                print("Creating job directory:", self.job_dir[self.job_dir.rfind(data_basedir):].lstrip("/"))
+                print("Creating job directory:", self.job_dir[self.job_dir.find(data_basedir):].lstrip("/"))
             os.makedirs(self.job_dir)
 
         # Create the output directory if it doesn't exist.
@@ -1037,12 +1035,10 @@ class IvertJob:
         # One (small) empty test .tif file would have been uploaded with this test job. If we can find it, mark it as processed.
         job_row = self.jobs_db.job_exists(self.username, self.job_id, return_row=True)
         assert job_row
-        job_local_path = job_row["input_dir_local"]
+        job_local_subdir = job_row["input_dir_local"]
 
         for fname in self.job_config_object.files:
-            f_path = os.path.join(job_local_path, fname)
-            print(fname, f_path)
-            sys.exit(0)
+            f_path = os.path.join(ivert_config.ivert_jobs_directory_local, job_local_subdir, fname)
             if os.path.exists(f_path):
                 self.jobs_db.update_file_status(self.username, self.job_id, fname, "processed", upload_to_s3=False)
             else:

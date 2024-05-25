@@ -165,17 +165,18 @@ def define_and_parse_args(return_parser: bool = False):
     parser_unsubscribe.add_argument("email", type=str,
                                     help="Enter an email address to unsubscribe from IVERT email notifications.")
 
-    ###############################################################
-    # Create the 'kill' subparser
-    ###############################################################
-    kill_help_msg = "Terminate an IVERT job."
-    parser_kill = subparsers.add_parser("kill", help=kill_help_msg, description=kill_help_msg)
-    parser_download.add_argument("job_id", type=str, default="LATEST",
-                                 help="Enter the job ID to download, typically a 12-digit number in YYYYMMDDNNNN format."
-                                      " Default: Download the latest job submitted by this user.")
-    parser_download.add_argument("-u", "--user", "--username", dest="username", type=str, default="",
-                                 help="Manually specify the IVERT username. Default: Use the username of the current "
-                                      "user saved in ~/.ivert/creds/ivert_user_config.ini.")
+    # Not implemented yet.
+    # ###############################################################
+    # # Create the 'kill' subparser
+    # ###############################################################
+    # kill_help_msg = "Terminate an IVERT job."
+    # parser_kill = subparsers.add_parser("kill", help=kill_help_msg, description=kill_help_msg)
+    # parser_download.add_argument("job_id", type=str, default="LATEST",
+    #                              help="Enter the job ID to download, typically a 12-digit number in YYYYMMDDNNNN format."
+    #                                   " Default: Download the latest job submitted by this user.")
+    # parser_download.add_argument("-u", "--user", "--username", dest="username", type=str, default="",
+    #                              help="Manually specify the IVERT username. Default: Use the username of the current "
+    #                                   "user saved in ~/.ivert/creds/ivert_user_config.ini.")
 
     if return_parser:
         return parser
