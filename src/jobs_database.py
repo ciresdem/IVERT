@@ -93,8 +93,14 @@ class JobsDatabaseClient:
             else:
                 os.remove(local_db)
 
+        # Close any open connections to the existing database.
+        if self.conn:
+            self.conn.close()
+            self.conn = None
+
         # Download the database from the S3 bucket
         self.s3m.download(db_key, local_db, bucket_type=db_btype)
+
         return
 
     def get_connection(self) -> sqlite3.Connection:
