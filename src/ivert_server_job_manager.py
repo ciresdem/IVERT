@@ -587,9 +587,6 @@ class IvertJob:
 
         The new version of the database will be immediately uploaded."""
 
-        print(vars(self))
-        sys.exit(0)
-
         # Create a new job entry in the jobs database.
         assert isinstance(self.job_config_object, utils.configfile.config)
         self.jobs_db.create_new_job(self.job_config_object,
