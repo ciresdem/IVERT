@@ -373,14 +373,11 @@ class IvertJob:
         """
         self.ivert_config = utils.configfile.config()
 
-        self.s3_configfile_key = job_config_s3_key
-        self.s3_configfile_bucket_type = job_config_s3_bucket_type
-
         self.jobs_db = jobs_database.JobsDatabaseServer()
 
         # Assign the job ID and username.
-        params_dict = self.jobs_db.get_params_from_s3_path(self.s3_configfile_key,
-                                                           bucket_type=self.s3_configfile_bucket_type)
+        params_dict = self.jobs_db.get_params_from_s3_path(self.job_config_s3_key,
+                                                           bucket_type=self.job_config_s3_bucket_type)
 
         self.job_id = params_dict["job_id"]
         self.username = params_dict["username"]
@@ -531,7 +528,7 @@ class IvertJob:
 
     def download_job_config_file(self):
         """Download the job configuration file from the S3 bucket."""
-        self.job_config_local = os.path.join(self.job_dir, self.s3_configfile_key.split("/")[-1])
+        self.job_config_local = os.path.join(self.job_dir, self.job_config_s3_key.split("/")[-1])
 
         if self.verbose:
             print(f"Downloading {os.path.basename(self.job_config_local)}")
@@ -600,6 +597,7 @@ class IvertJob:
                                     self.logfile,
                                     self.job_dir,
                                     self.output_dir,
+                                    job_export_prefix=self.export_prefix,
                                     job_status="started",
                                     upload_to_s3=upload_to_s3)
 
@@ -629,17 +627,17 @@ class IvertJob:
         while len(files_to_download) > 0 and (time.time() - time_start) <= self.download_timeout_s:
             for fname in files_to_download:
                 # files will each be in the same prefix as the config file.
-                f_key = "/".join(self.s3_configfile_key.split("/")[:-1]) + "/" + fname
+                f_key = "/".join(self.job_config_s3_key.split("/")[:-1]) + "/" + fname
                 # Put in the same local folder as the configfile.
                 local_fname = os.path.join(os.path.dirname(self.job_config_local), fname)
 
-                if self.s3m.exists(f_key, bucket_type=self.s3_configfile_bucket_type):
+                if self.s3m.exists(f_key, bucket_type=self.job_config_s3_bucket_type):
                     # Download from the s3 bucket.
                     if not only_create_database_entries:
                         if self.verbose:
                             print(f"Downloading {os.path.basename(local_fname)}")
 
-                        self.s3m.download(f_key, local_fname, bucket_type=self.s3_configfile_bucket_type)
+                        self.s3m.download(f_key, local_fname, bucket_type=self.job_config_s3_bucket_type)
 
                     # Update our list of files to go.
                     files_to_download.remove(fname)
@@ -679,7 +677,7 @@ class IvertJob:
         if len(files_to_download) > 0:
             for fname in files_to_download:
                 # files will each be in the same prefix as the config file.
-                f_key = "/".join(self.s3_configfile_key.split("/")[:-1]) + "/" + fname
+                f_key = "/".join(self.job_config_s3_key.split("/")[:-1]) + "/" + fname
                 # Put in the same local folder as the configfile.
                 local_fname = os.path.join(os.path.dirname(self.job_config_local), fname)
 
