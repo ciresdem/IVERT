@@ -910,6 +910,7 @@ class IvertJob:
         self.jobs_db.update_file_statistics(self.username,
                                             self.job_id,
                                             self.logfile,
+                                            new_status="uploaded",
                                             increment_vnumber=False,
                                             upload_to_s3=False)
 
@@ -1035,10 +1036,10 @@ class IvertJob:
         # One (small) empty test .tif file would have been uploaded with this test job. If we can find it, mark it as processed.
         job_row = self.jobs_db.job_exists(self.username, self.job_id, return_row=True)
         assert job_row
-        job_local_subdir = job_row["input_dir_local"]
 
         for fname in self.job_config_object.files:
-            f_path = os.path.join(self.ivert_config.ivert_jobs_directory_local, job_local_subdir, fname)
+            f_path = os.path.join(self.job_dir, fname)
+            print(fname, f_path)
             if os.path.exists(f_path):
                 self.jobs_db.update_file_status(self.username, self.job_id, fname, "processed", upload_to_s3=False)
             else:
