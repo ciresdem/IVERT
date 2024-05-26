@@ -2,7 +2,8 @@
 requires = ["setuptools>=61.2", "wheel"]
 build-backend = "setuptools.build_meta"
 
-#[tool.setuptools]
+[tool.setuptools]
+py-modules = ["src.ivert_client"]
 #include-package-data = true
 
 #[tool.setuptools.packages.find]
@@ -13,7 +14,6 @@ version = {attr = "src.ivert_version.__version__"}
 
 [project]
 name = "ivert"
-py-modules = ["src.ivert_client"]
 authors = [{name = "Mike MacFerrin", email = "michael.macferrin@colorado.edu"}]
 dynamic = ["version"]
 description = "ICESat-2 Validation of Elevations Reporting Tool (IVERT)"
