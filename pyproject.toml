@@ -9,6 +9,12 @@ include-package-data = true
 [tool.setuptools.dynamic]
 version = {attr = "ivert.version.__version__"}
 
+[tool.setuptools.package-data]
+ivert = ["config/*.ini", "config/*.sql", "data/empty_tile.tif"]
+
+[tools.setuptools.packages.find]
+where = ["ivert"]
+
 [project]
 name = "ivert"
 authors = [{name = "Mike MacFerrin", email = "michael.macferrin@colorado.edu"}]
