@@ -34,5 +34,5 @@ dependencies = [
 ]
 
 [project.scripts]
-ivert = "src.ivert_client:ivert_client_cli"
-s3 = "src.s3:s3_cli"
+ivert = "src/ivert_client:ivert_client_cli"
+s3 = "srcs3:s3_cli"
