@@ -20,9 +20,10 @@
 ### Code:
 import setuptools
 import site
-import sys
+# import sys
 
-site.ENABLE_USER_SITE = "--user" in sys.argv[1:]
+# We'll install as user for now. This could be changed in the future.
+site.ENABLE_USER_SITE = True
 
 with open('README.md', 'r') as fh:
     long_description = fh.read()
