@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=61.2", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -36,10 +36,10 @@ dependencies = [
 
 [project.scripts]
 ivert = "src/ivert_client:ivert_client_cli"
-s3 = "srcs3:s3_cli"
+#s3 = "srcs3:s3_cli"
 
-#[project.entry-points."ivert"]
-#ivert = "src.ivert_client:ivert_client_cli"
+[project.entry-points]
+ivert = "src.ivert_client:ivert_client_cli"
 #
 #[project.entry-points."s3"]
 #s3 = "srcs3:s3_cli"
