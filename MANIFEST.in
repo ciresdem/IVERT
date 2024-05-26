@@ -1,0 +1,5 @@
+include src/*.py src/utils/*.py config/* data/empty_file.tif
+prune src/tests_old
+prune scratch_data
+exclude src/atl*
+exclude src/*icesat2*
