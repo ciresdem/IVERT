@@ -5,13 +5,19 @@ import datetime
 import glob
 import os
 
-import jobs_database
-import s3
-import utils.configfile
-import utils.progress_bar
+try:
+    import jobs_database
+    import s3
+    import utils.configfile as configfile
+    import utils.progress_bar as progress_bar
+except ModuleNotFoundError:
+    import ivert.jobs_database as jobs_database
+    import ivert.s3 as s3
+    import ivert.utils.configfile as configfile
+    import ivert.utils.progress_bar as progress_bar
 
 # The ivert_config object loads user information from the user's config file if it exists.
-ivert_config = utils.configfile.config()
+ivert_config = configfile.config()
 
 
 def create_new_job_params(username: str = None) -> tuple[str, int]:
@@ -184,7 +190,7 @@ def upload_new_job(args: argparse.Namespace, verbose=True) -> str:
                bucket_type="untrusted")
 
     if verbose:
-        utils.progress_bar.ProgressBar(1, numfiles, decimals=0, suffix=f"1/{numfiles}")
+        progress_bar.ProgressBar(1, numfiles, decimals=0, suffix=f"1/{numfiles}")
 
     # Upload the other files to the S3 bucket.
     for i, f in enumerate(list_of_other_files):
@@ -193,7 +199,7 @@ def upload_new_job(args: argparse.Namespace, verbose=True) -> str:
                    bucket_type="untrusted")
 
         if verbose:
-            utils.progress_bar.ProgressBar(2 + i, numfiles, decimals=0, suffix=f"{2 + i}/{numfiles}")
+            progress_bar.ProgressBar(2 + i, numfiles, decimals=0, suffix=f"{2 + i}/{numfiles}")
 
     return job_name
 

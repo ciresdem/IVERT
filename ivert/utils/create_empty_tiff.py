@@ -3,7 +3,10 @@
 try:
     import configfile
 except ModuleNotFoundError:
-    import utils.configfile as configfile
+    try:
+        import utils.configfile as configfile
+    except ModuleNotFoundError:
+        import ivert.utils.configfile as configfile
 
 import os
 from osgeo import gdal

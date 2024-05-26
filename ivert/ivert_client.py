@@ -3,12 +3,20 @@
 import argparse
 import os
 
-import new_user_setup
-import client_subscriptions
-import client_job_download
-import client_test_job
-import client_job_status
-import utils.query_yes_no as yes_no
+try:
+    import new_user_setup
+    import client_subscriptions
+    import client_job_download
+    import client_test_job
+    import client_job_status
+    import utils.query_yes_no as yes_no
+except ModuleNotFoundError:
+    import ivert.new_user_setup as new_user_setup
+    import ivert.client_subscriptions as client_subscriptions
+    import ivert.client_job_download as client_job_download
+    import ivert.client_test_job as client_test_job
+    import ivert.client_job_status as client_job_status
+    import ivert.utils.query_yes_no as yes_no
 
 def define_and_parse_args(return_parser: bool = False):
     parser = argparse.ArgumentParser(description="The ICESat-2 Validation of Elevations Reporting Tool (IVERT)")

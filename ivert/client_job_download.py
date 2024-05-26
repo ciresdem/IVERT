@@ -3,12 +3,18 @@
 import argparse
 import os
 
-import jobs_database
-import client_job_status
-import s3
-import utils.configfile
+try:
+    import jobs_database
+    import client_job_status
+    import s3
+    import utils.configfile as configfile
+except ModuleNotFoundError:
+    import ivert.jobs_database as jobs_database
+    import ivert.client_job_status as client_job_status
+    import ivert.s3 as s3
+    import ivert.utils.configfile as configfile
 
-ivert_config = utils.configfile.config()
+ivert_config = configfile.config()
 
 
 def run_download_command(args: argparse.Namespace) -> list[str]:

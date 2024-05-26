@@ -6,25 +6,34 @@ import argparse
 import os
 import time
 
-import utils.configfile
-import utils.create_empty_tiff
-import utils.bcolors
-import client_job_upload
-import client_job_download
-import client_job_status
-import jobs_database
+try:
+    import utils.configfile as configfile
+    import utils.create_empty_tiff as create_empty_tiff
+    from utils.bcolors import bcolors
+    import client_job_upload
+    import client_job_download
+    import client_job_status
+    import jobs_database
+except ModuleNotFoundError:
+    import ivert.utils.configfile as configfile
+    import ivert.utils.create_empty_tiff as create_empty_tiff
+    from ivert.utils.bcolors import bcolors
+    import ivert.client_job_upload as client_job_upload
+    import ivert.client_job_download as client_job_download
+    import ivert.client_job_status as client_job_status
+    import ivert.jobs_database as jobs_database
 
 
 def run_test_command(args: argparse.Namespace,
                      wait_time_s: int = 5) -> None:
     """Run an end-to-end test job of the IVERT system, without having it actually process any data."""
 
-    ivert_config = utils.configfile.config()
+    ivert_config = configfile.config()
     empty_tiff = ivert_config.empty_tiff
 
     # if the empty .tif doesn't already exist, just create it.
     if not os.path.exists(empty_tiff):
-        utils.create_empty_tiff.create_empty_tiff()
+        create_empty_tiff.create_empty_tiff()
 
     assert os.path.exists(empty_tiff)
 
@@ -64,8 +73,8 @@ def run_test_command(args: argparse.Namespace,
 
     else:
         print("Job has been uploaded. You can wait to receive a notification email when it's done, and/or run "
-              f"'{utils.bcolors.bcolors.BOLD}ivert status {job_name}{utils.bcolors.bcolors.ENDC}' to check the status"
-              f" of the job, and/or '{utils.bcolors.bcolors.BOLD}ivert download {job_name}{utils.bcolors.bcolors.ENDC}'"
+              f"'{bcolors.BOLD}ivert status {job_name}{bcolors.ENDC}' to check the status"
+              f" of the job, and/or '{bcolors.BOLD}ivert download {job_name}{bcolors.ENDC}'"
               " to download the results when it's complete.")
 
 

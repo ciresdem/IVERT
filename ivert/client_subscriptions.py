@@ -2,8 +2,12 @@
 
 import argparse
 
-import client_job_upload
-from utils.bcolors import bcolors
+try:
+    import client_job_upload
+    from utils.bcolors import bcolors
+except ModuleNotFoundError:
+    import ivert.client_job_upload as client_job_upload
+    from ivert.utils.bcolors import bcolors
 
 
 def run_subscribe_command(args: argparse.Namespace) -> None:

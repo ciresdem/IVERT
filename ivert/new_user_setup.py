@@ -9,13 +9,19 @@ import re
 import sys
 # import textwrap
 
-import client_job_upload
-from utils.bcolors import bcolors
-import utils.configfile
-import utils.is_email
+try:
+    import client_job_upload
+    from utils.bcolors import bcolors
+    import utils.configfile as configfile
+    import utils.is_email as is_email
+except ModuleNotFoundError:
+    import ivert.client_job_upload as client_job_upload
+    from ivert.utils.bcolors import bcolors
+    import ivert.utils.configfile as configfile
+    import ivert.utils.is_email as is_email
 
-ivert_config = utils.configfile.config()
-ivert_user_config_template = utils.configfile.config(ivert_config.ivert_user_config_template)
+ivert_config = configfile.config()
+ivert_user_config_template = configfile.config(ivert_config.ivert_user_config_template)
 
 
 def setup_new_user(args: argparse.Namespace) -> None:
@@ -59,7 +65,7 @@ def setup_new_user(args: argparse.Namespace) -> None:
 def read_ivert_s3_credentials(error_if_not_found: bool = True):
     """Read the IVERT S3 credentials file."""
     if os.path.exists(ivert_config.ivert_s3_credentials_file):
-        return utils.configfile.config(ivert_config.ivert_s3_credentials_file)
+        return configfile.config(ivert_config.ivert_s3_credentials_file)
     else:
         if error_if_not_found:
             raise FileNotFoundError(f"IVERT S3 credentials file '{ivert_config.ivert_s3_credentials_file}' not found.")
@@ -497,7 +503,7 @@ def define_and_parse_args(just_return_parser: bool=False):
     """Define and parse command-line arguments."""
 
     parser = argparse.ArgumentParser(description="Set up a new IVERT user on the local machine.")
-    parser.add_argument("email", type=utils.is_email.return_email,
+    parser.add_argument("email", type=is_email.return_email,
                         help="The email address of the user.")
     parser.add_argument("-u", "--username", dest="username", type=str, required=False, default="",
                         help="The username of the new user. Only needed if you want to create a custom username. "

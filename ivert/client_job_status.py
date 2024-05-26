@@ -5,11 +5,16 @@ import os
 import pandas
 import typing
 
-import utils.configfile
-import jobs_database
-import utils.bcolors as bcolors
+try:
+    import utils.configfile as configfile
+    import jobs_database
+    import utils.bcolors as bcolors
+except ModuleNotFoundError:
+    import ivert.utils.configfile as configfile
+    import ivert.jobs_database as jobs_database
+    import ivert.utils.bcolors as bcolors
 
-ivert_config = utils.configfile.config()
+ivert_config = configfile.config()
 
 
 def find_latest_job_submitted(username: str,

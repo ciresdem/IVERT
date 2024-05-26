@@ -14,12 +14,18 @@ import types
 import tabulate
 import warnings
 
-import utils.query_yes_no
-import utils.bcolors
-import utils.configfile
-import utils.progress_bar
+try:
+    import utils.query_yes_no as query_yes_no
+    import utils.bcolors as bcolors
+    import utils.configfile as configfile
+    import utils.progress_bar as progress_bar
+except ModuleNotFoundError:
+    import ivert.utils.query_yes_no as query_yes_no
+    import ivert.utils.bcolors as bcolors
+    import ivert.utils.configfile as configfile
+    import ivert.utils.progress_bar as progress_bar
 
-ivert_config = utils.configfile.config()
+ivert_config = configfile.config()
 
 
 class S3Manager:
@@ -255,8 +261,8 @@ class S3Manager:
                 client.delete_object(Bucket=bucket_name, Key=s3k)
 
             if progress_bar:
-                utils.progress_bar.ProgressBar(i + 1, len(s3_keys_to_download),
-                                               suffix=f"{i + 1}/{len(s3_keys_to_download)}", decimals=0)
+                progress_bar.ProgressBar(i + 1, len(s3_keys_to_download),
+                                         suffix=f"{i + 1}/{len(s3_keys_to_download)}", decimals=0)
 
         return files_downloaded
 
@@ -525,7 +531,7 @@ class S3Manager:
             # Don't delete more than max_without_warning without user confirmation
             if max_without_warning is not None and len(matching_keys) > max_without_warning:
                 query_prompt = f"This will delete {len(matching_keys)} files in bucket '{bucket_name}'. Continue?"
-                delete_all_confirmation = utils.query_yes_no.query_yes_no(query_prompt, default="no")
+                delete_all_confirmation = query_yes_no.query_yes_no(query_prompt, default="no")
 
                 if not delete_all_confirmation:
                     return
@@ -646,7 +652,7 @@ def pretty_print_bucket_list(use_formatting=True):
                      "untrusted": ivert_config.s3_import_prefix_base if bname_dict["untrusted"] else "",
                      "export"   : ivert_config.s3_export_prefix_base if bname_dict["export"] else ""}
 
-    bc = utils.bcolors.bcolors()
+    bc = bcolors.bcolors()
 
     # A flag to incidate whether we had any "None" values.
     none_values_found = False

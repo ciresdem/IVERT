@@ -5,7 +5,11 @@ import configparser
 try:
     import is_aws
 except ModuleNotFoundError:
-    import utils.is_aws as is_aws
+    try:
+        import utils.is_aws as is_aws
+    except ModuleNotFoundError:
+        import ivert.utils.is_aws as is_aws
+
 import os
 import re
 import sys

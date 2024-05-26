@@ -8,8 +8,12 @@ import re
 import sqlite3
 import typing
 
-import utils.configfile
-import s3
+try:
+    import utils.configfile as configfile
+    import s3
+except ModuleNotFoundError:
+    import ivert.utils.configfile as configfile
+    import ivert.s3 as s3
 
 
 class JobsDatabaseClient:
@@ -30,7 +34,7 @@ class JobsDatabaseClient:
             None
         """
         # The IVERT configfile object. Get the paths from here.
-        self.ivert_config = utils.configfile.config()
+        self.ivert_config = configfile.config()
         self.ivert_jobs_dir = self.ivert_config.ivert_jobs_directory_local
         self.db_fname = self.ivert_config.ivert_jobs_database_local_fname
 
@@ -780,7 +784,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
         return
 
     def create_new_job(self,
-                       job_config_obj: utils.configfile.config,
+                       job_config_obj: configfile.config,
                        job_configfile: str,
                        job_logfile: str,
                        job_local_dir: str,
