@@ -3,14 +3,11 @@ requires = ["setuptools>=61.2", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["src"]
+py-modules = ["ivert"]
 #include-package-data = true
 
-[tool.setuptools.packages.find]
-where = ["src"]
-
 [tool.setuptools.dynamic]
-version = {attr = "src.ivert_version.__version__"}
+version = {attr = "ivert.version.__version__"}
 
 [project]
 name = "ivert"
@@ -36,11 +33,11 @@ dependencies = [
 ]
 
 [project.scripts]
-ivert = "src.ivert_client:ivert_client_cli"
+ivert = "ivert.ivert_client:ivert_client_cli"
 #s3 = "srcs3:s3_cli"
 
 [project.entry-points."ivert"]
-ivert = "src.ivert_client:ivert_client_cli"
+ivert = "ivert.ivert_client:ivert_client_cli"
 #
 #[project.entry-points."s3"]
 #s3 = "srcs3:s3_cli"
