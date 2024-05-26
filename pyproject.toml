@@ -28,8 +28,7 @@ dependencies = [
     "numpy",
     "scipy",
     "pandas",
-    "boto3",
-    "sqlite3"
+    "boto3"
 ]
 
 [project.scripts]
