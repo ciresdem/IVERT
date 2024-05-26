@@ -51,10 +51,8 @@ setuptools.setup(
         'pyproj', # all
         'h5py', # nsidc
         'boto3', # for amazon
-        'utm', # for cshelph
         'pandas', # for cshelph
-        'dateparser',
-        'osgeo'
+        'dateparser'
     ],
     entry_points = {
         'console_scripts': [
