@@ -10,7 +10,7 @@ plot_photon_clouds.py -- Simple tool for making photon point clouds with matplot
 
 # import retrieve_land_photons
 import atl_granules
-import progress_bar
+import utils.progress_bar as progress_bar
 
 import pandas
 import numpy

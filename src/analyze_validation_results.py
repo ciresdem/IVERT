@@ -3,13 +3,9 @@
 """analyze_validation_results.py -- A couple functions for taking a deeper look at our ICESat-2 validation results."""
 
 import numpy
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-import matplotlib
 import pandas
 import os
 import argparse
-import re
 
 
 def plot_analysis(photon_h5_name):

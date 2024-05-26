@@ -7,7 +7,10 @@ import numpy
 import time
 import subprocess
 
-import utils.progress_bar
+try:
+    import progress_bar
+except ModuleNotFoundError:
+    import utils.progress_bar as progress_bar
 
 def physical_cpu_count():
     """On this machine, get the number of physical cores.
@@ -266,7 +269,7 @@ def process_parallel(target_func,
         for tdir in running_tempdirs:
             if type(tdir) == str and os.path.exists(tdir):
                 rm_cmd = ["rm", "-rf", tdir]
-                subproess.run(rm_cmd, capture_output=True)
+                subprocess.run(rm_cmd, capture_output=True)
         if delete_partially_done_files:
             for fn in running_outfiles:
                 if type(fn) == str and os.path.exists(fn):
