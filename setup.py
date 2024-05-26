@@ -38,7 +38,7 @@ setuptools.setup(
     author = 'CIRES Coastal DEM Team',
     author_email = 'michael.macferrin@colorado.edu',
     url = 'http://github.com/ciresdem/IVERT',
-    packages = ['ivert'],
+    packages = setuptools.find_packages(exclude=['tests', 'src/tests_old', 'scratch_data']),
     package_data = {'ivert': ['data/icesat2/ATL03_EMPTY_TILE.h5', 'data/empty_tile.tif', 'config/*.ini', 'config/*.sql']},
     classifiers = [
         'Programming Language :: Python :: 3',
