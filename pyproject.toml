@@ -31,12 +31,13 @@ dependencies = [
     "boto3"
 ]
 
+[project.entry-points."ivert"]
+ivert = "ivert.ivert_client:ivert_client_cli"
+
 [project.scripts]
 ivert = "ivert/ivert_client:ivert_client_cli"
 #s3 = "srcs3:s3_cli"
 
-[project.entry-points."ivert"]
-ivert = "ivert.ivert_client:ivert_client_cli"
 
 #[project.entry-points."s3"]
 #s3 = "srcs3:s3_cli"
