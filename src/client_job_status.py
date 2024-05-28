@@ -29,6 +29,8 @@ def find_latest_job_submitted(username,
 
     Returns:
         str: The most recent job name submitted by this user, from either the jobs database or the local jobs directory.
+             If no jobs was found for this user, it returns "<username>_000000000000", or "__nada_000000000000" if
+             no username is provided.
     """
     if jobs_db is None:
         jobs_db = jobs_database.JobsDatabaseClient()
@@ -39,7 +41,10 @@ def find_latest_job_submitted(username,
     job_id_from_db = df["job_id"].max()
 
     if job_id_from_db in [None, numpy.nan]:
-        return "nada_000000000000"
+        if username:
+            return f"{username}_000000000000"
+        else:
+            return "__nada_000000000000"
 
     username_to_use = username if username else "__nada" # __nada will be less than any actual username.
     job_name_from_db = f"{username_to_use}_{job_id_from_db}"

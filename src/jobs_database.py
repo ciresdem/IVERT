@@ -12,12 +12,15 @@ import typing
 
 try:
     import utils.configfile as configfile
+    import utils.version as version
     import s3
 except ModuleNotFoundError:
     # When this is built a setup.py package, it names the module 'ivert'. This reflects that.
     import ivert_utils.configfile as configfile
+    import ivert_utils.version as version
     import ivert.s3 as s3
 
+ivert_config = configfile.config()
 
 class JobsDatabaseClient:
     """Base class for common operations on the IVERT jobs database.
@@ -37,7 +40,7 @@ class JobsDatabaseClient:
             None
         """
         # The IVERT configfile object. Get the paths from here.
-        self.ivert_config = configfile.config()
+        self.ivert_config = ivert_config
         self.ivert_jobs_dir = self.ivert_config.ivert_jobs_directory_local
         self.db_fname = self.ivert_config.ivert_jobs_database_local_fname
 
@@ -250,6 +253,23 @@ class JobsDatabaseClient:
             md = self.s3m.get_metadata(self.s3_database_key, bucket_type=self.s3_bucket_type)
             if md is not None and self.s3_vnum_metadata_key in md.keys():
                 return int(md[self.s3_vnum_metadata_key])
+            else:
+                return None
+        # If the database doesn't exist in the S3 bucket, just return None.
+        else:
+            return None
+
+    def fetch_ivert_version_from_s3_metadata(self) -> typing.Union[str, None]:
+        """Fetch the ivert software version currently running on the EC2 from the S3 metadata.
+
+        Returns:
+            str: The ivert software version currently running on the EC2.
+            or...
+            None: If the 'ivert_version' metadata key doesn't exist in the S3 metadata."""
+        if self.s3m.exists(self.s3_database_key, bucket_type=self.s3_bucket_type):
+            md = self.s3m.get_metadata(self.s3_database_key, bucket_type=self.s3_bucket_type)
+            if md is not None and self.ivert_config.s3_jobs_db_ivert_version_metadata_key in md.keys():
+                return md[self.ivert_config.s3_jobs_db_ivert_version_metadata_key]
             else:
                 return None
         # If the database doesn't exist in the S3 bucket, just return None.
@@ -772,6 +792,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
         latest_job_id = self.fetch_latest_job_number_from_database()
         local_filename = self.db_fname
         db_s3_key = self.s3_database_key
+        ivert_version_key = self.ivert_config.s3_jobs_db_ivert_version_metadata_key
 
         # Upload the database to the S3 bucket. Set the md5, the latest_job number, and the vnum in the S3 metadata.
         self.s3m.upload(local_filename,
@@ -780,7 +801,8 @@ class JobsDatabaseServer(JobsDatabaseClient):
                         include_md5=True,
                         other_metadata={
                             self.s3_latest_job_metadata_key: str(latest_job_id),
-                            self.s3_vnum_metadata_key: str(self.fetch_latest_db_vnum_from_database())
+                            self.s3_vnum_metadata_key: str(self.fetch_latest_db_vnum_from_database()),
+                            ivert_version_key: version.__version__
                         },
                         )
 
@@ -1152,8 +1174,10 @@ def define_and_parse_args() -> argparse.Namespace:
                         help="Name of the table to print to the screen. Only used for the 'print' command.")
     parser.add_argument("-a", "--all", dest="all", action="store_true", default=False,
                         help="Print all the columns of the table. Used only with 'print -t' command.")
-    parser.add_argument("-v", "--version", dest="version", default="",
-                        help="Print the version of the database, from the 'database'/'d' or 'server'/'s'. Used only with the print command.")
+    parser.add_argument("-vn", "--vnum", dest="vnum", default="",
+                        help="Print the mod-version of the database, from the 'database'/'d' or 'server'/'s'. Used only with the print command.")
+    parser.add_argument("-v", "--version", dest="version", action="store_true", default=False,
+                        help="Print the version of the IVERT software running on the databse. Used only with the print command.")
     parser.add_argument("-j", "--job_id", dest="job_id", type=int, default=None,
                         help="Print only records from the given job_id. Default: Print all records.")
     parser.add_argument("-l", "--latest", dest="latest", action="store_true", default=False,
@@ -1164,7 +1188,12 @@ def define_and_parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = define_and_parse_args()
-    idb = JobsDatabaseServer()
+
+    if ivert_config.is_aws:
+        idb = JobsDatabaseClient()
+    else:
+        idb = JobsDatabaseServer()
+
     if args.command == "create":
         idb.create_new_database(only_if_not_exists_in_s3=True, overwrite=args.overwrite)
     elif args.command == "upload":
@@ -1174,11 +1203,14 @@ if __name__ == "__main__":
     elif args.command == "delete":
         idb.delete_database()
     elif args.command == "print":
-        if args.version:
-            if args.version[0].lower() == "d":
+        if args.vnum:
+            if args.vnum[0].lower() == "d":
                 print(idb.fetch_latest_db_vnum_from_database())
             else:
                 print(idb.fetch_latest_db_vnum_from_s3_metadata())
+
+        elif args.version:
+            print(idb.fetch_ivert_version_from_s3_metadata())
 
         else:
             if args.all:

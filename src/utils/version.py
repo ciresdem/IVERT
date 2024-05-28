@@ -14,3 +14,6 @@ else:
 __version__ = None
 with open(file_to_use, 'r') as f:
     __version__ = f.read().strip()
+
+if __name__ == "__main__":
+    print(__version__)

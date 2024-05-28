@@ -10,6 +10,7 @@ try:
     import client_test_job
     import client_job_status
     import utils.query_yes_no as yes_no
+    import utils.version as version
 except ModuleNotFoundError:
     import ivert.new_user_setup as new_user_setup
     import ivert.client_subscriptions as client_subscriptions
@@ -17,14 +18,16 @@ except ModuleNotFoundError:
     import ivert.client_test_job as client_test_job
     import ivert.client_job_status as client_job_status
     import ivert_utils.query_yes_no as yes_no
+    import ivert_utils.version as version
 
 def define_and_parse_args(return_parser: bool = False):
-    parser = argparse.ArgumentParser(description="The ICESat-2 Validation of Elevations Reporting Tool (IVERT)")
+    parser = argparse.ArgumentParser(description="The ICESat-2 Validation of Elevations Reporting Tool (IVERT)."
+                                     f"\nRun 'ivert <command> --help' for more info about any specific command.")
+    parser.add_argument("-v", "--version", action="version", version=f"ivert {version.__version__}")
 
     # The first argument in the command. The other sub-parsers depend upon which command was used here.
-    subparsers = parser.add_subparsers(dest="command",
-                                       help=f"Run '{os.path.basename(__file__)} <command> --help' for more info about each command.")
-    subparsers.required = True
+    subparsers = parser.add_subparsers(dest="command", required=False)
+    subparsers.required = False
 
     ###############################################################
     # Create the "validate" subparser
@@ -50,7 +53,7 @@ def define_and_parse_args(return_parser: bool = False):
     parser_validate.add_argument("-w", "--wait", dest="wait", default=False, action="store_true",
                                  help="Wait to exit until the results are finished and downloaded. If False, just "
                                       "upload the job, exit, and wait for a response notification from IVERT. You can "
-                                      "then use the 'src status' and 'src download' commands to monitor the job. "
+                                      "then use the 'ivert status' and 'ivert download' commands to monitor the job. "
                                       "Default: False")
     parser_validate.add_argument("-p", "--prompt", dest="prompt", default=False, action="store_true",
                                  help="Print the command options and prompt the user to verify settings before uploading"
@@ -88,10 +91,8 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     # Create the "setup" subparser
     ###############################################################
-    setup_help_msg = ("Install the IVERT client on the local machine and create user settings. "
-                      "Run this once before using IVERT. Re-run again to change settings."
-                      " Note: It is recommended to get the ivert_s3_credentials.ini file and put it the ~/.src/creds/ "
-                      "directory. It will save you from having to copy-paste each credential from that file.")
+    setup_help_msg = ("Install the IVERT client and user-settings on the local machine. "
+                      "Run once before using IVERT on a new machine.")
     # Use the parent parser from new_user_setup.py to define the arguments for the subparser
     subparsers.add_parser("setup",
                           parents=[new_user_setup.define_and_parse_args(just_return_parser=True)],
@@ -101,10 +102,7 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     # Create the "test" subparser
     ###############################################################
-    test_help_msg = "Test the end-to-end functionalty of IVERT in the NCCF system." + \
-                    " No data will be processed, but a test file will be pushed and a textfile" + \
-                    " will be received on the other end. This will test your connectivity with the" + \
-                    " IVERT system."
+    test_help_msg = "Test the end-to-end functionalty of IVERT with an empty test job."
     parser_test = subparsers.add_parser("test", help=test_help_msg, description=test_help_msg)
     parser_test.add_argument("-w", "--wait", dest="wait", default=False, action="store_true",
                              help="Wait to exit until the results are finished and downloaded. If False,"
@@ -140,7 +138,7 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     # Create the "update" subparser
     ###############################################################
-    update_help_msg = "Request updated data in the IVERT photon database. [NOT YET IMPLEMENTED]"
+    update_help_msg = "Update photon data in the IVERT photon database. [NOT YET IMPLEMENTED]"
     parser_update = subparsers.add_parser("update", help=update_help_msg, description=update_help_msg)
     parser_update.add_argument("polygon_file", type=str,
                                help="Enter a polygon file (.shp, .json, .geojson, or .gkpg).")
@@ -197,10 +195,10 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     # Create the "unsubscribe" subparser
     ###############################################################
-    unsubscribe_help_msg = "Unsubscribe from IVERT email notifications. This can also be done by using the 'unsubscribe' link in any IVERT emails you receive."
+    unsubscribe_help_msg = "Unsubscribe from IVERT email notifications."
     parser_unsubscribe = subparsers.add_parser("unsubscribe", help=unsubscribe_help_msg, description=unsubscribe_help_msg)
     parser_unsubscribe.add_argument("email", type=str,
-                                    help="Enter an email address to unsubscribe from IVERT email notifications.")
+                                    help="Enter an email address to unsubscribe from IVERT email notifications. This can also be done by clicking the 'unsubscribe' link in any IVERT emails you receive.")
 
     # Not implemented yet.
     # ###############################################################
@@ -269,7 +267,10 @@ def ivert_client_cli():
 
     # Raise an error if the command doesn't exist.
     else:
-        raise NotImplementedError("Command '{args.command}' does not exist in IVERT or is not implemented.")
+        if args.command:
+            raise NotImplementedError(f"Command '{args.command}' does not exist in IVERT or is not implemented.")
+        else:
+            define_and_parse_args(return_parser=True).print_help()
 
 
 if __name__ == "__main__":
