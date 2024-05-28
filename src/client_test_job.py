@@ -15,13 +15,13 @@ try:
     import client_job_status
     import jobs_database
 except ModuleNotFoundError:
-    import ivert.utils.configfile as configfile
-    import ivert.utils.create_empty_tiff as create_empty_tiff
-    from ivert.utils.bcolors import bcolors
-    import ivert.client_job_upload as client_job_upload
-    import ivert.client_job_download as client_job_download
-    import ivert.client_job_status as client_job_status
-    import ivert.jobs_database as jobs_database
+    import src.utils.configfile as configfile
+    import src.utils.create_empty_tiff as create_empty_tiff
+    from src.utils.bcolors import bcolors
+    import src.client_job_upload as client_job_upload
+    import src.client_job_download as client_job_download
+    import src.client_job_status as client_job_status
+    import src.jobs_database as jobs_database
 
 
 def run_test_command(args: argparse.Namespace,
@@ -73,8 +73,8 @@ def run_test_command(args: argparse.Namespace,
 
     else:
         print("Job has been uploaded. You can wait to receive a notification email when it's done, and/or run "
-              f"'{bcolors.BOLD}ivert status {job_name}{bcolors.ENDC}' to check the status"
-              f" of the job, and/or '{bcolors.BOLD}ivert download {job_name}{bcolors.ENDC}'"
+              f"'{bcolors.BOLD}src status {job_name}{bcolors.ENDC}' to check the status"
+              f" of the job, and/or '{bcolors.BOLD}src download {job_name}{bcolors.ENDC}'"
               " to download the results when it's complete.")
 
 

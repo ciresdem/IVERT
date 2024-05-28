@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 ## A module for managing the IVERT jobs database.
 
 import argparse
@@ -12,8 +14,8 @@ try:
     import utils.configfile as configfile
     import s3
 except ModuleNotFoundError:
-    import ivert.utils.configfile as configfile
-    import ivert.s3 as s3
+    import src.utils.configfile as configfile
+    import src.s3 as s3
 
 
 class JobsDatabaseClient:

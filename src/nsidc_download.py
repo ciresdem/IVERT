@@ -60,7 +60,7 @@ import re
 import shapely.geometry
 #
 # ####################################3
-# # Include the base /ivert/ directory of thie project, to add all the other modules.
+# # Include the base /src/ directory of thie project, to add all the other modules.
 # import import_parent_dir; import_parent_dir.import_src_dir_via_pythonpath()
 ####################################3
 # import utils.progress_bar as progress_bar

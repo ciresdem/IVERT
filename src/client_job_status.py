@@ -10,9 +10,9 @@ try:
     import jobs_database
     import utils.bcolors as bcolors
 except ModuleNotFoundError:
-    import ivert.utils.configfile as configfile
-    import ivert.jobs_database as jobs_database
-    import ivert.utils.bcolors as bcolors
+    import src.utils.configfile as configfile
+    import src.jobs_database as jobs_database
+    import src.utils.bcolors as bcolors
 
 ivert_config = configfile.config()
 

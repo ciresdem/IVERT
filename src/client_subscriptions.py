@@ -6,8 +6,8 @@ try:
     import client_job_upload
     from utils.bcolors import bcolors
 except ModuleNotFoundError:
-    import ivert.client_job_upload as client_job_upload
-    from ivert.utils.bcolors import bcolors
+    import src.client_job_upload as client_job_upload
+    from src.utils.bcolors import bcolors
 
 
 def run_subscribe_command(args: argparse.Namespace) -> None:
@@ -47,5 +47,5 @@ def run_unsubscribe_command(args: argparse.Namespace) -> None:
 
     print("\nYour unsubscribe request has been sent to the IVERT server.")
     print(f"You will {bcolors.BOLD}not{bcolors.ENDC} get a notification back when the job is done (that's kind of the nature of this request, right?).")
-    print("You may resubscribe at any time using the 'ivert subscribe <email>' command.")
+    print("You may resubscribe at any time using the 'src subscribe <email>' command.")
     return

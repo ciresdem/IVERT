@@ -19,7 +19,7 @@ class ATL_granule:
     beam_code_dict = {0: "gt1l", 1: "gt1r", 2: "gt2l", 3: "gt2r", 4: "gt3l", 5: "gt3r"}
 
     def __init__(self, h5name, dataset_name):
-        # The various settings, in /ivert/ini/config.ini
+        # The various settings, in /src/ini/config.ini
         self.config = ATL_granule.config
         self.atl_sdp_epoch = dateparser.parse(self.config.atlas_sdp_epoch)
 

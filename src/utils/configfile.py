@@ -8,7 +8,7 @@ except ModuleNotFoundError:
     try:
         import utils.is_aws as is_aws
     except ModuleNotFoundError:
-        import ivert.utils.is_aws as is_aws
+        import src.utils.is_aws as is_aws
 
 import os
 import re
@@ -221,7 +221,7 @@ class config:
     def _add_user_variables_and_s3_creds_to_config_obj(self):
         """Add the names of the S3 buckets to the configfile.config object.
 
-        On a client instance, ivert setup needs to be run to flesh out the user configfile, before this will work."""
+        On a client instance, src setup needs to be run to flesh out the user configfile, before this will work."""
         # Make sure all these are defined in here. They may be assigned to None but they should exist. This is
         # a sanity check in case we changed the bucket variables names in the configfile.
         assert hasattr(self, "s3_bucket_import_untrusted")

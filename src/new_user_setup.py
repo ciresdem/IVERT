@@ -15,10 +15,10 @@ try:
     import utils.configfile as configfile
     import utils.is_email as is_email
 except ModuleNotFoundError:
-    import ivert.client_job_upload as client_job_upload
-    from ivert.utils.bcolors import bcolors
-    import ivert.utils.configfile as configfile
-    import ivert.utils.is_email as is_email
+    import src.client_job_upload as client_job_upload
+    from src.utils.bcolors import bcolors
+    import src.utils.configfile as configfile
+    import src.utils.is_email as is_email
 
 ivert_config = configfile.config()
 ivert_user_config_template = configfile.config(ivert_config.ivert_user_config_template)
@@ -37,7 +37,7 @@ def setup_new_user(args: argparse.Namespace) -> None:
     if args.prompt:
         confirm_inputs_with_user(args)
 
-    # Create the ivert local directories (in ~/.ivert)
+    # Create the src local directories (in ~/.src)
     create_local_dirs()
 
     # Update the AWS profiles on the local machine.
@@ -57,8 +57,8 @@ def setup_new_user(args: argparse.Namespace) -> None:
     else:
         print("\nYou may now ", end="")
 
-    print(f"run\n\n> {bcolors.BOLD}{bcolors.OKBLUE}ivert test{bcolors.ENDC}{bcolors.ENDC}\n\n...to perform a dry run, end-to-end test the IVERT system.\n")
-    print(f"At any time, run\n> {bcolors.BOLD}{bcolors.OKBLUE}ivert --help{bcolors.ENDC}{bcolors.ENDC}\n...to see a complete list of other IVERT commands. "
+    print(f"run\n\n> {bcolors.BOLD}{bcolors.OKBLUE}src test{bcolors.ENDC}{bcolors.ENDC}\n\n...to perform a dry run, end-to-end test the IVERT system.\n")
+    print(f"At any time, run\n> {bcolors.BOLD}{bcolors.OKBLUE}src --help{bcolors.ENDC}{bcolors.ENDC}\n...to see a complete list of other IVERT commands. "
           f"Happy validations!\n")
 
 
@@ -529,7 +529,7 @@ def define_and_parse_args(just_return_parser: bool=False):
     bucket_group = parser.add_argument_group("IVERT S3 bucket settings",
                               description="Manually enter the IVERT S3 bucket settings and credentials. It is FAR EASIER "
                               "to skip these options, copy the 'ivert_s3_credentials.ini' file from the "
-                              "team's GDrive, and place it in ~/.ivert/ivert_s3_credentials.ini. The script will "
+                              "team's GDrive, and place it in ~/.src/ivert_s3_credentials.ini. The script will "
                               "automatically grab all these variables from there.")
     bucket_group.add_argument("-ub", "--untrusted_bucket_name", dest="untrusted_bucket_name",
                               default="", type=str, required=False,

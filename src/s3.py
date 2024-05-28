@@ -20,10 +20,10 @@ try:
     import utils.configfile as configfile
     import utils.progress_bar as progress_bar
 except ModuleNotFoundError:
-    import ivert.utils.query_yes_no as query_yes_no
-    import ivert.utils.bcolors as bcolors
-    import ivert.utils.configfile as configfile
-    import ivert.utils.progress_bar as progress_bar
+    import src.utils.query_yes_no as query_yes_no
+    import src.utils.bcolors as bcolors
+    import src.utils.configfile as configfile
+    import src.utils.progress_bar as progress_bar
 
 ivert_config = configfile.config()
 
@@ -699,7 +699,7 @@ def add_subparser_bucket_param(subparser):
     """All the sub-parsers use the same bucket optional argument. Add it here."""
 
     subparser.add_argument("--bucket", "-b", default=None, choices=list(S3Manager.available_bucket_types) + [None],
-                           help="Shorthand alias of the ivert S3 bucket. "
+                           help="Shorthand alias of the src S3 bucket. "
                                 "Options are: 'database' 'd' (server work bucket, only accessible within the S3); "
                                 "'trusted' 't' (files that passed secure ingest, only accessible within the S3); "
                                 "'untrusted' 'u' (files uploaded to IVERT, only accessible by the client using credentials); "

@@ -3,20 +3,20 @@
 import argparse
 import os
 
-try:
-    import new_user_setup
-    import client_subscriptions
-    import client_job_download
-    import client_test_job
-    import client_job_status
-    import utils.query_yes_no as yes_no
-except ModuleNotFoundError:
-    import ivert.new_user_setup as new_user_setup
-    import ivert.client_subscriptions as client_subscriptions
-    import ivert.client_job_download as client_job_download
-    import ivert.client_test_job as client_test_job
-    import ivert.client_job_status as client_job_status
-    import ivert.utils.query_yes_no as yes_no
+import new_user_setup
+import client_subscriptions
+import client_job_download
+import client_test_job
+import client_job_status
+import utils.query_yes_no as yes_no
+
+
+#     import src.new_user_setup as new_user_setup
+#     import src.client_subscriptions as client_subscriptions
+#     import src.client_job_download as client_job_download
+#     import src.client_test_job as client_test_job
+#     import src.client_job_status as client_job_status
+#     import src.utils.query_yes_no as yes_no
 
 def define_and_parse_args(return_parser: bool = False):
     parser = argparse.ArgumentParser(description="The ICESat-2 Validation of Elevations Reporting Tool (IVERT)")
@@ -50,7 +50,7 @@ def define_and_parse_args(return_parser: bool = False):
     parser_validate.add_argument("-w", "--wait", dest="wait", default=False, action="store_true",
                                  help="Wait to exit until the results are finished and downloaded. If False, just "
                                       "upload the job, exit, and wait for a response notification from IVERT. You can "
-                                      "then use the 'ivert status' and 'ivert download' commands to monitor the job. "
+                                      "then use the 'src status' and 'src download' commands to monitor the job. "
                                       "Default: False")
     parser_validate.add_argument("-p", "--prompt", dest="prompt", default=False, action="store_true",
                                  help="Print the command options and prompt the user to verify settings before uploading"
@@ -91,7 +91,7 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     setup_help_msg = ("Install the IVERT client on the local machine and create user settings. "
                       "Run this once before using IVERT. Re-run again to change settings."
-                      " Note: It is recommended to get the ivert_s3_credentials.ini file and put it the ~/.ivert/creds/ "
+                      " Note: It is recommended to get the ivert_s3_credentials.ini file and put it the ~/.src/creds/ "
                       "directory. It will save you from having to copy-paste each credential from that file.")
     # Use the parent parser from new_user_setup.py to define the arguments for the subparser
     subparsers.add_parser("setup",
@@ -174,7 +174,7 @@ def define_and_parse_args(return_parser: bool = False):
     parser_import = subparsers.add_parser("import", help=import_help_msg, description=import_help_msg)
     parser_import.add_argument("files", type=str, nargs="+",
                                help="Enter a file, list of files, or a directory to import into the IVERT work bucket."
-                                    " May use bash-style wildcards such as ivert*.feather.")
+                                    " May use bash-style wildcards such as src*.feather.")
     parser_import.add_argument("-d", "-dest", "--destination_prefix", dest="destination_prefix",
                                type=str, default="",
                                help="Destintion prefix to place files into the IVERT work bucket."
@@ -214,7 +214,7 @@ def define_and_parse_args(return_parser: bool = False):
     #                                   " Default: Download the latest job submitted by this user.")
     # parser_download.add_argument("-u", "--user", "--username", dest="username", type=str, default="",
     #                              help="Manually specify the IVERT username. Default: Use the username of the current "
-    #                                   "user saved in ~/.ivert/creds/ivert_user_config.ini.")
+    #                                   "user saved in ~/.src/creds/ivert_user_config.ini.")
 
     if return_parser:
         return parser

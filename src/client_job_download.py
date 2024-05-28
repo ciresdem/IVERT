@@ -9,10 +9,10 @@ try:
     import s3
     import utils.configfile as configfile
 except ModuleNotFoundError:
-    import ivert.jobs_database as jobs_database
-    import ivert.client_job_status as client_job_status
-    import ivert.s3 as s3
-    import ivert.utils.configfile as configfile
+    import src.jobs_database as jobs_database
+    import src.client_job_status as client_job_status
+    import src.s3 as s3
+    import src.utils.configfile as configfile
 
 ivert_config = configfile.config()
 
@@ -101,7 +101,7 @@ def define_and_parse_args() -> argparse.Namespace:
     parser.add_argument("-n", "--job_name", dest="job_name", default=None,
                         help="The name of the job to download results for. Usually in the format 'username_jobid'. Default: Download whatever the latest job was that you submitted from this machine.")
     parser.add_argument("-o" "--output_dir", dest="output_dir", default=None,
-                        help="The directory to download the results to. Default: Download to the .ivert/jobs sub-directory where the job was submitted.")
+                        help="The directory to download the results to. Default: Download to the .src/jobs sub-directory where the job was submitted.")
 
     return parser.parse_args()
 
@@ -111,14 +111,14 @@ if __name__ == "__main__":
 
     if args.dest is None:
         if args.job_name is None:
-            # Look for the "most recent" job in your local .ivert/jobs directory.
+            # Look for the "most recent" job in your local .src/jobs directory.
             args.dest = find_most_recent_job_dir_from_this_machine()
 
         else:
             args.dest = find_matching_job_dir(args.job_name)
 
     if args.job_name is None:
-        # Look for the "most recent" job in your local .ivert/jobs directory.
+        # Look for the "most recent" job in your local .src/jobs directory.
         args.job_name = os.path.basename(find_most_recent_job_dir_from_this_machine())
 
     download_job(args.job_name, args.dest)

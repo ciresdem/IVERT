@@ -162,4 +162,5 @@ data/*
 !data/icesat2/
 !data/empty_tile.tif
 scratch_data/*
-ivert/tests_old
+src/tests_old
+OLD_*
