@@ -64,7 +64,7 @@ class config:
         self._parse_config_into_attrs()
 
         # If we're importing the primary IVERT config file, add the user variables and S3 creds to the config as well.
-        if os.path.normpath(os.path.abspath(self._configfile)) == os.path.normpath(os.path.abspath(ivert_default_configfile)):
+        if os.path.basename(self._configfile) == os.path.basename(ivert_default_configfile):
             self._add_user_variables_and_s3_creds_to_config_obj()
 
     def _abspath(self, path, only_if_actual_path_doesnt_exist=False):
