@@ -163,4 +163,5 @@ data/*
 !data/empty_tile.tif
 scratch_data/*
 src/tests_old
-OLD_*
+# A convention I used for old files that I am (at least temporarily) excluding.
+/OLD_*
