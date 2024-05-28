@@ -257,8 +257,8 @@ class config:
                 return
             else:
                 s3_credentials = config(self.ivert_s3_credentials_file)
-                self.s3_bucket_import_untrusted = s3_credentials.s3_bucket_import_untrusted
-                self.s3_bucket_export = s3_credentials.s3_bucket_export
+                self.s3_bucket_import_untrusted = s3_credentials.s3_untrusted_bucket_name
+                self.s3_bucket_export = s3_credentials.s3_export_bucket_name
 
 
 
