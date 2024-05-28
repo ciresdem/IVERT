@@ -93,7 +93,7 @@ def download_job(job_name: str,
 
     # Download the results
     s3m = s3.S3Manager()
-    return s3m.download(export_glob_str, dest, bucket_type="export", progress_bar=True)
+    return s3m.download(export_glob_str, dest, bucket_type="export", show_progress_bar=True)
 
 
 def define_and_parse_args() -> argparse.Namespace:

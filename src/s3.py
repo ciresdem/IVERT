@@ -18,11 +18,13 @@ try:
     import utils.query_yes_no as query_yes_no
     import utils.bcolors as bcolors
     import utils.configfile as configfile
+    import utils.progress_bar as progress_bar
 except ModuleNotFoundError:
     # When this is built a setup.py package, it names the module 'ivert'. This reflects that.
     import ivert_utils.query_yes_no as query_yes_no
     import ivert_utils.bcolors as bcolors
     import ivert_utils.configfile as configfile
+    import ivert_utils.progress_bar as progress_bar
 
 ivert_config = configfile.config()
 
@@ -201,7 +203,7 @@ class S3Manager:
                  delete_original: bool = False,
                  recursive: bool = False,
                  fail_quietly: bool = True,
-                 progress_bar: bool = False,
+                 show_progress_bar: bool = False,
                  include_metadata: bool = False) -> list:
         """Download a file from the S3 to the local file system.
 
@@ -212,7 +214,7 @@ class S3Manager:
             delete_original (bool): Whether to delete the original file after downloading.
             recursive (bool): Whether to download recursively.
             fail_quietly (bool): Whether to fail quietly if the file doesn't exist.
-            progress_bar (bool): Whether to show a progress bar.
+            show_progress_bar (bool): Whether to show a progress bar.
             include_metadata (bool): Whether to include the metadata in the downloaded file. In this case, the list of files will be a list of (filename, metadata_dict) tuples."""
         bucket_type = self.convert_btype(bucket_type)
 
@@ -259,7 +261,7 @@ class S3Manager:
             if delete_original:
                 client.delete_object(Bucket=bucket_name, Key=s3k)
 
-            if progress_bar:
+            if show_progress_bar:
                 progress_bar.ProgressBar(i + 1, len(s3_keys_to_download),
                                          suffix=f"{i + 1}/{len(s3_keys_to_download)}", decimals=0)
 

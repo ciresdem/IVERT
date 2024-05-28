@@ -74,8 +74,8 @@ def run_test_command(args: argparse.Namespace,
 
     else:
         print("Job has been uploaded. You can wait to receive a notification email when it's done, and/or run "
-              f"'{bcolors.BOLD}src status {job_name}{bcolors.ENDC}' to check the status"
-              f" of the job, and/or '{bcolors.BOLD}src download {job_name}{bcolors.ENDC}'"
+              f"'{bcolors.BOLD}ivert status {job_name}{bcolors.ENDC}' to check the status"
+              f" of the job, and/or '{bcolors.BOLD}ivert download {job_name}{bcolors.ENDC}'"
               " to download the results when it's complete.")
 
 

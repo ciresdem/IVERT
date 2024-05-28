@@ -48,14 +48,15 @@ def setup_new_user(args: argparse.Namespace) -> None:
     # Update the IVERT user config file.
     update_ivert_user_config(args)
 
-    # Update the IVERT config file, since the credentials fiels should now be populated.
+    # Update the IVERT config file, since the credentials fields should now be populated. They weren't before this.
     global ivert_config
     ivert_config = configfile.config()
-    # Gotta do this in the client upload script too, or else these variables won't be there.
+    # Gotta do this in the client upload module too, or else these variables won't be there.
     client_job_upload.reset_ivert_config()
     # And the s3 module.
 
     if args.subscribe_to_sns:
+        print("\nSending a job to the IVERT server to subscribe you to IVERT SNS notifications:")
         # Send new_user config (as an "update" command) to the IVERT cloud tool. This will subscribe the user to the IVERT SNS topic.
         subscribe_user_to_sns_notifications(args)
 
