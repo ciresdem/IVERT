@@ -61,7 +61,7 @@ def create_new_job_params(username: str = None) -> tuple[str, int]:
         username = ivert_config.username
 
     if not username:
-        raise ValueError("Username not defined in {ivert_config.user_config_file}.")
+        raise ValueError(f"Username not defined in {ivert_config.user_config_file}.")
 
     # The last job number is YYYYMMDDNNNN. If the last job was "today", we just increment it. Otherwise, we create a new job number using today's date.
     today_str = datetime.date.today().strftime("%Y%m%d")
