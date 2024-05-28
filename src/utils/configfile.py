@@ -253,7 +253,7 @@ class config:
                 pass
 
             # Now try to read the s3 credentials file.
-            if not os.path.exists(self.ivert_s3_credentials_file):
+            if not os.path.exists(os.path.abspath(self.ivert_s3_credentials_file)):
                 return
             else:
                 s3_credentials = config(self.ivert_s3_credentials_file)
