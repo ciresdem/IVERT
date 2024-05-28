@@ -364,6 +364,11 @@ def update_local_aws_config(aws_config_file: str,
     """
     # if the config file doesn't exist, create it
     if not os.path.exists(aws_config_file):
+        # Make the directory if it doesn't exist.
+        if not os.path.exists(os.path.dirname(aws_config_file)):
+            os.makedirs(os.path.dirname(aws_config_file))
+
+        # Create the file (a blank version)
         with open(aws_config_file, "w") as f:
             f.write("")
 
