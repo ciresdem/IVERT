@@ -7,6 +7,7 @@ import boto3
 import os
 import re
 import sys
+import shutil
 # import textwrap
 
 try:
@@ -63,8 +64,22 @@ def setup_new_user(args: argparse.Namespace) -> None:
           f"Happy validations!\n")
 
 
-def read_ivert_s3_credentials(error_if_not_found: bool = True):
-    """Read the IVERT S3 credentials file."""
+def read_ivert_s3_credentials(creds_file: str = "", error_if_not_found: bool = True):
+    """Read the IVERT S3 credentials file.
+
+    If we're given a path, move it first into the default credentials location."""
+    if os.path.exists(creds_file):
+        if not os.path.exists(creds_file):
+            raise FileNotFoundError(f"IVERT S3 credentials file '{creds_file}' not found.")
+
+        # Move the old creds file to the new location
+        print("Moving IVERT S3 credentials file to", os.path.dirname(ivert_config.ivert_s3_credentials_file))
+        # Create the directory if it doesn't exist yet.
+        if not os.path.exists(os.path.dirname(ivert_config.ivert_s3_credentials_file)):
+            os.makedirs(os.path.dirname(ivert_config.ivert_s3_credentials_file))
+
+        shutil.move(creds_file, ivert_config.ivert_s3_credentials_file)
+
     if os.path.exists(ivert_config.ivert_s3_credentials_file):
         return configfile.config(ivert_config.ivert_s3_credentials_file)
     else:
@@ -117,6 +132,7 @@ def collect_inputs(args: argparse.Namespace, only_if_not_provided: bool = True) 
 
     # Check to make sure all the args are present here.
     assert "email" in args
+    assert "creds" in args
     assert "username" in args
     assert "untrusted_bucket_name" in args
     assert "untrusted_access_key_id" in args
@@ -169,37 +185,37 @@ def collect_inputs(args: argparse.Namespace, only_if_not_provided: bool = True) 
 
     if not args.untrusted_bucket_name or not only_if_not_provided:
         if not s3_creds_obj:
-            s3_creds_obj = read_ivert_s3_credentials()
+            s3_creds_obj = read_ivert_s3_credentials(args.creds)
         if s3_creds_obj is not None:
             args.untrusted_bucket_name = s3_creds_obj.s3_bucket_import_untrusted
 
     if not args.export_bucket_name or not only_if_not_provided:
         if not s3_creds_obj:
-            s3_creds_obj = read_ivert_s3_credentials()
+            s3_creds_obj = read_ivert_s3_credentials(args.creds)
         if s3_creds_obj is not None:
             args.export_bucket_name = s3_creds_obj.s3_bucket_export
 
     if not args.untrusted_access_key_id or not only_if_not_provided:
         if not s3_creds_obj:
-            s3_creds_obj = read_ivert_s3_credentials()
+            s3_creds_obj = read_ivert_s3_credentials(args.creds)
         if s3_creds_obj is not None:
             args.untrusted_access_key_id = s3_creds_obj.s3_untrusted_access_key_id
 
     if not args.untrusted_secret_access_key or not only_if_not_provided:
         if not s3_creds_obj:
-            s3_creds_obj = read_ivert_s3_credentials()
+            s3_creds_obj = read_ivert_s3_credentials(args.creds)
         if s3_creds_obj is not None:
             args.untrusted_secret_access_key = s3_creds_obj.s3_untrusted_secret_access_key
 
     if not args.export_access_key_id or not only_if_not_provided:
         if not s3_creds_obj:
-            s3_creds_obj = read_ivert_s3_credentials()
+            s3_creds_obj = read_ivert_s3_credentials(args.creds)
         if s3_creds_obj is not None:
             args.export_access_key_id = s3_creds_obj.s3_export_access_key_id
 
     if not args.export_secret_access_key or not only_if_not_provided:
         if not s3_creds_obj:
-            s3_creds_obj = read_ivert_s3_credentials()
+            s3_creds_obj = read_ivert_s3_credentials(args.creds)
         if s3_creds_obj is not None:
             args.export_secret_access_key = s3_creds_obj.s3_export_secret_access_key
 
@@ -216,6 +232,7 @@ def validate_inputs(args: argparse.Namespace) -> None:
     """Validate user inputs for correctness. These should be a completed set of args, not a partial set."""
     assert "email" in args
     assert "username" in args
+    assert "creds" in args
     assert "untrusted_bucket_name" in args
     assert "untrusted_access_key_id" in args
     assert "untrusted_secret_access_key" in args
@@ -510,6 +527,8 @@ def define_and_parse_args(just_return_parser: bool=False):
                         help="The username of the new user. Only needed if you want to create a custom username. "
                              "Default: Derived from the left side of your email. It's recommended you just "
                              "use the default unless you have specific reasons to do otherwise.")
+    parser.add_argument("-c" "--creds", dest="creds", type=str, required=False, default="",
+                        help="The path to the 'ivert_s3_credentials.ini' file. This file will be moved to your ~/.ivert/creds directory.")
     parser.add_argument("-ns", "--do_not_subscribe", dest="subscribe_to_sns", action="store_false",
                         default=True, required=False,
                         help="Do not subscribe the new user to the IVERT SNS topic to receive email notifications. "
