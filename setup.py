@@ -60,11 +60,13 @@ setuptools.setup(
     ],
     install_requires = [
         'numpy', # all
-        'scipy', # waffles/convex hulls
-        'h5py', # nsidc
+        'scipy',
+        'h5py',
         'boto3', # for amazon
-        'pandas', # for cshelph
+        'pandas', # for reading the IVERT database tables.
         'dateparser',
+        'tabulate',
+        'psutil'
     ],
     entry_points = {
         'console_scripts': [
