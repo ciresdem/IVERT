@@ -44,11 +44,17 @@ def create_new_job_params(username: str = None) -> tuple[str, int]:
         int: New job number
     """
     # Check the last job submitted, either from the user's local files or from the jobs database.
-    last_job_number = int(client_job_status.find_latest_job_submitted(username)[-12:])
+    db = jobs_database.JobsDatabaseClient()
 
-    if last_job_number is None:
-        raise FileNotFoundError(
-            "Error connecting to the S3 jobs database. Check your online connection and/or contact your IVERT developers.")
+    last_job_name = client_job_status.find_latest_job_submitted(username, jobs_db=db)
+    if last_job_name is None:
+        last_job_name = "nada_000000000000"
+
+    last_job_number = int(last_job_name[-12:])
+
+    last_job_nubmer_by_anyone = db.fetch_latest_job_number_from_s3_metadata()
+    if last_job_nubmer_by_anyone is not None:
+        last_job_number = max(last_job_nubmer_by_anyone, last_job_number)
 
     # Get the username.
     if not username:

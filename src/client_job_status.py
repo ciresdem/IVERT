@@ -18,7 +18,7 @@ except ModuleNotFoundError:
 ivert_config = configfile.config()
 
 
-def find_latest_job_submitted(username: str,
+def find_latest_job_submitted(username,
                               jobs_db: typing.Union[jobs_database.JobsDatabaseClient, None] = None) -> str:
     """Find the most recent job submitted by this user, from either the jobs database or the local jobs directory.
 
@@ -34,9 +34,9 @@ def find_latest_job_submitted(username: str,
 
     jobs_db.download_from_s3(only_if_newer=True)
     # Read the table of all the jobs submitted by this user.
-    df = jobs_db.read_table_as_pandas_df("jobs", username=username)
+    df = jobs_db.read_table_as_pandas_df("jobs", username=None if username == "" else username)
     job_id_from_db = df["job_id"].max()
-    job_name_from_db = f"{username}_{job_id_from_db}"
+    job_name_from_db = f"{(username if username else "nada")}_{job_id_from_db}"
 
     # Now look in the local jobs folder to see if there's a more recent job there that was submitted, but isn't yet in
     # the server's jobs database. (Perhaps it just hasn't been picked up by the server yet.)

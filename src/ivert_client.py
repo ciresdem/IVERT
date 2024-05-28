@@ -18,13 +18,6 @@ except ModuleNotFoundError:
     import ivert.client_job_status as client_job_status
     import ivert_utils.query_yes_no as yes_no
 
-#     import src.new_user_setup as new_user_setup
-#     import src.client_subscriptions as client_subscriptions
-#     import src.client_job_download as client_job_download
-#     import src.client_test_job as client_test_job
-#     import src.client_job_status as client_job_status
-#     import src.utils.query_yes_no as yes_no
-
 def define_and_parse_args(return_parser: bool = False):
     parser = argparse.ArgumentParser(description="The ICESat-2 Validation of Elevations Reporting Tool (IVERT)")
 
@@ -91,7 +84,6 @@ def define_and_parse_args(return_parser: bool = False):
                                       "outside this threshold of the mean-of-errors will be removed as noise. "
                                       "-1 (or any negative number) will disable outlier filtering. Don't use 0 here, "
                                       "that'd filter everything out. (Default: 2.5 s.d.)")
-    # TODO: Parse the "files_or_directory" argument and replace it with a "files" argument listing all the files.
 
     ###############################################################
     # Create the "setup" subparser
