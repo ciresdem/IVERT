@@ -73,7 +73,7 @@ def read_ivert_s3_credentials(creds_file: str = "", error_if_not_found: bool = T
             raise FileNotFoundError(f"IVERT S3 credentials file '{creds_file}' not found.")
 
         # Move the old creds file to the new location
-        print("Moving IVERT S3 credentials file to", os.path.dirname(ivert_config.ivert_s3_credentials_file))
+        print("Moving", os.path.basename(creds_file), "to", os.path.dirname(ivert_config.ivert_s3_credentials_file))
         # Create the directory if it doesn't exist yet.
         if not os.path.exists(os.path.dirname(ivert_config.ivert_s3_credentials_file)):
             os.makedirs(os.path.dirname(ivert_config.ivert_s3_credentials_file))
