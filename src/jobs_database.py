@@ -14,8 +14,9 @@ try:
     import utils.configfile as configfile
     import s3
 except ModuleNotFoundError:
-    import src.utils.configfile as configfile
-    import src.s3 as s3
+    # When this is built a setup.py package, it names the module 'ivert'. This reflects that.
+    import ivert_utils.configfile as configfile
+    import ivert.s3 as s3
 
 
 class JobsDatabaseClient:

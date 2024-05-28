@@ -10,7 +10,7 @@ import subprocess
 try:
     import progress_bar
 except ModuleNotFoundError:
-    import utils.progress_bar as progress_bar
+    import ivert_utils.progress_bar as progress_bar
 
 def physical_cpu_count():
     """On this machine, get the number of physical cores.

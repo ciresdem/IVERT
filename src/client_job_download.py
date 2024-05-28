@@ -9,10 +9,11 @@ try:
     import s3
     import utils.configfile as configfile
 except ModuleNotFoundError:
-    import src.jobs_database as jobs_database
-    import src.client_job_status as client_job_status
-    import src.s3 as s3
-    import src.utils.configfile as configfile
+    # When this is built a setup.py package, it names the module 'ivert'. This reflects that.
+    import ivert.jobs_database as jobs_database
+    import ivert.client_job_status as client_job_status
+    import ivert.s3 as s3
+    import ivert_utils.configfile as configfile
 
 ivert_config = configfile.config()
 

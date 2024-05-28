@@ -6,7 +6,7 @@ except ModuleNotFoundError:
     try:
         import utils.configfile as configfile
     except ModuleNotFoundError:
-        import src.utils.configfile as configfile
+        import ivert_utils.configfile as configfile
 
 import os
 from osgeo import gdal

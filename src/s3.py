@@ -18,12 +18,11 @@ try:
     import utils.query_yes_no as query_yes_no
     import utils.bcolors as bcolors
     import utils.configfile as configfile
-    import utils.progress_bar as progress_bar
 except ModuleNotFoundError:
-    import src.utils.query_yes_no as query_yes_no
-    import src.utils.bcolors as bcolors
-    import src.utils.configfile as configfile
-    import src.utils.progress_bar as progress_bar
+    # When this is built a setup.py package, it names the module 'ivert'. This reflects that.
+    import ivert_utils.query_yes_no as query_yes_no
+    import ivert_utils.bcolors as bcolors
+    import ivert_utils.configfile as configfile
 
 ivert_config = configfile.config()
 

@@ -5,8 +5,13 @@ import glob
 import os
 import time
 
-import client_job_upload
-import s3
+try:
+    import client_job_upload
+    import s3
+except ModuleNotFoundError:
+    # When this is built a setup.py package, it names the module 'ivert'. This reflects that.
+    import ivert.client_job_upload as client_job_upload
+    import ivert.s3 as s3
 
 
 def run_validate_command(args: argparse.Namespace,

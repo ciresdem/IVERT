@@ -11,10 +11,11 @@ try:
     import utils.configfile as configfile
     import utils.progress_bar as progress_bar
 except ModuleNotFoundError:
-    import src.jobs_database as jobs_database
-    import src.s3 as s3
-    import src.utils.configfile as configfile
-    import src.utils.progress_bar as progress_bar
+    # When this is built a setup.py package, it names the module 'ivert'. This reflects that.
+    import ivert.jobs_database as jobs_database
+    import ivert.s3 as s3
+    import ivert_utils.configfile as configfile
+    import ivert_utils.progress_bar as progress_bar
 
 # The ivert_config object loads user information from the user's config file if it exists.
 ivert_config = configfile.config()

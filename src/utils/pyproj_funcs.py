@@ -2,7 +2,6 @@
 
 import pyproj
 from osgeo import gdal
-import shapely.geometry
 
 
 def get_bounding_box_and_step(gdal_dataset, bbox_interleaved=True):

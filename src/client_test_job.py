@@ -15,13 +15,14 @@ try:
     import client_job_status
     import jobs_database
 except ModuleNotFoundError:
-    import src.utils.configfile as configfile
-    import src.utils.create_empty_tiff as create_empty_tiff
-    from src.utils.bcolors import bcolors
-    import src.client_job_upload as client_job_upload
-    import src.client_job_download as client_job_download
-    import src.client_job_status as client_job_status
-    import src.jobs_database as jobs_database
+    # When this is built a setup.py package, it names the module 'ivert'. This reflects that.
+    import ivert_utils.configfile as configfile
+    import ivert_utils.create_empty_tiff as create_empty_tiff
+    from ivert_utils.bcolors import bcolors
+    import ivert.client_job_upload as client_job_upload
+    import ivert.client_job_download as client_job_download
+    import ivert.client_job_status as client_job_status
+    import ivert.jobs_database as jobs_database
 
 
 def run_test_command(args: argparse.Namespace,

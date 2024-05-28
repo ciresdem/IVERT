@@ -3,6 +3,7 @@
 
 import os
 
+
 def sizeof_fmt(num, suffix="B", decimal_digits=1):
     """Resturn a filesize in human readable format.
 

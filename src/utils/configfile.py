@@ -8,7 +8,7 @@ except ModuleNotFoundError:
     try:
         import utils.is_aws as is_aws
     except ModuleNotFoundError:
-        import src.utils.is_aws as is_aws
+        import ivert_utils.is_aws as is_aws
 
 import os
 import re
@@ -16,7 +16,10 @@ import sys
 
 ivert_default_configfile = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                                         "..", "..", "config", "ivert_config.ini"))
-
+# When we build the ivert package, this is the location of the ivert_data directory. Look for it there.
+if not os.path.exists(ivert_default_configfile):
+    ivert_default_configfile = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                                            "..", "..", "..", "..", "ivert_data", "config", "ivert_config.ini"))
 
 class config:
     """A subclass implementation of configparser.ConfigParser(), expect that config attributes are referenced as object
@@ -47,9 +50,11 @@ class config:
         """Initializes a new instance of the config class."""
 
         self._configfile = os.path.abspath(os.path.realpath(configfile))
-        # print(self._configfile)
         self._config = configparser.ConfigParser()
         self.is_aws = is_aws.is_aws()
+
+        if not os.path.exists(configfile):
+            raise FileNotFoundError(f"Configfile {configfile} not found.")
 
         self._config.read(configfile)
 

@@ -6,8 +6,9 @@ try:
     import client_job_upload
     from utils.bcolors import bcolors
 except ModuleNotFoundError:
-    import src.client_job_upload as client_job_upload
-    from src.utils.bcolors import bcolors
+    # When this is built a setup.py package, it names the module 'ivert'. This reflects that.
+    import ivert.client_job_upload as client_job_upload
+    from ivert_utils.bcolors import bcolors
 
 
 def run_subscribe_command(args: argparse.Namespace) -> None:

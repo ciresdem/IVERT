@@ -15,10 +15,11 @@ try:
     import utils.configfile as configfile
     import utils.is_email as is_email
 except ModuleNotFoundError:
-    import src.client_job_upload as client_job_upload
-    from src.utils.bcolors import bcolors
-    import src.utils.configfile as configfile
-    import src.utils.is_email as is_email
+    # When this is built a setup.py package, it names the module 'ivert'. This reflects that.
+    import ivert.client_job_upload as client_job_upload
+    from ivert_utils.bcolors import bcolors
+    import ivert_utils.configfile as configfile
+    import ivert_utils.is_email as is_email
 
 ivert_config = configfile.config()
 ivert_user_config_template = configfile.config(ivert_config.ivert_user_config_template)

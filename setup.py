@@ -40,9 +40,19 @@ setuptools.setup(
     author = 'Michael MacFerrin',
     author_email = 'michael.macferrin@colorado.edu',
     url = 'http://github.com/ciresdem/IVERT',
-    packages = ['ivert'],
-    package_dir = {'': 'src'},
-    package_data = {'ivert': ['data/icesat2/ATL03_EMPTY_TILE.h5', 'data/empty_tile.tif', 'config/*.ini', 'config/*.sql']},
+    packages = ['ivert', 'ivert_utils'],
+    package_dir = {'ivert': 'src',
+                   'ivert_utils': 'src/utils'},
+    data_files = [('ivert_data/data/', ["data/empty_tile.tif"]),
+                  ('ivert_data/config', ["config/email_templates.ini",
+                                         "config/ivert_config.ini",
+                                         "config/ivert_job_config_TEMPLATE.ini",
+                                         "config/ivert_user_config_TEMPLATE.ini",
+                                         "config/ivert_jobs_schema.sql"])],
+    # package_data = {'ivert': ['data/icesat2/ATL03_EMPTY_TILE.h5',
+    #                           'data/empty_tile.tif',
+    #                           'config/*.ini',
+    #                           'config/*.sql']},
     classifiers = [
         'Programming Language :: Python :: 3',
         'License :: OSI APPROVED :: MIT License',
@@ -55,38 +65,17 @@ setuptools.setup(
         'boto3', # for amazon
         'pandas', # for cshelph
         'dateparser',
-        'sqlite3',
     ],
     entry_points = {
         'console_scripts': [
-            'ivert = ivert_client:ivert_client_cli'
+            'ivert = ivert.ivert_client:ivert_client_cli'
         ]
     },
     py_modules = [
-        's3.py',
-        'sns.py'
-        'client_job_download.py',
-        'client_job_status.py',
-        'client_job_upload.py',
-        'ivert_client.py',
-        'client_job_validate.py',
-        'client_subscriptions.py',
-        'client_test_job.py',
-        'jobs_database.py',
-        'utils/create_empty_tiff.py',
-        'utils/bcolors.py',
-        'utils/configfile.py',
-        'utils/is_aws.py',
-        'utils/is_conda.py',
-        'utils/is_email.py',
-        'utils/progress_bar.py',
-        'utils/query_yes_no.py',
-        'utils/sizeof_format.py',
-        'utils/traverse_directory.py',
     ],
     scripts = [
-        's3.py',
-        'jobs_database.py'
+        'src/s3.py',
+        'src/jobs_database.py'
     ],
     python_requires = '>=3.9',
     project_urls = {
