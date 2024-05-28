@@ -36,7 +36,7 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     # Create the "validate" subparser
     ###############################################################
-    validate_help_msg = "Validate DEMs using IVERT (the core functionality)."
+    validate_help_msg = "Validate DEMs using IVERT (the core functionality). [NOT YET IMPLEMENTED]"
     # NOTE: The script client_test_job.py creates an identical copy of this argument list to send off a test job.
     # If any of these options are changed, go change the equivalent lines in that script as well to match the same
     # field names.
@@ -148,7 +148,7 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     # Create the "update" subparser
     ###############################################################
-    update_help_msg = "Request updated data in the IVERT photon database."
+    update_help_msg = "Request updated data in the IVERT photon database. [NOT YET IMPLEMENTED]"
     parser_update = subparsers.add_parser("update", help=update_help_msg, description=update_help_msg)
     parser_update.add_argument("polygon_file", type=str,
                                help="Enter a polygon file (.shp, .json, .geojson, or .gkpg).")
@@ -177,7 +177,7 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     # Create the "import" subparser
     ###############################################################
-    import_help_msg = "Import data into the IVERT tool."
+    import_help_msg = "Import data into the IVERT tool.  [NOT YET IMPLEMENTED]"
     parser_import = subparsers.add_parser("import", help=import_help_msg, description=import_help_msg)
     parser_import.add_argument("files", type=str, nargs="+",
                                help="Enter a file, list of files, or a directory to import into the IVERT work bucket."
