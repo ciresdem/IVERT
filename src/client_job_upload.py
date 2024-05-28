@@ -8,12 +8,14 @@ import os
 try:
     import jobs_database
     import s3
+    import client_job_status
     import utils.configfile as configfile
     import utils.progress_bar as progress_bar
 except ModuleNotFoundError:
     # When this is built a setup.py package, it names the module 'ivert'. This reflects that.
     import ivert.jobs_database as jobs_database
     import ivert.s3 as s3
+    import ivert.client_job_status as client_job_status
     import ivert_utils.configfile as configfile
     import ivert_utils.progress_bar as progress_bar
 
@@ -31,9 +33,8 @@ def create_new_job_params(username: str = None) -> tuple[str, int]:
         str: Username
         int: New job number
     """
-    # Since this is running on the client, we only get the functionality of the base class, not the server.
-    dbo = jobs_database.JobsDatabaseClient()
-    last_job_number = dbo.fetch_latest_job_number_from_s3_metadata()
+    # Check the last job submitted, either from the user's local files or from the jobs database.
+    last_job_number = int(client_job_status.find_latest_job_submitted(username)[-12:])
 
     if last_job_number is None:
         raise FileNotFoundError(
@@ -44,7 +45,7 @@ def create_new_job_params(username: str = None) -> tuple[str, int]:
         username = ivert_config.username
 
     if not username:
-        raise ValueError("Username not defined in .")
+        raise ValueError("Username not defined in {ivert_config.user_config_file}.")
 
     # The last job number is YYYYMMDDNNNN. If the last job was "today", we just increment it. Otherwise, we create a new job number using today's date.
     today_str = datetime.date.today().strftime("%Y%m%d")

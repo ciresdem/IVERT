@@ -59,8 +59,8 @@ def setup_new_user(args: argparse.Namespace) -> None:
     else:
         print("\nYou may now ", end="")
 
-    print(f"run\n\n> {bcolors.BOLD}{bcolors.OKBLUE}src test{bcolors.ENDC}{bcolors.ENDC}\n\n...to perform a dry run, end-to-end test the IVERT system.\n")
-    print(f"At any time, run\n> {bcolors.BOLD}{bcolors.OKBLUE}src --help{bcolors.ENDC}{bcolors.ENDC}\n...to see a complete list of other IVERT commands. "
+    print(f"run\n\n> {bcolors.BOLD}{bcolors.OKBLUE}ivert test{bcolors.ENDC}{bcolors.ENDC}\n\n...to perform a dry run, end-to-end test the IVERT system.\n")
+    print(f"At any time, run\n> {bcolors.BOLD}{bcolors.OKBLUE}ivert --help{bcolors.ENDC}{bcolors.ENDC}\n...to see a complete list of other IVERT commands. "
           f"Happy validations!\n")
 
 
@@ -99,8 +99,18 @@ def subscribe_user_to_sns_notifications(args: argparse.Namespace) -> None:
     # we fake it here.
     # Create a copy of the original arguments
     args_copy = argparse.Namespace(**vars(args))
+
     args_copy.command = "update"
     args_copy.sub_command = "subscribe"
+
+    # In the ivert "subscribe" command, the parameter goes by "all", not "filter_sns".
+    args_copy.all = not args_copy.filter_sns
+    if hasattr(args_copy, "filter_sns"):
+        del args_copy.filter_sns
+    if hasattr(args_copy, "subscribe_to_sns"):
+        del args_copy.subscribe_to_sns
+    if hasattr(args_copy, "creds"):
+        del args_copy.creds
 
     # Remove references to bucket names and access keys, as well as the local AWS profile names.
     # They are for setting up the local machine with AWS S3 credentials.
@@ -187,6 +197,8 @@ def collect_inputs(args: argparse.Namespace, only_if_not_provided: bool = True) 
         if not s3_creds_obj:
             s3_creds_obj = read_ivert_s3_credentials(args.creds)
         if s3_creds_obj is not None:
+            print(s3_creds_obj)
+            print(dir(s3_creds_obj))
             args.untrusted_bucket_name = s3_creds_obj.s3_untrusted_bucket_name
 
     if not args.export_bucket_name or not only_if_not_provided:
@@ -527,7 +539,7 @@ def define_and_parse_args(just_return_parser: bool=False):
                         help="The username of the new user. Only needed if you want to create a custom username. "
                              "Default: Derived from the left side of your email. It's recommended you just "
                              "use the default unless you have specific reasons to do otherwise.")
-    parser.add_argument("-c" "--creds", dest="creds", type=str, required=False, default="",
+    parser.add_argument("-c", "--creds", dest="creds", type=str, required=False, default="",
                         help="The path to the 'ivert_s3_credentials.ini' file. This file will be moved to your ~/.ivert/creds directory.")
     parser.add_argument("-ns", "--do_not_subscribe", dest="subscribe_to_sns", action="store_false",
                         default=True, required=False,
