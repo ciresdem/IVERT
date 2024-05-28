@@ -39,7 +39,7 @@ def setup_new_user(args: argparse.Namespace) -> None:
     if args.prompt:
         confirm_inputs_with_user(args)
 
-    # Create the src local directories (in ~/.src)
+    # Create the ivert local directories (in ~/.ivert)
     create_local_dirs()
 
     # Update the AWS profiles on the local machine.
@@ -47,6 +47,13 @@ def setup_new_user(args: argparse.Namespace) -> None:
 
     # Update the IVERT user config file.
     update_ivert_user_config(args)
+
+    # Update the IVERT config file, since the credentials fiels should now be populated.
+    global ivert_config
+    ivert_config = configfile.config()
+    # Gotta do this in the client upload script too, or else these variables won't be there.
+    client_job_upload.reset_ivert_config()
+    # And the s3 module.
 
     if args.subscribe_to_sns:
         # Send new_user config (as an "update" command) to the IVERT cloud tool. This will subscribe the user to the IVERT SNS topic.
@@ -561,7 +568,7 @@ def define_and_parse_args(just_return_parser: bool=False):
     bucket_group = parser.add_argument_group("IVERT S3 bucket settings",
                               description="Manually enter the IVERT S3 bucket settings and credentials. It is FAR EASIER "
                               "to skip these options, copy the 'ivert_s3_credentials.ini' file from the "
-                              "team's GDrive, and place it in ~/.src/ivert_s3_credentials.ini. The script will "
+                              "team's GDrive, and place it in ~/.ivert/ivert_s3_credentials.ini. The script will "
                               "automatically grab all these variables from there.")
     bucket_group.add_argument("-ub", "--untrusted_bucket_name", dest="untrusted_bucket_name",
                               default="", type=str, required=False,

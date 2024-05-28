@@ -1156,6 +1156,8 @@ def define_and_parse_args() -> argparse.Namespace:
                         help="Print the version of the database, from the 'database'/'d' or 'server'/'s'. Used only with the print command.")
     parser.add_argument("-j", "--job_id", dest="job_id", type=int, default=None,
                         help="Print only records from the given job_id. Default: Print all records.")
+    parser.add_argument("-l", "--latest", dest="latest", action="store_true", default=False,
+                        help="Get the latest job number from the IVERT online database.")
 
     return parser.parse_args()
 

@@ -23,6 +23,16 @@ except ModuleNotFoundError:
 ivert_config = configfile.config()
 
 
+def reset_ivert_config():
+    # Reset the ivert_config object(s). Useful during a new client install, when we first start up IVERT but it
+    # hasn't yet transferred the user credentials file, it doesn't have all the fields populated. This resets those.
+    # This is called from the parent object.
+    global ivert_config
+    ivert_config = configfile.config()
+    s3.ivert_config = configfile.config()
+    client_job_status.ivert_config = configfile.config()
+
+
 def create_new_job_params(username: str = None) -> tuple[str, int]:
     """Create a new job number and username pair.
 
