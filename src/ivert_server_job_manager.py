@@ -13,6 +13,7 @@ import numpy
 import os
 import pandas
 import psutil
+import signal
 import string
 import subprocess
 import sys
@@ -1065,6 +1066,15 @@ class IvertJob:
         return
 
 
+def kill_other_ivert_job_managers():
+    "Kill any other running instances of the ivert_job_manager process."
+    pid = is_another_manager_running()
+    while pid:
+        os.kill(pid, signal.SIGKILL)
+        pid = is_another_manager_running()
+    return
+
+
 def define_and_parse_arguments() -> argparse.Namespace:
     """Defines and parses the command line arguments.
 
@@ -1085,6 +1095,8 @@ def define_and_parse_arguments() -> argparse.Namespace:
                         help="Reset and then quietly populate the database. Useful to rebuild we've reset the database schema.")
     parser.add_argument("-v", "--verbose", dest="verbose", action="store_true", default=False,
                         help="Print verbose output while running.")
+    parser.add_argument("-k", "--kill", dest="kill", action="store_true", default=False,
+                        help="Kill an existing instance of the ivert_job_manager.py process.")
 
     return parser.parse_args()
 
@@ -1093,8 +1105,12 @@ if __name__ == "__main__":
     # Parse the command line arguments
     args = define_and_parse_arguments()
 
+    if args.kill:
+        kill_other_ivert_job_managers()
+        sys.exit(0)
+
     # If we're populating the database, then do that and exit.
-    if args.populate:
+    elif args.populate:
         JM = IvertJobManager(input_bucket_type=args.bucket,
                              time_interval_s=args.time_interval_s,
                              job_id=None if args.job_id == -1 else args.job_id)
