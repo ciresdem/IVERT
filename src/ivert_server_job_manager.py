@@ -1078,10 +1078,10 @@ class IvertJob:
 
 def kill_other_ivert_job_managers():
     "Kill any other running instances of the ivert_job_manager process."
-    pid = is_another_manager_running()
-    while pid:
-        os.kill(pid, signal.SIGKILL)
-        pid = is_another_manager_running()
+    proc = is_another_manager_running()
+    while proc:
+        proc.kill()
+        proc = is_another_manager_running()
     return
 
 
