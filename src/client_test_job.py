@@ -73,10 +73,10 @@ def run_test_command(args: argparse.Namespace,
         client_job_download.download_job(job_name, local_jobdir)
 
     else:
-        print("Job has been uploaded. You can wait to receive a notification email when it's done, and/or run "
-              f"'{bcolors.BOLD}ivert status {job_name}{bcolors.ENDC}' to check the status"
-              f" of the job, and/or '{bcolors.BOLD}ivert download {job_name}{bcolors.ENDC}'"
-              " to download the results when it's complete.")
+        print("Job has been uploaded. You can wait to receive a notification email when it's done, "
+              f"'{bcolors.BOLD}ivert status {job_name}{bcolors.ENDC}' to check the job status,"
+              f" and/or '{bcolors.BOLD}ivert download {job_name}{bcolors.ENDC}'"
+              " to download any results when it's complete.")
 
 
 if __name__ == "__main__":
