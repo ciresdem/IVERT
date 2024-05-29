@@ -205,8 +205,6 @@ def collect_inputs(args: argparse.Namespace, only_if_not_provided: bool = True) 
         if not s3_creds_obj:
             s3_creds_obj = read_ivert_s3_credentials(args.creds)
         if s3_creds_obj is not None:
-            print(s3_creds_obj)
-            print(dir(s3_creds_obj))
             args.untrusted_bucket_name = s3_creds_obj.s3_untrusted_bucket_name
 
     if not args.export_bucket_name or not only_if_not_provided:
