@@ -1,17 +1,10 @@
 #!/usr/bin/env python
 """ivert_client.py -- The front-facing interfact to IVERT code for cloud computing."""
 import argparse
-import os
+import sys
 
-try:
-    import new_user_setup
-    import client_subscriptions
-    import client_job_download
-    import client_test_job
-    import client_job_status
-    import utils.query_yes_no as yes_no
-    import utils.version as version
-except ModuleNotFoundError:
+if vars(sys.modules[__name__])['__package__'] == 'ivert':
+    # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
     import ivert.new_user_setup as new_user_setup
     import ivert.client_subscriptions as client_subscriptions
     import ivert.client_job_download as client_job_download
@@ -19,6 +12,15 @@ except ModuleNotFoundError:
     import ivert.client_job_status as client_job_status
     import ivert_utils.query_yes_no as yes_no
     import ivert_utils.version as version
+else:
+    # If running as a script, import this way.
+    import new_user_setup
+    import client_subscriptions
+    import client_job_download
+    import client_test_job
+    import client_job_status
+    import utils.query_yes_no as yes_no
+    import utils.version as version
 
 def define_and_parse_args(return_parser: bool = False):
     parser = argparse.ArgumentParser(description="The ICESat-2 Validation of Elevations Reporting Tool (IVERT)."

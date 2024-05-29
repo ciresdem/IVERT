@@ -1,18 +1,19 @@
 # -*- coding: utf-8 -*-
 import ast
 import configparser
-# If I import this script from a script in the parent directory, the "import is_aws" breaks. Instead, use "import utils/is_aws"
-try:
-    import is_aws
-except ModuleNotFoundError:
-    try:
-        import utils.is_aws as is_aws
-    except ModuleNotFoundError:
-        import ivert_utils.is_aws as is_aws
-
 import os
 import re
 import sys
+
+if vars(sys.modules[__name__])['__package__'] == 'ivert_utils':
+    # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
+    import ivert_utils.is_aws as is_aws
+else:
+    # If running as a script, import this way.
+    try:
+        import is_aws
+    except ModuleNotFoundError:
+        import utils.is_aws as is_aws
 
 ivert_default_configfile = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                                         "..", "..", "config", "ivert_config.ini"))

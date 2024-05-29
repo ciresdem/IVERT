@@ -8,17 +8,19 @@ import os
 import pandas
 import re
 import sqlite3
+import sys
 import typing
 
-try:
-    import utils.configfile as configfile
-    import utils.version as version
-    import s3
-except ModuleNotFoundError:
-    # When this is built a setup.py package, it names the module 'ivert'. This reflects that.
+if vars(sys.modules[__name__])['__package__'] == 'ivert':
+    # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
     import ivert_utils.configfile as configfile
     import ivert_utils.version as version
     import ivert.s3 as s3
+else:
+    # If running as a script, import this way.
+    import utils.configfile as configfile
+    import utils.version as version
+    import s3
 
 ivert_config = configfile.config()
 

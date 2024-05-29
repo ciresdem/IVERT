@@ -3,24 +3,23 @@
 
 import argparse
 import boto3
-# import glob
 import os
 import re
 import sys
 import shutil
-# import textwrap
 
-try:
-    import client_job_upload
-    from utils.bcolors import bcolors
-    import utils.configfile as configfile
-    import utils.is_email as is_email
-except ModuleNotFoundError:
-    # When this is built a setup.py package, it names the module 'ivert'. This reflects that.
+if vars(sys.modules[__name__])['__package__'] == 'ivert':
+    # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
     import ivert.client_job_upload as client_job_upload
     from ivert_utils.bcolors import bcolors
     import ivert_utils.configfile as configfile
     import ivert_utils.is_email as is_email
+else:
+    # If running as a script, import this way.
+    import client_job_upload
+    from utils.bcolors import bcolors
+    import utils.configfile as configfile
+    import utils.is_email as is_email
 
 ivert_config = configfile.config()
 ivert_user_config_template = configfile.config(ivert_config.ivert_user_config_template)

@@ -5,17 +5,10 @@ It creates and empty .tif file, uploads it to do a validation but uses the --emp
 import argparse
 import os
 import time
+import sys
 
-try:
-    import utils.configfile as configfile
-    import utils.create_empty_tiff as create_empty_tiff
-    from utils.bcolors import bcolors
-    import client_job_upload
-    import client_job_download
-    import client_job_status
-    import jobs_database
-except ModuleNotFoundError:
-    # When this is built a setup.py package, it names the module 'ivert'. This reflects that.
+if vars(sys.modules[__name__])['__package__'] == 'ivert':
+    # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
     import ivert_utils.configfile as configfile
     import ivert_utils.create_empty_tiff as create_empty_tiff
     from ivert_utils.bcolors import bcolors
@@ -23,6 +16,15 @@ except ModuleNotFoundError:
     import ivert.client_job_download as client_job_download
     import ivert.client_job_status as client_job_status
     import ivert.jobs_database as jobs_database
+else:
+    # If running as a script, import this way.
+    import utils.configfile as configfile
+    import utils.create_empty_tiff as create_empty_tiff
+    from utils.bcolors import bcolors
+    import client_job_upload
+    import client_job_download
+    import client_job_status
+    import jobs_database
 
 
 def run_test_command(args: argparse.Namespace,

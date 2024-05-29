@@ -4,20 +4,21 @@ import argparse
 import datetime
 import glob
 import os
+import sys
 
-try:
-    import jobs_database
-    import s3
-    import client_job_status
-    import utils.configfile as configfile
-    import utils.progress_bar as progress_bar
-except ModuleNotFoundError:
-    # When this is built a setup.py package, it names the module 'ivert'. This reflects that.
+if vars(sys.modules[__name__])['__package__'] == 'ivert':
+    # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
     import ivert.jobs_database as jobs_database
     import ivert.s3 as s3
     import ivert.client_job_status as client_job_status
     import ivert_utils.configfile as configfile
     import ivert_utils.progress_bar as progress_bar
+else:
+    import jobs_database
+    import s3
+    import client_job_status
+    import utils.configfile as configfile
+    import utils.progress_bar as progress_bar
 
 # The ivert_config object loads user information from the user's config file if it exists.
 ivert_config = configfile.config()

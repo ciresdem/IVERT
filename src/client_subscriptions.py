@@ -1,14 +1,15 @@
 """Methods for pushing subscribe and unsubscribe commands to the IVERT server."""
 
 import argparse
+import sys
 
-try:
-    import client_job_upload
-    from utils.bcolors import bcolors
-except ModuleNotFoundError:
-    # When this is built a setup.py package, it names the module 'ivert'. This reflects that.
+if vars(sys.modules[__name__])['__package__'] == 'ivert':
+    # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
     import ivert.client_job_upload as client_job_upload
     from ivert_utils.bcolors import bcolors
+else:
+    import client_job_upload
+    from utils.bcolors import bcolors
 
 
 def run_subscribe_command(args: argparse.Namespace) -> None:

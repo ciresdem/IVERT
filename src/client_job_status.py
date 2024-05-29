@@ -5,16 +5,18 @@ import numpy
 import os
 import pandas
 import typing
+import sys
 
-try:
-    import utils.configfile as configfile
-    import jobs_database
-    import utils.bcolors as bcolors
-except ModuleNotFoundError:
-    # When this is built a setup.py package, it names the module 'ivert'. This reflects that.
+if vars(sys.modules[__name__])['__package__'] == 'ivert':
+    # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
     import ivert.jobs_database as jobs_database
     import ivert_utils.configfile as configfile
     import ivert_utils.bcolors as bcolors
+else:
+    # If running as a script, import this way.
+    import utils.configfile as configfile
+    import jobs_database
+    import utils.bcolors as bcolors
 
 ivert_config = configfile.config()
 

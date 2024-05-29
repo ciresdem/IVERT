@@ -2,18 +2,20 @@
 
 import argparse
 import os
+import sys
 
-try:
-    import jobs_database
-    import client_job_status
-    import s3
-    import utils.configfile as configfile
-except ModuleNotFoundError:
-    # When this is built a setup.py package, it names the module 'ivert'. This reflects that.
+if vars(sys.modules[__name__])['__package__'] == 'ivert':
+    # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
     import ivert.jobs_database as jobs_database
     import ivert.client_job_status as client_job_status
     import ivert.s3 as s3
     import ivert_utils.configfile as configfile
+else:
+    # If running as a script, import this way.
+    import jobs_database
+    import client_job_status
+    import s3
+    import utils.configfile as configfile
 
 ivert_config = configfile.config()
 

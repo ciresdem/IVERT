@@ -14,17 +14,17 @@ import types
 import tabulate
 import warnings
 
-try:
-    import utils.query_yes_no as query_yes_no
-    import utils.bcolors as bcolors
-    import utils.configfile as configfile
-    import utils.progress_bar as progress_bar
-except ModuleNotFoundError:
-    # When this is built a setup.py package, it names the module 'ivert'. This reflects that.
+if vars(sys.modules[__name__])['__package__'] == 'ivert':
+    # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
     import ivert_utils.query_yes_no as query_yes_no
     import ivert_utils.bcolors as bcolors
     import ivert_utils.configfile as configfile
     import ivert_utils.progress_bar as progress_bar
+else:
+    import utils.query_yes_no as query_yes_no
+    import utils.bcolors as bcolors
+    import utils.configfile as configfile
+    import utils.progress_bar as progress_bar
 
 ivert_config = configfile.config()
 
