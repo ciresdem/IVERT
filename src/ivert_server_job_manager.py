@@ -33,6 +33,9 @@ import utils.sizeof_format as sizeof
 # after we log out from the EC2 server.
 # > nohup python3 ivert_server_job_manager.py -v >> /opt/cudem/ivert_data/ivert_manager.log 2>&1 <&- &
 
+# To see which processes are running, do a pgrep command.
+# pgrep -a python3
+
 # To kill the process, run this script in 'kill' mode.
 # python ivert_server_job_manager.py --kill
 
@@ -47,9 +50,14 @@ def is_another_manager_running() -> typing.Union[bool, psutil.Process]:
 
     processes = psutil.process_iter()
     for p in processes:
-        if "python" in p.name() and numpy.any([opt.endswith(os.path.basename(__file__)) for opt in p.cmdline()]):
-            if p.pid != os.getpid():
-                return p
+        try:
+            if "python" in p.name() and numpy.any([opt.endswith(os.path.basename(__file__)) for opt in p.cmdline()]):
+                if p.pid != os.getpid():
+                    return p
+        except psutil.ZombieProcess:
+            # If a process was killed but we're polling it here before it was eliminated, it'l be a zombie process.
+            # Ignore that, it's already dead.
+            pass
 
     return False
 
