@@ -28,6 +28,16 @@ import sns
 import utils.configfile
 import utils.sizeof_format as sizeof
 
+### TEMPORARY FIX ###
+# Until we get this as a permanent daemon process on the server, here is a way to start this file and leave it running
+# after we log out from the EC2 server.
+# > nohup python3 ivert_server_job_manager.py -v >> /opt/cudem/ivert_data/ivert_manager.log 2>&1 <&- &
+
+# To kill the process, run this script in 'kill' mode.
+# python ivert_server_job_manager.py --kill
+
+#####################
+
 
 def is_another_manager_running() -> typing.Union[bool, psutil.Process]:
     """Returns a Process if another instance of this script is already running. If none is found, returns False.
