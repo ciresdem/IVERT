@@ -58,6 +58,8 @@ def run_import_command(args: argparse.Namespace) -> None:
     del args_to_send.files_or_directory
     del args_to_send.prompt
     del args_to_send.read_textfiles
+    del args_to_send.max_files_per_chunk
+    del args_to_send.max_gb_per_chunk
 
     # NOW, if we've hit either of the maximums (size, or number of files), we need to divvy this up into chunks.
 

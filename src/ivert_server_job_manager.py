@@ -455,8 +455,8 @@ class IvertJob:
             self.push_sns_notification(start_or_finish="start", upload_to_s3=False)
 
             # 6. Download all other job files.
-            #  --- Enter records for each of the files in the database and don't bother downloading.
-            self.download_job_files(upload_to_s3=False)
+            # If it's specifically an "import" job, we don't need to download each file, just create records for them.
+            self.download_job_files(only_create_database_entries=(self.command == "import"), upload_to_s3=False)
 
             # 7. Run the job!
             # -- Figure out how to monitor the status of the job as it goes along.
@@ -700,9 +700,9 @@ class IvertJob:
                 else:
                     pass
 
-            # If we didn't manage to download the files on the first loop, sleep 10 seconds and try again.
+            # If we didn't manage to download the files on the first loop, sleep 5 seconds and try again.
             if len(files_to_download) > 0:
-                time.sleep(10)
+                time.sleep(5)
 
         # If we've exited the loop and there are still files that didn't download, log an error status for them.
         if len(files_to_download) > 0:
@@ -1142,38 +1142,43 @@ class IvertJob:
         if dest_prefix == "":
             dest_prefix = self.ivert_config.s3_photon_tiles_directory_prefix
 
-        total_size_bytes = 0
         numfiles_processed = 0
-        for fname in jco.files:
-            f_path = os.path.join(self.job_dir, fname)
-            fkey_dst = str(os.path.join(dest_prefix, fname))
+        files_to_transfer = jco.files.copy()
+        time_started = time.time()
 
-            if os.path.exists(f_path):
-                # Upload the file to the database.
-                self.s3m.upload(f_path, fkey_dst, bucket_type="database", include_md5=True)
+        while len(files_to_transfer) > 0 and ((time.time() - time_started) < self.download_timeout_s):
+            for fname in files_to_transfer:
+                fkey_src = str(os.path.join(job_row["import_prefix"], fname))
+                fkey_dst = str(os.path.join(dest_prefix, fname))
 
-                # Make sure the file uploaded successfully.
-                if self.s3m.exists(fkey_dst, bucket_type="database"):
+                if self.s3m.exists(fkey_src, bucket_type="trusted"):
+                    # Transfer the file to the database bucket from the trusted bucket.
+                    self.s3m.transfer(fkey_src, fkey_dst, src_bucket_type="trusted", dst_bucket_type="database",
+                                      include_metadata=True)
 
-                    if self.verbose:
-                        print(fname, "uploaded to", dest_prefix + ".")
+                    # Make sure the file uploaded successfully.
+                    if self.s3m.exists(fkey_dst, bucket_type="database"):
 
-                    # If the file exists locally, mark it as 'processed'.
-                    self.jobs_db.update_file_status(self.username, self.job_id, fname, "processed", upload_to_s3=False)
+                        if self.verbose:
+                            print(fname, "transferred to", dest_prefix + ".")
+
+                        # If the file exists locally, mark it as 'processed'.
+                        self.jobs_db.update_file_status(self.username, self.job_id, fname, "processed",
+                                                        new_size=self.s3m.size(fkey_dst, bucket_type="database"),
+                                                        upload_to_s3=False)
+                    else:
+                        # If we can't find the file and its status is not some type of error, mark it as 'error'.
+                        self.jobs_db.update_file_status(self.username, self.job_id, fname, "error", upload_to_s3=False)
+
+                    files_to_transfer.remove(fname)
+                    numfiles_processed += 1
+                    # Remove the file locally (free up the space).
+
                 else:
                     # If we can't find the file and its status is not some type of error, mark it as 'error'.
-                    self.jobs_db.update_file_status(self.username, self.job_id, fname, "error", upload_to_s3=False)
-
-                total_size_bytes += os.path.getsize(f_path)
-                numfiles_processed += 1
-                # Remove the file locally (free up the space).
-                os.remove(f_path)
-
-            else:
-                # If we can't find the file and its status is not some type of error, mark it as 'error'.
-                if self.jobs_db.file_exists(fname, self.username, self.job_id, return_row=True)["status"] not in \
-                        ("error", "timeout", "quarantined", "unknown"):
-                    self.jobs_db.update_file_status(self.username, self.job_id, fname, "error", upload_to_s3=False)
+                    if self.jobs_db.file_exists(fname, self.username, self.job_id, return_row=True)["status"] not in \
+                            ("error", "timeout", "quarantined", "unknown"):
+                        self.jobs_db.update_file_status(self.username, self.job_id, fname, "error", upload_to_s3=False)
 
         # Get the total size of the files from this job. Write it to the logfile.
         self.write_to_logfile(

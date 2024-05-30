@@ -647,6 +647,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
                            job_id: typing.Union[int, str],
                            filename: str,
                            status: str,
+                           new_size: typing.Union[int, None] = None,
                            increment_vnum: bool = True,
                            upload_to_s3: bool = True) -> None:
         """
@@ -684,10 +685,18 @@ class JobsDatabaseServer(JobsDatabaseClient):
         cursor = conn.cursor()
 
         update_stmt = """UPDATE ivert_files
-                         SET status = ?
+                         SET status = ?"""
+
+        if new_size is not None:
+            update_stmt += ", size_bytes = ?"
+
+        update_stmt += """
                          WHERE username = ? AND job_id = ? AND filename = ?;"""
 
-        cursor.execute(update_stmt, (status, username, job_id, file_basename))
+        if new_size is None:
+            cursor.execute(update_stmt, (status, username, job_id, file_basename))
+        else:
+            cursor.execute(update_stmt, (status, new_size, username, job_id, file_basename))
 
         # Increment the database version number
         if increment_vnum:
