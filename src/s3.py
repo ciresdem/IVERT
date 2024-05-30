@@ -306,6 +306,9 @@ class S3Manager:
         if len(matching_filenames) == 0:
             return []
 
+        if other_metadata is None:
+            other_metadata = {}
+
         files_uploaded = []
         for fname in matching_filenames:
             # If the key is pointing to an S3 directory (prefix), then use the same filename as filename, and put it in that
