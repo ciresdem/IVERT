@@ -51,6 +51,12 @@ def find_latest_job_submitted(username,
     username_to_use = username if username else "__nada" # __nada will be less than any actual username.
     job_name_from_db = f"{username_to_use}_{job_id_from_db}"
 
+    job_name_from_folders = get_latest_job_name_from_local_dirs()
+
+    # Return whichever job name is greater.
+    return max(job_name_from_db, job_name_from_folders)
+
+def get_latest_job_name_from_local_dirs():
     # Now look in the local jobs folder to see if there's a more recent job there that was submitted, but isn't yet in
     # the server's jobs database. (Perhaps it just hasn't been picked up by the server yet.)
     local_jobs_dir = ivert_config.ivert_jobs_directory_local
@@ -61,8 +67,7 @@ def find_latest_job_submitted(username,
     else:
         job_name_from_folders = ""
 
-    # Return whichever job name is greater.
-    return max(job_name_from_db, job_name_from_folders)
+    return job_name_from_folders
 
 
 def run_job_status_command(args: argparse.Namespace) -> None:

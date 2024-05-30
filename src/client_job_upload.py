@@ -4,6 +4,7 @@ import argparse
 import datetime
 import glob
 import os
+import string
 import sys
 
 if vars(sys.modules[__name__])['__package__'] == 'ivert':
@@ -32,6 +33,32 @@ def reset_ivert_config():
     ivert_config = configfile.config()
     s3.ivert_config = configfile.config()
     client_job_status.ivert_config = configfile.config()
+
+
+def convert_cmd_args_to_string(args):
+    "Convert the command arguments to a string for the purpose of sending a message to the user."
+    assert hasattr(args, "command")
+    assert hasattr(args, "files") and isinstance(args.files, list)
+    command_str = args.command
+    for key, val in args.items():
+        if key == "command":
+            continue
+        command_str = command_str + f" --{key} {repr(val)}"
+    if len(args.files) > 0:
+        command_str = command_str + " --files"
+    for fname in args.files:
+        if len(fname) == 0:
+            continue
+        command_str = command_str + " " + (f'"{fname}"'
+                                           if contains_whitespace(fname)
+                                           else fname)
+
+    return command_str
+
+
+def contains_whitespace(s):
+    """Returns T/F if a string has any whitespace in it."""
+    return any([wch in s for wch in string.whitespace])
 
 
 def create_new_job_params(username: str = None) -> tuple[str, int]:

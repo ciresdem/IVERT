@@ -5,11 +5,13 @@ import sys
 
 if vars(sys.modules[__name__])['__package__'] == 'ivert':
     # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
+    # See setup.py for details about that.
     import ivert.new_user_setup as new_user_setup
     import ivert.client_subscriptions as client_subscriptions
     import ivert.client_job_download as client_job_download
     import ivert.client_test_job as client_test_job
     import ivert.client_job_status as client_job_status
+    import ivert.client_job_validate as client_job_validate
     import ivert_utils.query_yes_no as yes_no
     import ivert_utils.version as version
 else:
@@ -19,6 +21,7 @@ else:
     import client_job_download
     import client_test_job
     import client_job_status
+    import client_job_validate
     import utils.query_yes_no as yes_no
     import utils.version as version
 
@@ -67,6 +70,9 @@ def define_and_parse_args(return_parser: bool = False):
                                       "(Measures how may of the 225 sub-regions within each grid cell contain photons, "
                                       "allowing to post-process filter only higher-coverage grid cells in "
                                       "course-resolution DEMs. Typically not used for high-res DEMs. Default: False")
+    parser_validate.add_argument("-ph" "--include_photons", dest="include_photons", default=False, action="store_true",
+                                 help="In additional to returning .h5 and .tif files of ICESat-2 cell results, also "
+                                      "return a .h5 of individual ICESat-2 photon results. Default: False")
     parser_validate.add_argument("-bn", "--band_num", dest="band_num", type=int, default=1,
                                  help="The raster band number to validate. Other bands are ignored. (Default: 1)")
     parser_validate.add_argument("-co", "--coastlines_only", dest="coastlines_only", default=False,
@@ -239,9 +245,7 @@ def ivert_client_cli():
 
     # Validate a set of DEMs
     elif args.command == "validate":
-        # TODO: Implement this
-        raise NotImplementedError("Command 'validate' not yet implemented.")
-        pass
+        client_job_validate.run_validate_command(args)
 
     # Download results from IVERT
     elif args.command == "download":
