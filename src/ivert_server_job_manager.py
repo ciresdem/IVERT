@@ -901,7 +901,7 @@ class IvertJob:
             self.update_job_status("killed")
             return
 
-        except RuntimeError:
+        except Exception:
             self.write_to_logfile(traceback.format_exc())
             self.update_job_status("error")
             return
