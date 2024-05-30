@@ -436,49 +436,64 @@ class IvertJob:
 
     def start(self):
         """Start the job."""
-        # 1. Create local folders to store the job input files
-        self.create_local_job_folders()
+        try:
+            # 1. Create local folders to store the job input files
+            self.create_local_job_folders()
 
-        # 2. Download the job configuration file from the S3 bucket.
-        self.download_job_config_file()
+            # 2. Download the job configuration file from the S3 bucket.
+            self.download_job_config_file()
 
-        # 3. Parse the job configuration file.
-        self.parse_job_config_ini()
+            # 3. Parse the job configuration file.
+            self.parse_job_config_ini()
 
-        # 4. Create a new job entry in the jobs database.
-        # -- also creates an ivert_files entry for the logfile, and uploads the new database version.
-        self.create_new_job_entry()
+            # 4. Create a new job entry in the jobs database.
+            # -- also creates an ivert_files entry for the logfile, and uploads the new database version.
+            self.create_new_job_entry()
 
-        # 5. Send SNS notification that the job has started.
-        #  --- Insert SNS record in database (upload to s3)
-        self.push_sns_notification(start_or_finish="start", upload_to_s3=False)
+            # 5. Send SNS notification that the job has started.
+            #  --- Insert SNS record in database (upload to s3)
+            self.push_sns_notification(start_or_finish="start", upload_to_s3=False)
 
-        # 6. Download all other job files.
-        #  --- Enter records for each of the files in the database and don't bother downloading.
-        self.download_job_files(upload_to_s3=False)
+            # 6. Download all other job files.
+            #  --- Enter records for each of the files in the database and don't bother downloading.
+            self.download_job_files(upload_to_s3=False)
 
-        # 7. Run the job!
-        # -- Figure out how to monitor the status of the job as it goes along.
-        self.update_job_status("running", upload_to_s3=True)
+            # 7. Run the job!
+            # -- Figure out how to monitor the status of the job as it goes along.
+            self.update_job_status("running", upload_to_s3=True)
 
-        # See execute_job() for the logic of parsing out the work to individual jobs.
-        self.execute_job()
+            # See execute_job() for the logic of parsing out the work to individual jobs.
+            self.execute_job()
 
-        # 8. Upload export files to the S3 bucket (if any). Enter them into the database.
-        # Exclude the logfile because we may still be writing to it if any of these files have errors.
-        self.upload_export_files(exclude_logfile=True, upload_to_s3=False)
+            # 8. Upload export files to the S3 bucket (if any). Enter them into the database.
+            # Exclude the logfile because we may still be writing to it if any of these files have errors.
+            self.upload_export_files(exclude_logfile=True, upload_to_s3=False)
 
-        # 9. Upload the logfile (if exists) and enter in database. (Upload to s3)
-        self.export_logfile_if_exists(upload_db_to_s3=False)
+            # 9. Upload the logfile (if exists) and enter in database. (Upload to s3)
+            self.export_logfile_if_exists(upload_db_to_s3=False)
 
-        # 10. Mark the job as finished in the jobs database. (Upload to s3)
-        self.update_job_status("complete", upload_to_s3=False)
+            # 10. Mark the job as finished in the jobs database. (Upload to s3)
+            self.update_job_status("complete", upload_to_s3=False)
 
-        # 11. Send SNS notification that the job has finished.
-        self.push_sns_notification(start_or_finish="finish", upload_to_s3=True)
+            # 11. Send SNS notification that the job has finished.
+            self.push_sns_notification(start_or_finish="finish", upload_to_s3=True)
 
-        # 12. After exporting output files, delete the local job files & folders.
-        self.delete_local_job_folders()
+            # 12. After exporting output files, delete the local job files & folders.
+            self.delete_local_job_folders()
+
+        except KeyboardInterrupt as e:
+            if self.verbose:
+                print("Caught keyboard interrupt. Terminating job.")
+            self.write_to_logfile(traceback.format_exc())
+
+            self.update_job_status("killed")
+            return
+
+        except Exception:
+            self.write_to_logfile(traceback.format_exc())
+            self.update_job_status("error")
+            return
+
 
     def get_email_templates(self) -> utils.configfile.config:
         """Get the email templates."""
@@ -786,6 +801,8 @@ class IvertJob:
 
             body = email_templates.email_job_finished_start.format(self.username, self.job_id, job_status)
 
+            ifiles_text = ""
+            ofiles_text = ""
             if len(input_files) > 0:
                 # List the input files.
                 body += email_templates.email_job_finished_input_files_addendum.format(len(input_files),
@@ -793,20 +810,32 @@ class IvertJob:
                                                                                        num_inputs_unsuccessful)
 
                 for ifile in input_files:
-                    body += email_templates.file_item.format(ifile["filename"],
-                                                             sizeof.sizeof_fmt(ifile["size_bytes"]),
-                                                             ifile["status"])
+                    ifiles_text += email_templates.file_item.format(ifile["filename"],
+                                                                    sizeof.sizeof_fmt(ifile["size_bytes"]),
+                                                                    ifile["status"])
+                    if len(files_text) > 512:
+                        ifiles_text += "[Other files omitted for brevity.]\n"
+                        break
+
+                body += ifiles_text
 
             if len(output_files) > 0:
+
                 # List the output files.
                 body += email_templates.email_job_finished_output_files_addendum.format(len(output_files),
                                                                                         num_outputs_successful,
                                                                                         num_outputs_unsuccessful)
 
                 for ofile in output_files:
-                    body += email_templates.file_item.format(ofile["filename"],
-                                                             sizeof.sizeof_fmt(ofile["size_bytes"]),
-                                                             ofile["status"])
+                    ofiles_text += email_templates.file_item.format(ofile["filename"],
+                                                                    sizeof.sizeof_fmt(ofile["size_bytes"]),
+                                                                    ofile["status"])
+
+                    if len(ofiles_text) > (512 if len(ifiles_text) < 512 else 256):
+                        ofiles_text += "[Other files omitted for brevity.]\n"
+                        break
+
+                body += ofiles_text
 
                 body += email_templates.email_output_files_download_notification.format(self.username, self.job_id)
 
@@ -831,17 +860,24 @@ class IvertJob:
         # Query the database to get the table as a pandas dataframe.
         return self.jobs_db.read_table_as_pandas_df("files", self.username, self.job_id)
 
-    def convert_cmd_args_to_string(self):
+    def convert_cmd_args_to_string(self, max_filenames_length_chars=512) -> str:
         "Convert the command arguments to a string for the purpose of sending a message to the user."
         command_str = self.command
         for key, val in self.job_config_object.cmd_args.items():
             command_str = command_str + f" --{key} {repr(val)}"
+
         if len(self.job_config_object.files) > 0:
             command_str = command_str + " --files"
+        fnames_str = ""
         for fname in self.job_config_object.files:
-            command_str = command_str + " " + (f'"{fname}"'
-                                               if (self.contains_whitespace(fname) or (len(fname) == 0))
-                                               else fname)
+            fnames_str = fnames_str + " " + (f'"{fname}"'
+                                            if (self.contains_whitespace(fname) or (len(fname) == 0))
+                                            else fname)
+
+        if len(fnames_str) > max_filenames_length_chars:
+            fnames_str = " " + f"[{len(self.job_config_object.files)} files here. Abbreviated for clarity.]
+
+        command_str += fnames_str
 
         return command_str
 
@@ -1112,18 +1148,21 @@ class IvertJob:
             f_path = os.path.join(self.job_dir, fname)
             fkey_dst = str(os.path.join(dest_prefix, fname))
 
-            # DEBUG STATEMENT, TODO: REMOVE LATER.
-            print(f_path, os.path.exists(f_path))
-
             if os.path.exists(f_path):
                 # Upload the file to the database.
                 self.s3m.upload(f_path, fkey_dst, bucket_type="database", include_md5=True)
 
-                if self.verbose and self.s3m.exists(fkey_dst, bucket_type="database"):
-                    print(fname, "uploaded to", dest_prefix + ".")
+                # Make sure the file uploaded successfully.
+                if self.s3m.exists(fkey_dst, bucket_type="database"):
 
-                # If the file exists locally, mark it as 'processed'.
-                self.jobs_db.update_file_status(self.username, self.job_id, fname, "processed", upload_to_s3=False)
+                    if self.verbose:
+                        print(fname, "uploaded to", dest_prefix + ".")
+
+                    # If the file exists locally, mark it as 'processed'.
+                    self.jobs_db.update_file_status(self.username, self.job_id, fname, "processed", upload_to_s3=False)
+                else:
+                    # If we can't find the file and its status is not some type of error, mark it as 'error'.
+                    self.jobs_db.update_file_status(self.username, self.job_id, fname, "error", upload_to_s3=False)
 
                 total_size_bytes += os.path.getsize(f_path)
                 numfiles_processed += 1
