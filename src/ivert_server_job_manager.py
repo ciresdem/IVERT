@@ -1111,9 +1111,16 @@ class IvertJob:
         for fname in jco.files:
             f_path = os.path.join(self.job_dir, fname)
             fkey_dst = str(os.path.join(dest_prefix, fname))
+
+            # DEBUG STATEMENT, TODO: REMOVE LATER.
+            print(f_path, os.path.exists(f_path))
+
             if os.path.exists(f_path):
                 # Upload the file to the database.
                 self.s3m.upload(f_path, fkey_dst, bucket_type="database", include_md5=True)
+
+                if self.verbose and self.s3m.exists(fkey_dst, bucket_type="database"):
+                    print(fname, "uploaded to", dest_prefix + ".")
 
                 # If the file exists locally, mark it as 'processed'.
                 self.jobs_db.update_file_status(self.username, self.job_id, fname, "processed", upload_to_s3=False)
