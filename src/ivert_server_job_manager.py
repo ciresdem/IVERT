@@ -1151,9 +1151,6 @@ class IvertJob:
             for fname in files_to_transfer.copy():
                 fkey_src = str(os.path.join(os.path.dirname(self.job_config_s3_key), fname))
                 fkey_dst = str(os.path.join(dest_prefix, fname))
-                # DEBUG statement. TODO: Remove later.
-                if self.verbose:
-                    print(fkey_src, "->\n\t", fkey_dst)
 
                 if self.s3m.exists(fkey_src, bucket_type="trusted"):
                     # Transfer the file to the database bucket from the trusted bucket.
@@ -1167,7 +1164,7 @@ class IvertJob:
                     if self.s3m.exists(fkey_dst, bucket_type="database"):
 
                         if self.verbose:
-                            print(fname, "transferred to", dest_prefix + ".")
+                            print(fname, "transferred to", dest_prefix)
 
                         fsize = self.s3m.size(fkey_dst, bucket_type="database")
 
