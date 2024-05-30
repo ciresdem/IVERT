@@ -870,12 +870,12 @@ class IvertJob:
             command_str = command_str + " --files"
         fnames_str = ""
         for fname in self.job_config_object.files:
-            fnames_str = fnames_str + " " + (f'"{fname}"'
-                                            if (self.contains_whitespace(fname) or (len(fname) == 0))
-                                            else fname)
+            fnames_str = fnames_str + " " + (f'"{fname}"' \
+                                             if (self.contains_whitespace(fname) or (len(fname) == 0)) \
+                                             else fname)
 
         if len(fnames_str) > max_filenames_length_chars:
-            fnames_str = " " + f"[{len(self.job_config_object.files)} files here. Abbreviated for clarity.]
+            fnames_str = " " + f"[{len(self.job_config_object.files)} files here. Abbreviated for clarity.]"
 
         command_str += fnames_str
 
