@@ -387,7 +387,8 @@ class ICESat2_Database:
         if (type(polygon_or_bbox) in (list, tuple)) and (len(polygon_or_bbox) == 4):
             polygon = shapely.geometry.box(*polygon_or_bbox, ccw=False)
         else:
-            assert type(polygon_or_bbox) == shapely.geometry.Polygon
+            assert type(polygon_or_bbox) in (shapely.geometry.Polygon, shapely.geometry.polygon.Polygon,
+                                             shapely.geometry.MultiPolygon, shapely.geometry.multipolygon.MultiPolygon)
             polygon = polygon_or_bbox
 
         # Use the polygon intersection tool to find the intersection.

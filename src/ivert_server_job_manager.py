@@ -454,7 +454,7 @@ class IvertJob:
         self.push_sns_notification(start_or_finish="start", upload_to_s3=False)
 
         # 6. Download all other job files.
-        #  --- Enter them each in database. (Upload to s3)
+        #  --- Enter records for each of the files in the database and don't bother downloading.
         self.download_job_files(upload_to_s3=False)
 
         # 7. Run the job!
@@ -864,33 +864,35 @@ class IvertJob:
             if self.command == "validate":
                 # If EMPTY_TEST is set in the config file, don't actually do a validation. Just print a confirm message to
                 # the logfile and upload it, then we're done.
+
+                # RUN A TEST COMMAND
                 if "EMPTY_TEST" in self.job_config_object.cmd_args:
                     self.run_test_command()
+                # RUN A VALIDATION COMMAND
                 else:
-                    # RUN A VALIDATION COMMAND
-                    # TODO: Implement
-                    pass
+                    self.run_validate_command()
 
             elif self.command == "import":
                 # RUN AN IMPORT COMMAND
-                # TODO: Implement
-                pass
+                self.run_import_command()
 
             elif self.command == "update":
                 # For update, look for a particular sub-command under the args.
                 assert "sub_command" in self.job_config_object.cmd_args
                 sub_command = self.job_config_object.cmd_args["sub_command"]
 
+                # RUN A SUBSCRIBE COMMAND
                 if sub_command == "subscribe":
                     self.run_subscribe_command()
 
+                # RUN AN UNSUBSCRIBE COMMAND
                 elif sub_command == "unsubscribe":
                     self.run_unsubscribe_command()
 
+
+                # RUN AN UPDATE COMMAND
                 else:
-                    # RUN AN UPDATE COMMAND
-                    # TODO: Implement
-                    pass
+                    self.run_update_command()
 
         except KeyboardInterrupt as e:
             if self.verbose:
@@ -1072,6 +1074,7 @@ class IvertJob:
             f_path = os.path.join(self.job_dir, fname)
 
             if os.path.exists(f_path):
+                # If the file exists locally, mark it as 'processed'.
                 self.jobs_db.update_file_status(self.username, self.job_id, fname, "processed", upload_to_s3=False)
             else:
                 # If we can't find the file and its status is not some type of error, mark it as 'error'.
@@ -1083,6 +1086,54 @@ class IvertJob:
         self.write_to_logfile(f"Test job {self.username}_{self.job_id} has completed.")
         return
 
+    def run_validate_command(self):
+        # TODO: Implement this
+        raise NotImplementedError("Command 'validate' not yet implemented.")
+
+    def run_import_command(self):
+        job_row = self.jobs_db.job_exists(self.username, self.job_id, return_row=True)
+        assert job_row
+
+        jco = self.job_config_object
+        assert hasattr(jco, "dest")
+        assert hasattr(jco, "files") and isinstance(jco.files, list)
+
+        # If the destination is not set, set it to to the photon_tiles directory on the EC2.
+        # This is where most the data will go.
+        if jco.dest == "":
+            jco.dest = self.ivert_config.s3_photon_tiles_directory_prefix
+
+        total_size_bytes = 0
+        numfiles_processed = 0
+        for fname in jco.files:
+            f_path = os.path.join(self.job_dir, fname)
+            fkey_dst = str(os.path.join(jco.dest, fname))
+            if os.path.exists(f_path):
+                # Upload the file to the database.
+                self.s3m.upload(f_path, fkey_dst, bucket_type="database", include_md5=True)
+
+                # If the file exists locally, mark it as 'processed'.
+                self.jobs_db.update_file_status(self.username, self.job_id, fname, "processed", upload_to_s3=False)
+
+                total_size_bytes += os.path.getsize(f_path)
+                numfiles_processed += 1
+                # Remove the file locally (free up the space).
+                os.remove(f_path)
+
+            else:
+                # If we can't find the file and its status is not some type of error, mark it as 'error'.
+                if self.jobs_db.file_exists(fname, self.username, self.job_id, return_row=True)["status"] not in \
+                        ("error", "timeout", "quarantined", "unknown"):
+                    self.jobs_db.update_file_status(self.username, self.job_id, fname, "error", upload_to_s3=False)
+
+        # Get the total size of the files from this job. Write it to the logfile.
+        self.write_to_logfile(f"Imported {numfiles_processed} of {len(jco.files)} files totaling {sizeof.sizeof_fmt(total_size_bytes)} to directory {jco.dest}.")
+
+        return
+
+    def run_update_command(self):
+        # TODO: Implement this
+        raise NotImplementedError("Command 'update' not yet implemented.")
 
 def kill_other_ivert_job_managers():
     "Kill any other running instances of the ivert_job_manager process."

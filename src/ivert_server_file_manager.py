@@ -1,3 +1,6 @@
+# NOTE: This code was only used directly by the "validate_dem.py" module. We can eliminate this when we've replaced it
+# with the server configuration.
+
 """ivert_server_file_manager.py -- Code for managing cloud files and IVERT instances within the EC2 instance."""
 
 import argparse

@@ -12,6 +12,7 @@ if vars(sys.modules[__name__])['__package__'] == 'ivert':
     import ivert.client_test_job as client_test_job
     import ivert.client_job_status as client_job_status
     import ivert.client_job_validate as client_job_validate
+    import ivert.client_job_import as client_job_import
     import ivert_utils.query_yes_no as yes_no
     import ivert_utils.version as version
 else:
@@ -22,6 +23,7 @@ else:
     import client_test_job
     import client_job_status
     import client_job_validate
+    import client_job_import
     import utils.query_yes_no as yes_no
     import utils.version as version
 
@@ -175,17 +177,20 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     # Create the "import" subparser
     ###############################################################
-    import_help_msg = "Import data into the IVERT tool.  [NOT YET IMPLEMENTED]"
+    import_help_msg = "Import data into the IVERT tool."
     parser_import = subparsers.add_parser("import", help=import_help_msg, description=import_help_msg)
-    parser_import.add_argument("files", type=str, nargs="+",
+    parser_import.add_argument("files_or_directory", type=str, nargs="+",
                                help="Enter a file, list of files, or a directory to import into the IVERT work bucket."
                                     " May use bash-style wildcards such as src*.feather.")
     parser_import.add_argument("-d", "-dest", "--destination_prefix", dest="destination_prefix",
                                type=str, default="",
                                help="Destintion prefix to place files into the IVERT work bucket."
-                                    " Default: '', for the base directory.")
+                                    " Default: place them in the photon_tiles prefix for database tiles.")
     parser_import.add_argument("-p", "--prompt", default=False, action="store_true",
                                help="Prompt the user to verify settings before uploading files to IVERT. Default: False")
+    parser_import.add_argument("-t", "--read_textfiles", dest="read_textfiles", default=False,
+                               action="store_true",
+                               help="Any .txt files provided, read them as a list of files rather than a single file. Default: False")
 
     ###############################################################
     # Create the "subscribe" subparser
@@ -267,9 +272,7 @@ def ivert_client_cli():
 
     # Import data into the IVERT tool (for setup purposes only)
     elif args.command == "import":
-        # TODO: Implement this
-        raise NotImplementedError("Command 'import' not yet implemented.")
-        pass
+        client_job_import.run_import_command(args)
 
     # Raise an error if the command doesn't exist.
     else:

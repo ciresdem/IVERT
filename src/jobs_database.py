@@ -938,6 +938,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
                                status: str = "unknown",
                                upload_to_s3: bool = True,
                                fake_file_stats: bool = False,
+                               default_file_size: int = 0,
                                ) -> sqlite3.Row:
         """
         Create a new file record in the database. The (username, job_id) tuple must already exist in the ivert_jobs table.
@@ -949,9 +950,10 @@ class JobsDatabaseServer(JobsDatabaseClient):
             username (str): The username of the user who submitted the job.
             import_or_export (int): Whether the file is being imported (0), exported (1), or both (2).
             status (str): The initial status to assign to the job in the database. Default "unknown". Look in ivert_jobs_schema.sql for other options.
-            skip_database_upload (bool): Whether or not to skip uploading the database after this operation is performed.
+            upload_to_s3 (bool): Whether or not to upload the database after this operation is performed.
             fake_file_stats (bool): If the file doesn't exist locally, just put blank entries for the file statistics.
                                     This happens when we're just logging an error message about a file that wasn't downloaded or was quarantined.
+            default_file_size (int): The default file size to use if the file doesn't exist locally.
 
         Returns:
             A sqlite3.Row object of the new row creatd (or the row that exists).
@@ -973,7 +975,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
             # Providing fake values here is useful if there was an error processing the file and the file itself
             # doesn't exist on disk but we are still logging it as an error.
             file_md5 = "-" * 32
-            file_size = 0
+            file_size = default_file_size
         else:
             # If the file exists, compute the md5 and the size of it.
             file_md5 = self.s3m.compute_md5(filename)
