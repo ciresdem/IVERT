@@ -1149,8 +1149,8 @@ class IvertJob:
 
         # DEBUG statement. TODO: Remove later.
         if self.verbose:
-        print(files_to_transfer)
-        return
+            print(files_to_transfer)
+            return
 
         while len(files_to_transfer) > 0 and ((time.time() - time_started) < self.download_timeout_s):
             for fname in files_to_transfer.copy():
