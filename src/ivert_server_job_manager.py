@@ -1147,14 +1147,9 @@ class IvertJob:
         time_started = time.time()
         bytes_copied = 0
 
-        # DEBUG statement. TODO: Remove later.
-        if self.verbose:
-            print(files_to_transfer)
-            return
-
         while len(files_to_transfer) > 0 and ((time.time() - time_started) < self.download_timeout_s):
             for fname in files_to_transfer.copy():
-                fkey_src = str(os.path.join(job_row["import_prefix"], fname))
+                fkey_src = str(os.path.join(os.path.dirname(self.job_config_s3_key), fname))
                 fkey_dst = str(os.path.join(dest_prefix, fname))
                 # DEBUG statement. TODO: Remove later.
                 if self.verbose:
