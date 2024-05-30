@@ -813,7 +813,7 @@ class IvertJob:
                     ifiles_text += email_templates.file_item.format(ifile["filename"],
                                                                     sizeof.sizeof_fmt(ifile["size_bytes"]),
                                                                     ifile["status"])
-                    if len(files_text) > 512:
+                    if len(ifiles_text) > 512:
                         ifiles_text += "[Other files omitted for brevity.]\n"
                         break
 
