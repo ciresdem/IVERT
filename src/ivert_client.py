@@ -191,6 +191,12 @@ def define_and_parse_args(return_parser: bool = False):
     parser_import.add_argument("-t", "--read_textfiles", dest="read_textfiles", default=False,
                                action="store_true",
                                help="Any .txt files provided, read them as a list of files rather than a single file. Default: False")
+    parser_import.add_argument("-m", "--max_gb_per_chunk", dest="max_gb_per_chunk", type=float, default=5.0,
+                               help="The maximum size of a single chunk in GB. Default: 5.0 GB. If the import is larger,"
+                                    "this will be performed in more than one chunk. Any negative value will be treated as 'no limit.'")
+    parser_import.add_argument("-mf", "--max_files_per_chunk", dest="max_files_per_chunk", type=int, default=100,
+                               help="The maximum number of files to import in a single chunk. Default: 100. If the import is larger,"
+                                    "this will be performed in more than one chunk. Negative values will be treated as 'no limit.'")
 
     ###############################################################
     # Create the "subscribe" subparser

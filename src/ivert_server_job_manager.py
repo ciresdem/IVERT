@@ -875,7 +875,7 @@ class IvertJob:
                                              else fname)
 
         if len(fnames_str) > max_filenames_length_chars:
-            fnames_str = " " + f"[{len(self.job_config_object.files)} files here. Abbreviated for clarity.]"
+            fnames_str = " " + f"[*{len(self.job_config_object.files)} files here. Abbreviated for brevity.*]"
 
         command_str += fnames_str
 
