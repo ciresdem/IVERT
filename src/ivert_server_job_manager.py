@@ -1145,15 +1145,22 @@ class IvertJob:
         numfiles_processed = 0
         files_to_transfer = jco.files.copy()
         time_started = time.time()
+        bytes_copied = 0
 
         while len(files_to_transfer) > 0 and ((time.time() - time_started) < self.download_timeout_s):
-            for fname in files_to_transfer:
+            for fname in files_to_transfer.copy():
                 fkey_src = str(os.path.join(job_row["import_prefix"], fname))
                 fkey_dst = str(os.path.join(dest_prefix, fname))
+                # DEBUG statement. TODO: Remove later.
+                if self.verbose:
+                    print(fkey_src, "->\n\t", fkey_dst)
 
                 if self.s3m.exists(fkey_src, bucket_type="trusted"):
                     # Transfer the file to the database bucket from the trusted bucket.
-                    self.s3m.transfer(fkey_src, fkey_dst, src_bucket_type="trusted", dst_bucket_type="database",
+                    self.s3m.transfer(fkey_src,
+                                      fkey_dst,
+                                      src_bucket_type="trusted",
+                                      dst_bucket_type="database",
                                       include_metadata=True)
 
                     # Make sure the file uploaded successfully.
@@ -1162,27 +1169,43 @@ class IvertJob:
                         if self.verbose:
                             print(fname, "transferred to", dest_prefix + ".")
 
+                        fsize = self.s3m.size(fkey_dst, bucket_type="database")
+
                         # If the file exists locally, mark it as 'processed'.
                         self.jobs_db.update_file_status(self.username, self.job_id, fname, "processed",
-                                                        new_size=self.s3m.size(fkey_dst, bucket_type="database"),
-                                                        upload_to_s3=False)
+                                                        new_size=fsize, upload_to_s3=False)
+
+                        bytes_copied += fsize
+
                     else:
+                        if self.verbose:
+                            print("Error with file", fname)
+
                         # If we can't find the file and its status is not some type of error, mark it as 'error'.
                         self.jobs_db.update_file_status(self.username, self.job_id, fname, "error", upload_to_s3=False)
 
                     files_to_transfer.remove(fname)
                     numfiles_processed += 1
-                    # Remove the file locally (free up the space).
 
-                else:
-                    # If we can't find the file and its status is not some type of error, mark it as 'error'.
-                    if self.jobs_db.file_exists(fname, self.username, self.job_id, return_row=True)["status"] not in \
-                            ("error", "timeout", "quarantined", "unknown"):
-                        self.jobs_db.update_file_status(self.username, self.job_id, fname, "error", upload_to_s3=False)
+                # else:
+                #     # If we can't find the file and its status is not some type of error, mark it as 'error'.
+                #     if self.jobs_db.file_exists(fname, self.username, self.job_id, return_row=True)["status"] not in \
+                #             ("error", "timeout", "quarantined", "unknown"):
+                #         self.jobs_db.update_file_status(self.username, self.job_id, fname, "error", upload_to_s3=False)
+
+            # Sleep for a few seconds and then try again.
+            time.sleep(3)
+
+        if len(files_to_transfer) > 0:
+            # If we still have files to transfer, mark them as 'timeout'.
+            for fname in files_to_transfer:
+                self.jobs_db.update_file_status(self.username, self.job_id, fname, "timeout", upload_to_s3=False)
 
         # Get the total size of the files from this job. Write it to the logfile.
         self.write_to_logfile(
-            f"Imported {numfiles_processed} of {len(jco.files)} files totaling {sizeof.sizeof_fmt(total_size_bytes)} to directory {dest_prefix}.")
+            f"Imported {numfiles_processed} of {len(jco.files)} files totaling {sizeof.sizeof_fmt(bytes_copied)} to directory {dest_prefix}.")
+        if len(files_to_transfer) > 0:
+            self.write_to_logfile(f"Timed out after {self.download_timeout_s} seconds. {len(files_to_transfer)} files were not processed.")
 
         return
 
