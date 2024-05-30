@@ -1137,7 +1137,8 @@ class IvertJob:
                     self.jobs_db.update_file_status(self.username, self.job_id, fname, "error", upload_to_s3=False)
 
         # Get the total size of the files from this job. Write it to the logfile.
-        self.write_to_logfile(f"Imported {numfiles_processed} of {len(jco.files)} files totaling {sizeof.sizeof_fmt(total_size_bytes)} to directory {jco.dest}.")
+        self.write_to_logfile(
+            f"Imported {numfiles_processed} of {len(jco.files)} files totaling {sizeof.sizeof_fmt(total_size_bytes)} to directory {dest_prefix}.")
 
         return
 
