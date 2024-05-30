@@ -1095,19 +1095,22 @@ class IvertJob:
         assert job_row
 
         jco = self.job_config_object
-        assert hasattr(jco, "destination_prefix")
+        assert hasattr(jco, "cmd_args") and type(jco.cmd_args) is dict
+        assert "destination_prefix" in jco.cmd_args.keys()
         assert hasattr(jco, "files") and isinstance(jco.files, list)
+
+        dest_prefix = jco.cmd_args["destination_prefix"]
 
         # If the destination is not set, set it to to the photon_tiles directory on the EC2.
         # This is where most the data will go.
-        if jco.destination_prefix == "":
-            jco.destination_prefix = self.ivert_config.s3_photon_tiles_directory_prefix
+        if dest_prefix == "":
+            dest_prefix = self.ivert_config.s3_photon_tiles_directory_prefix
 
         total_size_bytes = 0
         numfiles_processed = 0
         for fname in jco.files:
             f_path = os.path.join(self.job_dir, fname)
-            fkey_dst = str(os.path.join(jco.destination_prefix, fname))
+            fkey_dst = str(os.path.join(dest_prefix, fname))
             if os.path.exists(f_path):
                 # Upload the file to the database.
                 self.s3m.upload(f_path, fkey_dst, bucket_type="database", include_md5=True)
