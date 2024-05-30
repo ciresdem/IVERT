@@ -128,7 +128,12 @@ class S3Manager:
         if head is False:
             return False
 
-        s3_size = int(head['ContentLength'])
+        if 'content-length' in head.keys():
+            s3_size = int(head['content-length'])
+        elif 'content-length' in head['ResponseMetadata']['HTTPHeaders'].keys():
+            s3_size = int(head['ResponseMetadata']['HTTPHeaders']['content-length'])
+        else:
+            return False
 
         if os.path.exists(filename):
             local_size = os.stat(filename).st_size
@@ -136,6 +141,21 @@ class S3Manager:
             return False
 
         return s3_size == local_size
+
+    def size(self, s3_key, bucket_type=None):
+        """Return the size of the S3 key."""
+        bucket_type = self.convert_btype(bucket_type)
+
+        head = self.exists(s3_key, bucket_type=bucket_type, return_head=True)
+        if head is False:
+            return False
+
+        if 'content-length' in head.keys():
+            return int(head['content-length'])
+        elif 'content-length' in head['ResponseMetadata']['HTTPHeaders'].keys():
+            return int(head['ResponseMetadata']['HTTPHeaders']['content-length'])
+        else:
+            return False
 
     def exists(self, s3_key, bucket_type=None, return_head: bool = False):
         """Look in the appropriate bucket, and see if a file or directory exists there."""
