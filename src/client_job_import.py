@@ -48,10 +48,12 @@ def run_import_command(args: argparse.Namespace) -> None:
         del files_to_send_2
 
     # Strip off client-only arguments
-    del args_to_send.file_or_directory
+    del args_to_send.files_or_directory
     del args_to_send.prompt
     del args_to_send.read_textfiles
 
     # Append the "files" argument to the args_to_send object
     args_to_send.files = files_to_send
-    client_job_upload.run_upload_command(args_to_send, files_to_send)
+
+    # Upload the job
+    client_job_upload.upload_new_job(args_to_send)

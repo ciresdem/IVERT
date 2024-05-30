@@ -61,7 +61,7 @@ def get_latest_job_name_from_local_dirs():
     # the server's jobs database. (Perhaps it just hasn't been picked up by the server yet.)
     local_jobs_dir = ivert_config.ivert_jobs_directory_local
     job_folders = [fn for fn in os.listdir(local_jobs_dir)
-                   if os.path.isdir(os.path.join(local_jobs_dir, fn)) and (username in fn)]
+                   if os.path.isdir(os.path.join(local_jobs_dir, fn)) and (ivert_config.username in fn)]
     if len(job_folders) > 0:
         job_name_from_folders = max(job_folders)
     else:
