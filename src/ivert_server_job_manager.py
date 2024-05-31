@@ -13,7 +13,6 @@ import numpy
 import os
 import pandas
 import psutil
-import signal
 import string
 import subprocess
 import sys
@@ -27,6 +26,9 @@ import s3
 import sns
 import utils.configfile
 import utils.sizeof_format as sizeof
+import validate_dem
+import validate_dem_collection
+import coastline_mask
 
 ### TEMPORARY FIX ###
 # Until we get this as a permanent daemon process on the server, here is a way to start this file and leave it running
@@ -1144,8 +1146,105 @@ class IvertJob:
         return
 
     def run_validate_command(self):
-        # TODO: Implement this
-        raise NotImplementedError("Command 'validate' not yet implemented.")
+        job_row = self.jobs_db.job_exists(self.username, self.job_id, return_row=True)
+        assert job_row
+
+        jco = self.job_config_object
+        assert hasattr(jco, "cmd_args") and type(jco.cmd_args) is dict
+        assert hasattr(jco, "files") and isinstance(jco.files, list) and len(jco.files) > 0
+        cargs = jco.cmd_args
+        assert "input_vdatum" in cargs
+        assert "output_vdatum" in cargs
+        assert "region_name" in cargs
+        assert "measure_coverage" in cargs
+        assert "include_photons" in cargs
+        assert "band_num" in cargs
+        assert "coastlines_only" in cargs
+        assert "mask_buildings" in cargs
+        assert "mask_urban" in cargs
+        assert "outlier_sd_threshold" in cargs
+
+        outputs_dir = os.path.join(self.job_dir, "outputs")
+        if not os.path.exists(outputs_dir):
+            os.mkdir(outputs_dir)
+
+        retfiles = []
+
+        # Handle logic of coastline_only. Don't call validate, just generate the coastline mask.
+        if cargs["coastlines_only"]:
+            for fn in jco.files:
+                rfile = coastline_mask.create_coastline_mask(fn,
+                                                             mask_out_lakes=True,
+                                                             mask_out_buildings=cargs["mask_buildings"],
+                                                             mask_out_urban=cargs["mask_urban"],
+                                                             mask_out_nhd=True,
+                                                             run_in_tempdir=True,
+                                                             horizontal_datum_only=True,
+                                                             verbose=self.verbose)
+
+                retfiles.append(rfile)
+
+        elif len(jco.files) == 1:
+            # If there's only one file, run the validate_dem module.
+            rfiles = validate_dem.validate_dem_parallel(jco.files[0],
+                                                        output_dir=outputs_dir,
+                                                        icesat2_photon_database_obj=None,
+                                                        dem_vertical_datum=cargs["input_vdatum"],
+                                                        output_vertical_datum=cargs["output_vdatum"],
+                                                        mask_out_lakes=True,
+                                                        mask_out_buildings=cargs["mask_buildings"],
+                                                        mask_out_urban=cargs["mask_urban"],
+                                                        write_result_tifs=True,
+                                                        write_summary_stats=True,
+                                                        export_coastline_mask=True,
+                                                        plot_results=True,
+                                                        outliers_sd_threshold=cargs["outlier_sd_threshold"],
+                                                        location_name=cargs["region_name"],
+                                                        mark_empty_results=True,
+                                                        omit_bad_granules=True,
+                                                        measure_coverage=cargs["measure_coverage"],
+                                                        include_photon_level_validation=cargs["include_photons"],
+                                                        band_num=cargs["band_num"],
+                                                        quiet=not self.verbose
+                                                        )
+
+            retfiles.extend(rfiles)
+
+        else:
+            # Run the validate_dem_collection module.
+            rfiles = validate_dem_collection.validate_list_of_dems(jco.files,
+                                                                   output_dir=outputs_dir,
+                                                                   fname_filter=None,
+                                                                   fname_omit=None,
+                                                                   band_num=cargs["band_num"],
+                                                                   input_vdatum=cargs["input_vdatum"],
+                                                                   output_vdatum=cargs["output_vdatum"],
+                                                                   overwrite=False,
+                                                                   place_name=cargs["region_name"],
+                                                                   mask_buildings=cargs["mask_buildings"],
+                                                                   use_urban_mask=cargs["mask_urban"],
+                                                                   create_individual_results=True,
+                                                                   delete_datafiles=False,
+                                                                   include_photon_validation=cargs["include_photons"],
+                                                                   write_result_tifs=True,
+                                                                   omit_bad_granules=True,
+                                                                   write_summary_csv=True,
+                                                                   measure_coverage=cargs["measure_coverage"],
+                                                                   outliers_sd_threshold=cargs["outlier_sd_threshold"],
+                                                                   verbose=self.verbose)
+
+            retfiles.extend(rfiles)
+
+        for i, rfile in enumerate(retfiles):
+            # Add the resulting file to the list of output files in the database. It will be uploaded later.
+            self.jobs_db.create_new_file_record(rfile,
+                                                self.job_id,
+                                                self.username,
+                                                import_or_export=1, # mark for export.
+                                                status="processed",
+                                                upload_to_s3=((i + 1) == len(retfiles))) # Only upload the database on the last record.
+
+        return
 
     def run_import_command(self):
         job_row = self.jobs_db.job_exists(self.username, self.job_id, return_row=True)

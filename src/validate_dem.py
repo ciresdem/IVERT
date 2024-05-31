@@ -476,6 +476,7 @@ def kick_off_new_child_process(height_array,
 def validate_dem_parallel(dem_name,
                           output_dir=None,
                           icesat2_photon_database_obj=None, # Used only if we've already created this, for efficiency.
+                          band_num: int = 1,
                           dem_vertical_datum="egm2008",
                           output_vertical_datum="egm2008",
                           s3_input_dir=None,
@@ -692,6 +693,7 @@ def validate_dem_parallel(dem_name,
                                                              use_osm_planet=use_osm_planet,
                                                              include_gmrt=include_gmrt_mask,
                                                              target_fname_or_dir=coastline_mask_filename,
+                                                             band_num=band_num,
                                                              verbose=not quiet)
 
     # Test for compound CRSs. If it's that, just get the horizontal crs from it.
@@ -1220,10 +1222,13 @@ def validate_dem_parallel(dem_name,
         if mark_empty_results:
             # Just create an empty file to makre this dataset as done.
             with open(empty_results_filename, 'w') as f:
-                f.close()
+                f.write("No ICESat-2 data data overlapping this DEM to validate.")
+
             if not quiet:
                 print("Created", empty_results_filename, "to indicate no data was returned here.")
-        return
+            files_to_export.append(empty_results_filename)
+
+        return files_to_export
 
     else:
         # Write out the results dataframe. Method depends upon the file type. Can be .csv, .txt, .h5 (assumed default of not one of the text files.)
@@ -1280,7 +1285,7 @@ def validate_dem_parallel(dem_name,
         if not quiet:
             print("Cleaning up...", end="")
 
-        if os.path.exists(coastline_mask_filename):
+        if os.path.exists(coastline_mask_filename) and not export_coastline_mask:
             os.remove(coastline_mask_filename)
         if (converted_dem_name is not None) and os.path.exists(converted_dem_name):
             os.remove(converted_dem_name)
@@ -1288,7 +1293,7 @@ def validate_dem_parallel(dem_name,
         if not quiet:
             print("Done.")
 
-    return
+    return files_to_export
 
 
 def write_summary_stats_file(results_df, statsfile_name, verbose=True):
@@ -1460,5 +1465,6 @@ if __name__ == "__main__":
                           s3_output_bucket_type=args.s3_output_bucket_type,
                           measure_coverage=args.measure_coverage,
                           numprocs=args.numprocs,
+                          band_num=args.band_num,
                           quiet=args.quiet)
 

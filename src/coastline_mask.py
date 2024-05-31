@@ -178,6 +178,7 @@ def get_coastline_mask_and_other_dem_data(dem_name,
                                           target_fname_or_dir=None,
                                           run_in_tempdir=False,
                                           return_coastline_array_only=False,
+                                          band_num: int = 1,
                                           verbose=True):
     """Get data from the DEM and a generated/opened coastline mask.
 
@@ -197,7 +198,7 @@ def get_coastline_mask_and_other_dem_data(dem_name,
 
     if not return_coastline_array_only:
         dem_ds = gdal.Open(dem_name, gdal.GA_ReadOnly)
-        dem_array = dem_ds.ReadAsArray()
+        dem_array = dem_ds.GetRasterBand(band_num).ReadAsArray()
 
     coastline_ds = None
 

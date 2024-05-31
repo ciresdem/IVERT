@@ -33,10 +33,12 @@ def validate_list_of_dems(dem_list_or_dir,
                           output_dir=None,
                           fname_filter=r"\.tif\Z",
                           fname_omit=None,
+                          band_num: int=1,
                           input_vdatum="wgs84",
                           output_vdatum="wgs84",
                           overwrite=False,
                           place_name=None,
+                          mask_buildings=True,
                           use_urban_mask=False,
                           create_individual_results = False,
                           delete_datafiles=False,
@@ -143,6 +145,7 @@ def validate_list_of_dems(dem_list_or_dir,
     # This saves us a lot of re-reading the geodataframe repeatedly.
     photon_db_obj = icesat2_photon_database.ICESat2_Database()
 
+    files_to_export = []
     list_of_results_dfs = []
     for i, dem_path in enumerate(dem_list):
         if verbose:
@@ -162,27 +165,28 @@ def validate_list_of_dems(dem_list_or_dir,
 
         # Do the validation.
         # Note: We automatically skip the icesat-2 download here because we already downloaded it above for the whole directory.
-        validate_dem.validate_dem_parallel(dem_path,
-                                           output_dir,
-                                           icesat2_photon_database_obj=photon_db_obj,
-                                           dem_vertical_datum=input_vdatum,
-                                           output_vertical_datum=output_vdatum,
-                                           # granule_ids=None,
-                                           # icesat2_date_range = date_range,
-                                           interim_data_dir = this_output_dir,
-                                           overwrite=overwrite,
-                                           delete_datafiles = delete_datafiles,
-                                           write_result_tifs = write_result_tifs,
-                                           mask_out_buildings=not use_urban_mask,
-                                           mask_out_urban=use_urban_mask,
-                                           write_summary_stats = create_individual_results,
-                                           include_photon_level_validation = include_photon_validation,
-                                           plot_results = create_individual_results,
-                                           outliers_sd_threshold=outliers_sd_threshold,
-                                           mark_empty_results=True,
-                                           omit_bad_granules=omit_bad_granules,
-                                           measure_coverage=measure_coverage,
-                                           quiet=not verbose)
+        retfiles = validate_dem.validate_dem_parallel(dem_path,
+                                                      output_dir,
+                                                      band_num=band_num,
+                                                      icesat2_photon_database_obj=photon_db_obj,
+                                                      dem_vertical_datum=input_vdatum,
+                                                      output_vertical_datum=output_vdatum,
+                                                      interim_data_dir=this_output_dir,
+                                                      overwrite=overwrite,
+                                                      delete_datafiles=delete_datafiles,
+                                                      write_result_tifs=write_result_tifs,
+                                                      mask_out_buildings=mask_buildings,
+                                                      mask_out_urban=use_urban_mask,
+                                                      write_summary_stats=create_individual_results,
+                                                      include_photon_level_validation=include_photon_validation,
+                                                      plot_results=create_individual_results,
+                                                      outliers_sd_threshold=outliers_sd_threshold,
+                                                      mark_empty_results=True,
+                                                      omit_bad_granules=omit_bad_granules,
+                                                      measure_coverage=measure_coverage,
+                                                      quiet=not verbose)
+
+        files_to_export.extend(retfiles)
 
         if os.path.exists(results_h5_file):
             list_of_results_dfs.append(results_h5_file)
@@ -214,10 +218,14 @@ def validate_list_of_dems(dem_list_or_dir,
         summary_csv_name = os.path.join(this_output_dir, stats_and_plots_base+".csv")
         write_summary_csv_file(total_results_df, summary_csv_name)
 
+        retfiles.append(summary_csv_name)
+
     # Output the statistics summary file.
     validate_dem.write_summary_stats_file(total_results_df,
                                           statsfile_name,
                                           verbose=verbose)
+
+    retfiles.append(statsfile_name)
 
     # Output the validation results plot.
     plot_validation_results.plot_histogram_and_error_stats_4_panels(total_results_df,
@@ -225,12 +233,16 @@ def validate_list_of_dems(dem_list_or_dir,
                                                                     place_name=place_name,
                                                                     verbose=verbose)
 
+    retfiles.append(plot_file_name)
+
     if results_h5 is not None:
         total_results_df.to_hdf(results_h5, "results", complib="zlib", complevel=3)
         if verbose:
             print(results_h5, "written.")
 
-    return
+    retfiles.append(results_h5)
+
+    return retfiles
 
 def define_and_parse_args():
     parser = argparse.ArgumentParser(
