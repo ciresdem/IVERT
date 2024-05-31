@@ -40,7 +40,7 @@ def run_download_command(args: argparse.Namespace) -> list[str]:
         username = args.job_id_or_name[0:args.job_id_or_name.rfind("_")]
 
     if args.job_dir:
-        output_dir = os.path.join(ivert_config.ivert_data_directory, f"{username}_{job_id}")
+        output_dir = os.path.join(ivert_config.ivert_jobs_directory_local, f"{username}_{job_id}")
     else:
         # Get the absolute path of the output directory.
         output_dir = os.path.abspath(os.path.expanduser(args.output_dir))
