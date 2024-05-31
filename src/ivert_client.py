@@ -142,6 +142,9 @@ def define_and_parse_args(return_parser: bool = False):
                                       " format or a 'username_YYYYMMMDDNNNN' format. Either one is valid. If the"
                                       " username isn't given, it will be looked up from the user_config.ini file on"
                                       " this machine. Default: Downloads the latest job submitted by this user.")
+    parser_download.add_argument("-j", "--job_dir", dest="job_dir", action="store_true", default=False,
+                                 help="Just download results to the same job_dir where the job configfile was submitted,"
+                                      " in your ~/.ivert/jobs/ directory. Overrides '-o'. Default: False")
     parser_download.add_argument("-o", "--output_dir", dest="output_dir", type=str, default=".",
                                  help="Specify the local directory to download results. Default: '.'")
 

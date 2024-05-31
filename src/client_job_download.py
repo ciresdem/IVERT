@@ -39,8 +39,11 @@ def run_download_command(args: argparse.Namespace) -> list[str]:
         job_id = int(args.job_id_or_name[args.job_id_or_name.rfind("_") + 1:])
         username = args.job_id_or_name[0:args.job_id_or_name.rfind("_")]
 
-    # Get the absolute path of the output directory.
-    output_dir = os.path.abspath(os.path.expanduser(args.output_dir))
+    if args.job_dir:
+        output_dir = os.path.join(ivert_config.ivert_data_directory, f"{username}_{job_id}")
+    else:
+        # Get the absolute path of the output directory.
+        output_dir = os.path.abspath(os.path.expanduser(args.output_dir))
 
     # Create the output directory if it doesn't exist.
     if not os.path.exists(output_dir):
@@ -48,8 +51,12 @@ def run_download_command(args: argparse.Namespace) -> list[str]:
 
     # Download the job.
     job_name = f"{username}_{job_id}"
-    return download_job(job_name, output_dir)
+    d_files = download_job(job_name, output_dir)
 
+    # Print the number of files written.
+    print(len(d_files), "files written to", output_dir)
+
+    return d_files
 
 def find_most_recent_job_dir_from_this_machine() -> str:
     """Find the most recent job directory on this machine."""
