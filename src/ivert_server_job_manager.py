@@ -290,6 +290,8 @@ class IvertJobManager:
     def clean_up_terminated_job(self, pid: int, exitcode: int) -> None:
         """If a job is no longer running, clean it up, including its files.
 
+        This is normally done by the "IvertJob object, but if that crashes for any reason, we should clean it up here.
+
         Fetch the job details from the database."""
         # TODO: Implement this.
 
@@ -305,7 +307,7 @@ class IvertJobManager:
         Useful if we've rebuilt the database and there are exiting files in the trusted bucket that we want to populate
         with records, but not kick off any jobs from it.
 
-        NOTE: Do not do this while new jobs are coming in. It may skip a new job that has just come in.
+        NOTE: Do not do this while new jobs are coming in. It may skip (and not execute) a new job that has just come in.
         """
         ini_keys = self.check_for_new_jobs()
         for ini_fn in ini_keys:
@@ -372,6 +374,7 @@ class IvertJobManager:
 
         self.running_jobs = []
         return
+
 
 class IvertJob:
     """Class for managing and running IVERT individual jobs on an EC2 instance.
@@ -457,7 +460,8 @@ class IvertJob:
 
             # 6. Download all other job files.
             # If it's specifically an "import" job, we don't need to download each file, just create records for them.
-            self.download_job_files(only_create_database_entries=(self.command == "import"), upload_to_s3=False)
+            # By default, update the database entries for each file, and re-upload to the s3 bucket once every 10 files.
+            self.download_job_files(only_create_database_entries=(self.command == "import"), upload_to_s3=10)
 
             # 7. Run the job!
             # -- Figure out how to monitor the status of the job as it goes along.
@@ -643,7 +647,23 @@ class IvertJob:
 
         return
 
-    def download_job_files(self, only_create_database_entries=False, upload_to_s3=True):
+    @staticmethod
+    def should_we_upload(upload_to_s3: typing.Union[bool, int], num_files: int) -> bool:
+        """Given the number of files uploaded, decide if we should upload to the s3 bucket.
+
+        The download_job_files method accepts either a boolean (always upload to s3, or never), or an integer (upload to s3 every N files).
+        """
+        if type(upload_to_s3) is bool:
+            return upload_to_s3
+
+        else:
+            # Else, upload once every 'num_files' files, when the remainder is zero.
+            return (num_files % upload_to_s3) == 0
+
+
+    def download_job_files(self,
+                           only_create_database_entries: bool = False,
+                           upload_to_s3: typing.Union[bool, int] = True):
         """Download all other job files from the S3 bucket and add their entries to the jobs database."""
         # It may take some time for all the files to pass quarantine and be available in the trusted bucket.
         try:
@@ -682,7 +702,7 @@ class IvertJob:
                                                         import_or_export=0,
                                                         status="unknown" if only_create_database_entries else "downloaded",
                                                         fake_file_stats=True if only_create_database_entries else False,
-                                                        upload_to_s3=False)
+                                                        upload_to_s3=self.should_we_upload(upload_to_s3, len(files_downloaded)))
 
                 elif quarantine_manager.is_quarantined(f_key):
                     if self.verbose:
@@ -693,7 +713,7 @@ class IvertJob:
                                                         self.username,
                                                         import_or_export=0,
                                                         status="quarantined",
-                                                        upload_to_s3=False,
+                                                        upload_to_s3=self.should_we_upload(upload_to_s3, len(files_downloaded)),
                                                         fake_file_stats=True)
                     files_to_download.remove(fname)
                     files_downloaded.append(fname)
@@ -721,7 +741,7 @@ class IvertJob:
                                                     self.username,
                                                     import_or_export=0,
                                                     status="timeout",
-                                                    upload_to_s3=False,
+                                                    upload_to_s3=self.should_we_upload(upload_to_s3, len(files_downloaded)),
                                                     fake_file_stats=True)
 
                 files_to_download.remove(fname)
