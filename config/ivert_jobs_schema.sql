@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS ivert_files (
     FOREIGN KEY(job_id, username)
         REFERENCES ivert_jobs(job_id, username)
         ON DELETE CASCADE -- NOTE: In order to enforce this foreign key, we must run "PRAGMA foreign_keys = ON;"
-                          -- whenever we connect to the database. Foreign key constraints are disabled by default in\
+                          -- whenever we connect to the database. Foreign key constraints are disabled by default in
                           -- python's sqlite3 library.
                           -- "ON DELETE CASCADE" means that if a record is deleted from the ivert_jobs table, all file
                           -- records linked to that job in this table should also be deleted automatically.

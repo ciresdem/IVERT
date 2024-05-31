@@ -71,11 +71,12 @@ def run_import_command(args: argparse.Namespace) -> None:
         print("Your job is larger than the maximum allowed. Splitting it up into chunks.")
 
         # Split up the job into chunks
-        list_of_file_chunks = split_job_into_chunks(files_to_send, args.max_files_per_chunk, args.max_gb_per_job)
+        list_of_file_chunks = split_job_into_chunks(files_to_send, args.max_files_per_chunk, args.max_gb_per_chunk)
         db = jobs_database.JobsDatabaseClient()
 
         # For each chunk, upload it
         chunk_statuses = []
+        total_files_processed = 0
         for chunk_list in list_of_file_chunks:
             args_to_send.files = chunk_list
             job_name = client_job_upload.upload_new_job(args_to_send)
@@ -85,7 +86,7 @@ def run_import_command(args: argparse.Namespace) -> None:
                 cur_job_status = client_job_status.get_simple_job_status(job_name, db)
 
                 if cur_job_status != prev_job_status:
-                    print(f"{cur_job_status}", end="")
+                    print(f"{cur_job_status}", end="", flush=True)
                     prev_job_status = cur_job_status
 
                 if cur_job_status in ("complete", "error", "killed", "unknown"):
@@ -93,9 +94,10 @@ def run_import_command(args: argparse.Namespace) -> None:
                     break
 
                 time.sleep(3)
-                print(".", end="")
+                print(".", end="", flush=True)
 
-            print("\n")
+            total_files_processed += len(chunk_list)
+            print(f"{total_files_processed} of {len(files_to_send)} files processed.", end="\n")
 
         print(len(chunk_statuses), "jobs finished importing with statuses:", chunk_statuses)
 
@@ -109,13 +111,13 @@ def run_import_command(args: argparse.Namespace) -> None:
         print(f"Job uploaded. Use '{bcolors.BOLD}ivert status{bcolors.ENDC}' to check the status.")
 
 
-def split_job_into_chunks(files_to_send: list[str], max_files_per_chunk: int, max_gb_per_job: float) -> list[list[str]]:
+def split_job_into_chunks(files_to_send: list[str], max_files_per_chunk: int, max_gb_per_chunk: float) -> list[list[str]]:
     """Split a list of files into chunks.
 
     Args:
         files_to_send: A list of files to split up.
         max_files_per_chunk: The maximum number of files per chunk.
-        max_gb_per_job: The maximum size of the job in GB.
+        max_gb_per_chunk: The maximum size of the job in GB.
 
     Returns:
         A list of lists of files.
@@ -128,7 +130,7 @@ def split_job_into_chunks(files_to_send: list[str], max_files_per_chunk: int, ma
     for fn in files_to_send:
         fn_size_gb = os.path.getsize(fn) / (1024 ** 3)
 
-        if ((len(cur_chunk) + 1) <= max_files_per_chunk) and ((cur_chunk_size_gb + fn_size_gb) <= max_gb_per_job):
+        if ((len(cur_chunk) + 1) <= max_files_per_chunk) and ((cur_chunk_size_gb + fn_size_gb) <= max_gb_per_chunk):
             cur_chunk.append(fn)
             cur_chunk_size_gb += fn_size_gb
         else:

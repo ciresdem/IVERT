@@ -100,14 +100,19 @@ def run_job_status_command(args: argparse.Namespace) -> None:
 
             print("Input file statuses:")
             for i, frow in input_files.iterrows():
-                print(f"    {frow['filename']}: {repr(frow['status'])}", end="")
+                print(f"    {frow['filename']}: {frow['status']}", end="")
                 if frow['filename'].endswith(".ini"):
                     print(f" (<-{bcolors.bcolors.ITALIC}job config file{bcolors.bcolors.ENDC})")
                 else:
                     print()
 
         if len(export_files) > 0:
-            print(f"There are currently {len(export_files)} export files processed for this job.")
+            print(f"There are currently {len(export_files)} export files processed for this job:")
+
+            for i, frow in export_files.iterrows():
+                print(f"    {frow['filename']}: {frow['status']}")
+
+            print(f"\n'{bcolors.bcolors.BOLD}ivert download {args.job_name}{bcolors.bcolors.ENDC}' will download the results.")
 
     else:
         status = get_simple_job_status(args.job_name, jobs_db)

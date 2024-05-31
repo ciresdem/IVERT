@@ -30,15 +30,16 @@ import utils.sizeof_format as sizeof
 
 ### TEMPORARY FIX ###
 # Until we get this as a permanent daemon process on the server, here is a way to start this file and leave it running
-# after we log out from the EC2 server.
+# after we log out from the EC2 server. It uses the linux "nohup" utility.
 # > nohup python3 ivert_server_job_manager.py -v >> /opt/cudem/ivert_data/ivert_manager.log 2>&1 <&- &
 
 # To see which processes are running, do a pgrep command.
 # pgrep -a python3
 
-# To kill the process, run this script in 'kill' mode.
+# To kill the process, running this script with the --kill option will do it.
 # python ivert_server_job_manager.py --kill
 
+# This comment section will be removed once we get this as a permanent daemon process on the server.
 #####################
 
 
