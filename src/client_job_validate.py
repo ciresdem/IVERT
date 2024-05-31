@@ -38,12 +38,12 @@ def run_validate_command(args: argparse.Namespace) -> None:
     assert hasattr(args, "wait")
     assert hasattr(args, "prompt")
     assert hasattr(args, "measure_coverage")
+    assert hasattr(args, "include_photons")
     assert hasattr(args, "band_num")
     assert hasattr(args, "coastlines_only")
-    assert hasattr(args, "buildings")
-    assert hasattr(args, "urban")
+    assert hasattr(args, "mask_buildings")
+    assert hasattr(args, "mask_urban")
     assert hasattr(args, "outlier_sd_threshold")
-    assert hasattr(args, "include_photons")
 
     # Make a copy we can modify to generate a config file for the job.
     args_to_send = argparse.Namespace(**vars(args))
@@ -63,7 +63,8 @@ def run_validate_command(args: argparse.Namespace) -> None:
     # Create absolute paths.
     files_to_send = [os.path.abspath(fn) for fn in files_to_send]
 
-    # If there are no files to send, raise an error.
+    # If there are no files to send, raise an error. Could happen if the user had a mistake in a glob pattern that
+    # doesn't match any files.
     if len(files_to_send) == 0:
         raise ValueError(f"{args.files_or_directory} has no matching files to validate.")
 
@@ -82,6 +83,7 @@ def run_validate_command(args: argparse.Namespace) -> None:
         print("The following job will be sent to the IVERT server, along with files listed:")
         print(client_job_upload.convert_cmd_args_to_string(args_to_send))
         answer = yes_no.query_yes_no("Proceed?", default="y")
+        # If they don't want to proceed, just exit.
         if not answer:
             sys.exit(0)
 
