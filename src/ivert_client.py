@@ -68,24 +68,24 @@ def define_and_parse_args(return_parser: bool = False):
                                       " before sending it off. Default: False")
     parser_validate.add_argument("-mc", "--measure_coverage", dest="measure_coverage",
                                  default=False, action="store_true",
-                                 help="Measure the coverage of the region as a field in the h5 results. "
-                                      "(Measures how may of the 225 sub-regions within each grid cell contain photons, "
+                                 help="Measure the relative 'coverage' of each grid-cell as a field in the h5 results. "
+                                      "(Measures how may of the 15x15 (225 total) sub-regions within each grid cell contain ICESat-2 photons, "
                                       "allowing to post-process filter only higher-coverage grid cells in "
-                                      "course-resolution DEMs. Typically not used for high-res DEMs. Default: False")
+                                      "course-resolution DEMs where sampling bias might be an issue. This is typically only used for lower-resoultion DEMs. Default: False")
     parser_validate.add_argument("-ph" "--include_photons", dest="include_photons", default=False, action="store_true",
                                  help="In additional to returning .h5 and .tif files of ICESat-2 cell results, also "
-                                      "return a .h5 of individual ICESat-2 photon results. Default: False")
+                                      "return a .h5 point database of individual ICESat-2 photons used to validate each DEM. Use if you want to 'see the photons'. Default: False")
     parser_validate.add_argument("-bn", "--band_num", dest="band_num", type=int, default=1,
-                                 help="The raster band number to validate. Other bands are ignored. (Default: 1)")
+                                 help="The raster band number to validate in each DEM, if using multi-band datasets. 1-indexed (1 is the first band, not 0). Other bands are ignored. (Default: 1)")
     parser_validate.add_argument("-co", "--coastlines_only", dest="coastlines_only", default=False,
                                  action="store_true",
                                  help="Return only the coastline masks. Skip the rest of the validation. Default: False")
-    parser_validate.add_argument("-mb", "--mask_buildings", dest="buildings", type=yes_no.interpret_yes_no,
+    parser_validate.add_argument("-mb", "--mask_buildings", dest="mask_buildings", type=yes_no.interpret_yes_no,
                                  default=True,
                                  help="Whether to mask out building footprints in the coastline mask. Must be followed "
                                       "by 'True', 'False', 'Yes', 'No', or any abbreviation thereof (case-insensitive). "
                                       "(Default: True)")
-    parser_validate.add_argument("-mu", "--mask_urban", dest="urban", type=yes_no.interpret_yes_no,
+    parser_validate.add_argument("-mu", "--mask_urban", dest="mask_urban", type=yes_no.interpret_yes_no,
                                  default=False,
                                  help="Whether to mask out World-Settlement-Footprint heavy urban areas in the "
                                       "coastline mask. Typically used instead of building footprints for DEMs coarser"
