@@ -1170,9 +1170,11 @@ class IvertJob:
 
         retfiles = []
 
+        dem_files = [os.path.join(self.job_dir, f) for f in jco.files]
+
         # Handle logic of coastline_only. Don't call validate, just generate the coastline mask.
         if cargs["coastlines_only"]:
-            for fn in jco.files:
+            for fn in dem_files:
                 rfile = coastline_mask.create_coastline_mask(fn,
                                                              mask_out_lakes=True,
                                                              mask_out_buildings=cargs["mask_buildings"],
@@ -1184,9 +1186,9 @@ class IvertJob:
 
                 retfiles.append(rfile)
 
-        elif len(jco.files) == 1:
+        elif len(dem_files) == 1:
             # If there's only one file, run the validate_dem module.
-            rfiles = validate_dem.validate_dem_parallel(jco.files[0],
+            rfiles = validate_dem.validate_dem_parallel(dem_files[0],
                                                         output_dir=outputs_dir,
                                                         icesat2_photon_database_obj=None,
                                                         dem_vertical_datum=cargs["input_vdatum"],
@@ -1212,7 +1214,7 @@ class IvertJob:
 
         else:
             # Run the validate_dem_collection module.
-            rfiles = validate_dem_collection.validate_list_of_dems(jco.files,
+            rfiles = validate_dem_collection.validate_list_of_dems(dem_files,
                                                                    output_dir=outputs_dir,
                                                                    fname_filter=None,
                                                                    fname_omit=None,
