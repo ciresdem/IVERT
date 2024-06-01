@@ -5,10 +5,11 @@
 
 kill=0
 
-while getopts k: flag
+while getopts "k" OPTION;
 do
-  case "${flag}" in
-    k) kill=1;;
+  case "$OPTION" in
+    k)
+      kill=1;;
   esac
 done
 
