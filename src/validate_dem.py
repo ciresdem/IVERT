@@ -766,6 +766,7 @@ def validate_dem_parallel(dem_name,
         dem_srs = osr.SpatialReference(wkt=dem_proj_wkt)
 
         # DEBUG TODO: REMOVE LATER
+        print(dem_ds, type(dem_ds))
         print("icesat2_srs:", icesat2_srs)
         print("dem_proj_wkt:", dem_proj_wkt)
         print("dem_srs", dem_srs)
