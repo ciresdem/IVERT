@@ -757,7 +757,7 @@ def validate_dem_parallel(dem_name,
 
         return None
 
-    # If the DEM is not in WGS84 coordaintes, create a conversion funtion to pass to sub-functions.
+    # If the DEM is not in WGS84 coordinates, create a conversion funtion to pass to sub-functions.
     if dem_epsg != 4326:
         dem_proj_wkt = dem_ds.GetProjection()
         # print(dem_proj_wkt)
