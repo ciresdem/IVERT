@@ -255,8 +255,8 @@ class IvertJobManager:
                 job.close()
 
                 if exitcode != 0:
-                    if self.verbose:
-                        print(f"Job {job_key[job_key.rfind('/') + 1: job_key.rfind('.ini')]} exited with code {exitcode}.")
+                    # if self.verbose:
+                    #     print(f"Job {job_key[job_key.rfind('/') + 1: job_key.rfind('.ini')]} exited with code {exitcode}.")
                     self.clean_up_terminated_job(job_key, exitcode)
 
                 # Remove the job from the list of running jobs.
@@ -296,8 +296,6 @@ class IvertJobManager:
         This is normally done by the "IvertJob object, but if that crashes for any reason, we should clean it up here.
 
         Fetch the job details from the database."""
-        # TODO: Implement this.
-
         # Get the job details
         # Recreate the IvertJob object, but don't execute it.
         job_obj = IvertJob(job_key, self.input_bucket_type, auto_start=False, verbose=self.verbose)
@@ -307,16 +305,21 @@ class IvertJobManager:
             print(f"Job {job_obj.username}_{job_obj.job_id} exited with code {exitcode}. Cleaning up.")
 
         # Re-parse the .ini to get the info from it.
+        print("1)")
         job_obj.parse_job_config_ini()
 
+        print("2)")
         job_obj.export_logfile_if_exists(upload_db_to_s3=False)
 
+        print("3)")
         if job_obj.jobs_db.job_status(job_obj.username, job_obj.job_id) not in ("complete", "error", "killed"):
             job_obj.jobs_db.update_job_status(job_obj.username, job_obj.job_id, 'error', upload_to_s3=False)
 
+        print("4)")
         # Loop through the job's files.
         job_files_df = self.jobs_db.read_table_as_pandas_df('files', job_obj.username, job_obj.job_id)
 
+        print("5)")
         # Any files that haven't been entered or given a proper status yet, do so.
         for fn in job_obj.job_config_object.files:
             if fn in job_files_df['filename'].values:
@@ -325,13 +328,17 @@ class IvertJobManager:
             else:
                 self.jobs_db.create_new_file_record(fn, job_obj.job_id, job_obj.username, status="unknown", upload_to_s3=False)
 
-        # If there aren't already 2 notifications in the database, push a notification that the job has finished (even if unsuccessfully).
+        print("6)")
+        # If there aren't already 2 notifications in the database for this job (start and finish), push a notification
+        # that the job has finished (even if unsuccessfully).
         sns_table = self.jobs_db.read_table_as_pandas_df("messages", job_obj.username, job_obj.job_id)
         if len(sns_table) < 2:
             job_obj.push_sns_notification(start_or_finish="finish", upload_to_s3=False)
 
+        print("7)")
         self.jobs_db.upload_to_s3()
 
+        print("8)")
         # Clean up the local files.
         job_obj.delete_local_job_folders()
 
