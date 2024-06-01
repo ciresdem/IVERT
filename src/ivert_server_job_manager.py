@@ -250,13 +250,14 @@ class IvertJobManager:
         #   Then send a notification to the user that the job finished unsuccessfully.
         for job, job_key in zip(self.running_jobs, self.running_jobs_keys):
             if not job.is_alive():
-                pid = job.pid
                 job.join()
                 exitcode = job.exitcode
                 job.close()
 
                 if exitcode != 0:
-                    self.clean_up_terminated_job(pid, exitcode)
+                    if self.verbose:
+                        print(f"Job {job_key[job_key.rfind('/') + 1: job_key.rfind('.ini')]} exited with code {exitcode}.")
+                    self.clean_up_terminated_job(job_key, exitcode)
 
                 # Remove the job from the list of running jobs.
                 self.running_jobs.remove(job)
@@ -289,7 +290,7 @@ class IvertJobManager:
 
         return
 
-    def clean_up_terminated_job(self, pid: int, exitcode: int) -> None:
+    def clean_up_terminated_job(self, job_key: str, exitcode: int) -> None:
         """If a job is no longer running, clean it up, including its files.
 
         This is normally done by the "IvertJob object, but if that crashes for any reason, we should clean it up here.
@@ -297,11 +298,43 @@ class IvertJobManager:
         Fetch the job details from the database."""
         # TODO: Implement this.
 
-        # TODO: Get the ivert_job database record using the PID.
-        # TODO: Check to see if an SNS message was sent to the user at the end of this job.
-        # TODO: Look for the job's log file and upload it to the export bucket (if not there already).
-        # TODO: If no SNS message was already sent, send one.
-        # TODO: Delete the job's local file directory.
+        # Get the job details
+        # Recreate the IvertJob object, but don't execute it.
+        job_obj = IvertJob(job_key, self.input_bucket_type, auto_start=False, verbose=self.verbose)
+
+        # Print the exit code if in verbose mode.
+        if self.verbose:
+            print(f"Job {job_obj.username}_{job_obj.job_id} exited with code {exitcode}. Cleaning up.")
+
+        # Re-parse the .ini to get the info from it.
+        job_obj.parse_job_config_ini()
+
+        job_obj.export_logfile_if_exists(upload_db_to_s3=False)
+
+        if job_obj.jobs_db.job_status(job_obj.username, job_obj.job_id) not in ("complete", "error", "killed"):
+            job_obj.jobs_db.update_job_status(job_obj.username, job_obj.job_id, 'error', upload_to_s3=False)
+
+        # Loop through the job's files.
+        job_files_df = self.jobs_db.read_table_as_pandas_df('files', job_obj.username, job_obj.job_id)
+
+        # Any files that haven't been entered or given a proper status yet, do so.
+        for fn in job_obj.job_config_object.files:
+            if fn in job_files_df['filename'].values:
+                if job_files_df[job_files_df['filename'] == fn]['status'].values[0] not in ("processed", "uploaded", "error", "quarantined", "unknown"):
+                    self.jobs_db.update_file_status(job_obj.username, job_obj.job_id, fn, status="error", upload_to_s3=False)
+            else:
+                self.jobs_db.create_new_file_record(fn, job_obj.job_id, job_obj.username, status="unknown", upload_to_s3=False)
+
+        # If there aren't already 2 notifications in the database, push a notification that the job has finished (even if unsuccessfully).
+        sns_table = self.jobs_db.read_table_as_pandas_df("messages", job_obj.username, job_obj.job_id)
+        if len(sns_table) < 2:
+            job_obj.push_sns_notification(start_or_finish="finish", upload_to_s3=False)
+
+        self.jobs_db.upload_to_s3()
+
+        # Clean up the local files.
+        job_obj.delete_local_job_folders()
+
 
     def quietly_populate_database(self, new_vnum: int = 0):
         """Populate the database without executing anything.
@@ -333,7 +366,7 @@ class IvertJobManager:
                 # -- also creates an ivert_files entry for the logfile, and uploads the new database version.
                 job_obj.create_new_job_entry()
 
-                # Create database entries for the job files
+                # Create database entries for the job files. Don't actually download them.
                 job_obj.download_job_files(only_create_database_entries=True, upload_to_s3=False)
 
                 job_obj.update_job_status("unknown", upload_to_s3=False)
@@ -348,7 +381,7 @@ class IvertJobManager:
 
     def __del__(self):
         """Clean up any running jobs."""
-        for job in self.running_jobs:
+        for job, job_key in zip(self.running_jobs, self.running_jobs_keys):
             try:
                 if job.is_alive():
                     # Kill the IVERT job and all its children. Kinda morbid terminoligy I know, but it's what's needed here.
@@ -357,7 +390,6 @@ class IvertJobManager:
                         child.kill()
                     job.kill()
 
-                job_pid = job.pid
                 job_exitcode = job.exitcode
                 job.close()
 
@@ -365,14 +397,12 @@ class IvertJobManager:
                 # If we try to close or kill an already-closed process, a ValueError is raised.
                 # In this case, just move on.
                 try:
-                    job_pid = job.pid
                     job_exitcode = job.exitcode
                     job.close()
                 except Exception:
-                    job_pid = 0
                     job_exitcode = 1
 
-            self.clean_up_terminated_job(job_pid, job_exitcode)
+            self.clean_up_terminated_job(job_key, job_exitcode)
 
         self.running_jobs = []
         return
