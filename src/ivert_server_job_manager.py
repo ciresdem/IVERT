@@ -250,14 +250,23 @@ class IvertJobManager:
         #   Also update the job status in the database.
         #   Then send a notification to the user that the job finished unsuccessfully.
         for job, job_key in zip(self.running_jobs, self.running_jobs_keys):
-            if not job.is_alive():
+            try:
+                is_alive = job.is_alive()
+            except ValueError:
+                # If the job has been closed, it'll raise ValueError when we try to call anything on it.
+                self.running_jobs.remove(job)
+                self.running_jobs_keys.remove(job_key)
+                if self.specific_job_id:
+                    sys.exit(0)
+                else:
+                    continue
+
+            if not is_alive:
                 job.join()
                 exitcode = job.exitcode
                 job.close()
 
                 if exitcode != 0:
-                    # if self.verbose:
-                    #     print(f"Job {job_key[job_key.rfind('/') + 1: job_key.rfind('.ini')]} exited with code {exitcode}.")
                     self.clean_up_terminated_job(job_key, exitcode)
 
                 # Remove the job from the list of running jobs.
