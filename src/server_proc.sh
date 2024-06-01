@@ -20,4 +20,4 @@ done
 # Start the server
 echo "nohup python3 ivert_server_job_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &"
 nohup python3 ivert_server_job_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &
-return 0
+
