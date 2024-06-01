@@ -79,7 +79,8 @@ setuptools.setup(
     ],
     scripts = [
         'src/s3.py',
-        'src/jobs_database.py'
+        'src/jobs_database.py',
+        'src/utils/split_dem.py'
     ],
     python_requires = '>=3.9',
     project_urls = {
