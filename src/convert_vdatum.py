@@ -26,6 +26,7 @@ import os
 import shutil
 import subprocess
 import re
+import shlex
 import sys
 
 import utils.traverse_directory
@@ -86,19 +87,19 @@ def list_all_datums():
         print("{0:<8s}".format(key), ":", vdd_descriptions_dict[key])
 
 
-def cmd_smart_split(cmd_str, strip_quotes=True):
-    """Split up a string using posix standards where quotes are respected.
-
-    strip_quotes:
-        If True (default), remove any "" or '' surrounding an argument.
-        If False, leave the quotes there.
-
-    Good for splitting up command-line arguments where a quoted string should be a single argument."""
-    items = re.findall(r'(?:[^\s,"]|"(?:\\.|[^"])*")+', cmd_str)
-    if strip_quotes:
-        items = [item.strip("'\"") for item in items]
-
-    return items
+# def cmd_smart_split(cmd_str, strip_quotes=True):
+#     """Split up a string using posix standards where quotes are respected.
+#
+#     strip_quotes:
+#         If True (default), remove any "" or '' surrounding an argument.
+#         If False, leave the quotes there.
+#
+#     Good for splitting up command-line arguments where a quoted string should be a single argument."""
+#     items = re.findall(r'(?:[^\s,"]|"(?:\\.|[^"])*")+', cmd_str)
+#     if strip_quotes:
+#         items = [item.strip("'\"") for item in items]
+#
+#     return items
 
 
 def vertical_datum_lookup(vd_name):
@@ -141,12 +142,14 @@ def convert_vdatum(input_dem,
     command = command_template.format(input_vertical_datum,
                                       output_vertical_datum,
                                       my_config.cudem_cache_directory,
+                                      # repr(input_dem),
+                                      # repr(output_dem))
                                       input_dem.replace(" ", r"\ "),
                                       output_dem.replace(" ", r"\ "))
 
     if verbose:
         print("Running:", command)
-    retproc = subprocess.run(cmd_smart_split(command), capture_output=not verbose, cwd=cwd)
+    retproc = subprocess.run(shlex.split(command), capture_output=not verbose, cwd=cwd)
 
     if verbose and retproc.returncode != 0:
         print("ERROR: Process\n'{0}'\n... returned status code {1}.".format(command, retproc.returncode))
