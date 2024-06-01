@@ -539,7 +539,6 @@ def validate_dem_parallel(dem_name,
     print("max_photons_per_cell", max_photons_per_cell)
     print("numprocs", numprocs)
     print("quiet", quiet)
-    return []
 
     # If an S3 directory is specified to grab the input file *and* the file doesn't exist locally, grab it from the S3
     # and put it in the local directory.
