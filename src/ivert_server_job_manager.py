@@ -368,7 +368,7 @@ class IvertJobManager:
                     job_pid = job.pid
                     job_exitcode = job.exitcode
                     job.close()
-                except RuntimeError:
+                except Exception:
                     job_pid = 0
                     job_exitcode = 1
 
@@ -497,7 +497,11 @@ class IvertJob:
             return
 
         except Exception:
-            self.write_to_logfile(traceback.format_exc())
+            trace = traceback.format_exc()
+            self.write_to_logfile(trace)
+            if self.verbose:
+                print(trace, file=sys.stderr)
+
             self.update_job_status("error")
             return
 
@@ -961,7 +965,11 @@ class IvertJob:
             return
 
         except Exception:
-            self.write_to_logfile(traceback.format_exc())
+            trace = traceback.format_exc()
+            self.write_to_logfile(trace)
+            if self.verbose:
+                print(trace, file=sys.stderr)
+
             self.update_job_status("error")
             return
 
