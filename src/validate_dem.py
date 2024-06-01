@@ -45,6 +45,7 @@ import time
 # NOTE: This eliminates a Deprecation error in GDAL v3.x. In GDAL 4.0, they will use Exceptions by default and this
 # command will be unnecessary.
 gdal.UseExceptions()
+osr.UseExceptions()
 
 ivert_config = utils.configfile.config()
 EMPTY_VAL = ivert_config.dem_default_ndv
