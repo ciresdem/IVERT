@@ -37,39 +37,45 @@ def split(dem_name: str,
     if output_dir is None:
         output_dir = os.path.dirname(dem_name)
 
-    Y, X = gdal.Open(dem_name, gdal.GA_ReadOnly).ReadAsArray().shape
-    # How to cover all the DEM when it can't be split evenly?
-    X_steps = evenly_split(X, factor)
-    Y_steps = evenly_split(Y, factor)
+    if s3.S3Manager.contains_glob_flags(dem_name):
+        files = glob.glob(dem_name)
+    else:
+        files = [dem_name]
 
-    for xi, xb in zip(range(factor), X_steps):
-        for yj, yb in zip(range(factor), Y_steps):
-            assert len(xb) == 2
-            assert len(yb) == 2
-            fn_out = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(dem_name))[0]}_{yj}.{xi}.tif")
+    for fname in files:
+        Y, X = gdal.Open(fname, gdal.GA_ReadOnly).ReadAsArray().shape
+        # How to cover all the DEM when it can't be split evenly?
+        X_steps = evenly_split(X, factor)
+        Y_steps = evenly_split(Y, factor)
 
-            if os.path.exists(fn_out):
-                print(fn_out, "already exists.")
-                continue
+        for xi, xb in zip(range(factor), X_steps):
+            for yj, yb in zip(range(factor), Y_steps):
+                assert len(xb) == 2
+                assert len(yb) == 2
+                fn_out = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(fname))[0]}_{yj}.{xi}.tif")
 
-            gdal_cmd = f"""gdal_translate -of GTiff
-                          -srcwin {xb[0]} {yb[0]} {xb[1] - xb[0] + 1} {yb[1] - yb[0] + 1}
-                          -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES
-                          {repr(dem_name)} {repr(fn_out)}"""
+                if os.path.exists(fn_out):
+                    print(fn_out, "already exists.")
+                    continue
 
-            gdal_args = shlex.split(gdal_cmd.replace("\n", " "))
-            print(" ".join(gdal_args))
+                gdal_cmd = f"""gdal_translate -of GTiff
+                              -srcwin {xb[0]} {yb[0]} {xb[1] - xb[0] + 1} {yb[1] - yb[0] + 1}
+                              -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES
+                              {repr(fname)} {repr(fn_out)}"""
 
-            subprocess.run(gdal_args)
+                gdal_args = shlex.split(gdal_cmd.replace("\n", " "))
+                print(" ".join(gdal_args))
 
-            if os.path.exists(fn_out):
-                if verbose:
-                    print(fn_out, "written.")
-            else:
-                if verbose:
-                    print(fn_out, "failed.")
+                subprocess.run(gdal_args)
 
-    return []
+                if os.path.exists(fn_out):
+                    if verbose:
+                        print(fn_out, "written.")
+                else:
+                    if verbose:
+                        print(fn_out, "failed.")
+
+        return []
 
 
 def evenly_split(N: int, factor: int) -> list:
