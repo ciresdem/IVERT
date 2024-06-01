@@ -513,39 +513,6 @@ def validate_dem_parallel(dem_name,
     """The main function. Do it all here. But do it on more than one processor.
     TODO: Document all these method parameters. There are a bunch and they need better explanation.
     """
-
-    # # DEBUG TODO: Delete these statements.
-    # print("dem_name", dem_name)
-    # print("output_dir", output_dir)
-    # print("icesat2_photon_database_obj is None", icesat2_photon_database_obj is None)
-    # print("dem_vertical_datum", dem_vertical_datum)
-    # print("output_vertical_datum", output_vertical_datum)
-    # print("s3_input_dir", s3_input_dir)
-    # print("s3_input_bucket_type", s3_input_bucket_type)
-    # print("s3_output_dir", s3_output_dir)
-    # print("s3_output_bucket_type", s3_output_bucket_type)
-    # print("""interim_data_dir is None""", interim_data_dir is None)
-    # print("overwrite", overwrite)
-    # print("delete_datafiles", delete_datafiles)
-    # print("mask_out_lakes", mask_out_lakes)
-    # print("mask_out_buildings", mask_out_buildings)
-    # print("use_osm_planet", use_osm_planet)
-    # print("mask_out_urban", mask_out_urban)
-    # print("include_gmrt_mask", include_gmrt_mask)
-    # print("write_reuslt_tifs", write_result_tifs)
-    # print("write_summary_stats", write_summary_stats)
-    # print("export_coastline_mask", export_coastline_mask)
-    # print("outliers_sd_threshold", outliers_sd_threshold)
-    # print("include_photon_level_validation", include_photon_level_validation)
-    # print("plot_results", plot_results)
-    # print("location_name", location_name)
-    # print("mark_empty_results", mark_empty_results)
-    # print("omit_bad_granules", omit_bad_granules)
-    # print("measure_coverage", measure_coverage)
-    # print("max_photons_per_cell", max_photons_per_cell)
-    # print("numprocs", numprocs)
-    # print("quiet", quiet)
-
     # If an S3 directory is specified to grab the input file *and* the file doesn't exist locally, grab it from the S3
     # and put it in the local directory.
     if not os.path.exists(dem_name) and s3_input_dir:
@@ -822,17 +789,11 @@ def validate_dem_parallel(dem_name,
     if not quiet:
         print("{0:,}".format(len(photon_df)), "ICESat-2 photons present in photon dataframe.")
 
-    # DEBUG TODO: REMOVE THIS LATER
-    print("GOT HERE 0")
-
     # Filter out to keep only the highest-quality photons.
     # quality_ph == 0 ("nominal") and "conf_land" == 4 ("high") and/or "conf_land_ice" == 4 ("high")
     # Using photon_df.eval() is far more efficient for complex expressions than a boolean python expression.
     good_photon_mask = photon_df.eval("(quality_ph == 0) & ((conf_land == 4) | (conf_land_ice == 4))")
     photon_df = photon_df[good_photon_mask].copy()
-
-    # DEBUG TODO: REMOVE THIS LATER
-    print("GOT HERE 1")
 
     if len(photon_df) == 0:
         if mark_empty_results:
@@ -845,35 +806,19 @@ def validate_dem_parallel(dem_name,
         else:
             return []
 
-    # DEBUG TODO: REMOVE THIS LATER
-    print("GOT HERE 2")
-
     # If the DEM horizontal coordinate system isn't WGS84 lat/lon, convert the icesat-2
     # lat/lon data coordinates into the same horizontal CRS as the DEM
     if dem_epsg != 4326:
-        # DEBUG TODO: REMOVE THESE PRINT STATEMENTS LATER
-        print("GOT HERE 2.1")
         lon_x = photon_df["longitude"]
         lat_y = photon_df["latitude"]
         latlon_array = numpy.array([lon_x, lat_y]).transpose()
 
-        print("GOT HERE 2.2")
-
-        # IT'S STOPPING RIGHT HERE. SILENTLY. I'VE NO IDEA WHY.
-
-        print(sizeof.sizeof_fmt(psutil.Process().memory_info().rss))
-
         points = numpy.array(is2_to_dem.TransformPoints(latlon_array))
 
-        print(sizeof.sizeof_fmt(psutil.Process().memory_info().rss))
-
-        print("GOT HERE 2.3")
         p_x = points[:, 0]
         p_y = points[:, 1]
         photon_df["dem_x"] = p_x
         photon_df["dem_y"] = p_y
-
-        print("GOT HERE 2.4")
 
         ph_xcoords = p_x
         ph_ycoords = p_y
@@ -881,21 +826,14 @@ def validate_dem_parallel(dem_name,
     # Subset the dataframe to photons within the DEM bounding box.
     # Also, filter out all noise photons.
     else:
-        # DEBUG TODO: REMOVE THIS LATER
-        print("GOT HERE 2.5")
         ph_xcoords = photon_df["longitude"]
         ph_ycoords = photon_df["latitude"]
         # If we're measuring the coverage, we'll just use the "dem_x" and "dem_y" values.
         # We don't need this extra field if we're not measuring the coverage, since the photons are just taken
         # from the ph_xcoords and ph_ycoords variables assigned above.
-        print("GOT HERE 2.6")
         if measure_coverage:
             photon_df["dem_x"] = ph_xcoords
             photon_df["dem_y"] = ph_ycoords
-        print("GOT HERE 2.7")
-
-    # DEBUG TODO: REMOVE THIS LATER
-    print("GOT HERE 3")
 
     # Compute the (i,j) indices into the array of all the photons collected.
     # Transform photon lat/lons into DEM indices.
@@ -924,9 +862,6 @@ def validate_dem_parallel(dem_name,
     ph_xcoords = ph_xcoords[ph_bbox_mask]
     ph_ycoords = ph_ycoords[ph_bbox_mask]
 
-    # DEBUG TODO: REMOVE THIS LATER
-    print("GOT HERE 4")
-
     # Omit any photons from "bad granules" found from find_bad_icesat2_granules.py
     # NOTE: After we've filtered out bad granules from the ICESat-2 database, we can
     # un-set the "omit_bad_granules" flag because the database will have already globally been
@@ -953,9 +888,6 @@ def validate_dem_parallel(dem_name,
                 ph_xcoords = ph_xcoords[n_ph_bad_granules_mask]
                 ph_ycoords = ph_ycoords[n_ph_bad_granules_mask]
 
-
-    # DEBUG TODO: REMOVE THIS LATER
-    print("GOT HERE 5")
 
     # Assign a dem (i,j) index location for each photon. We use this for computing.
     photon_df["i"] = numpy.floor((ph_ycoords - ystart) / ystep).astype(int)
@@ -989,9 +921,6 @@ def validate_dem_parallel(dem_name,
         dem_overlap_ymax = ystart + (ystep * dem_overlap_i)
         dem_overlap_ymin = dem_overlap_ymax + ystep
     N = len(dem_overlap_i)
-
-    # DEBUG TODO: REMOVE THIS LATER
-    print("GOT HERE 6")
 
     if not quiet:
         num_goodpixels = numpy.count_nonzero(dem_goodpixel_mask)

@@ -33,7 +33,7 @@ import coastline_mask
 ### TEMPORARY FIX ###
 # Until we get this as a permanent daemon process on the server, here is a way to start this file and leave it running
 # after we log out from the EC2 server. It uses the linux "nohup" utility.
-# > nohup python3 ivert_server_job_manager.py -v >> /opt/cudem/ivert_data/ivert_manager.log 2>&1 <&- &
+# > nohup python3 ivert_server_job_manager.py -v >> /mnt/uvol0//ivert_data/ivert_manager.log 2>&1 <&- &
 
 # To see which processes are running, do a pgrep command.
 # pgrep -a python3
