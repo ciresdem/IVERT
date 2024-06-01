@@ -760,6 +760,14 @@ def validate_dem_parallel(dem_name,
     # If the DEM is not in WGS84 coordinates, create a conversion funtion to pass to sub-functions.
     if dem_epsg != 4326:
         dem_proj_wkt = dem_ds.GetProjection()
+        # Right now we're having a bug where occasionally the WKT is None in datasets converted to WGS84 vertical coordinates.
+        # JUST ON THE IVERT EC2 we're having this bug (not sure why).
+        # If this is the case, we'll try to pull the WKT from the original DEM, hopefully that help.
+        if dem_proj_wkt is None or len(dem_proj_wkt) == 0:
+            dem_proj_wkt = gdal.Open(dem_name, gdal.GA_ReadOnly).GetProjection()
+
+        assert dem_proj_wkt is not None and len(dem_proj_wkt) > 0
+
         # print(dem_proj_wkt)
         icesat2_srs = osr.SpatialReference()
         icesat2_srs.SetWellKnownGeogCS("EPSG:4326")
