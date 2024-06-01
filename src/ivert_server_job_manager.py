@@ -1103,8 +1103,8 @@ class IvertJob:
             if exclude_logfile and (f_basename == job_logfile):
                 continue
 
-            f_path = os.path.join(job_output_path, f_basename)
-            f_path_other = os.path.join(job_local_path, f_basename)
+            f_path = os.path.join(self.ivert_config.ivert_jobs_directory_local, job_output_path, f_basename)
+            f_path_other = os.path.join(self.ivert_config.ivert_jobs_directory_local, job_local_path, f_basename)
 
             if os.path.exists(f_path):
                 # Upload the file.
