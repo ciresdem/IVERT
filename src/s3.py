@@ -15,7 +15,7 @@ import tabulate
 import warnings
 
 # Had to add an extra if condition because if other module entities import this.
-if vars(sys.modules[__name__])['__package__'] == 'ivert' or sys.modules[__name__]["__name__"] == "s3":
+if vars(sys.modules[__name__])['__package__'] == 'ivert' or sys.modules[__name__].__name__ == "s3":
     # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
     import ivert_utils.query_yes_no as query_yes_no
     import ivert_utils.bcolors as bcolors
