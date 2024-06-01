@@ -129,7 +129,7 @@ class IvertJobManager:
                 # If there are new jobs, start them in the background
                 for ini_name in new_ini_keys:
                     # Either look for any new jobs, or if specific_job_id is set, look for just that job.
-                    if (not self.specific_job_id) or str(self.specific_job_id) in ini_name.split("/")[-1]:
+                    if (not self.specific_job_id) or (str(self.specific_job_id) in ini_name.split("/")[-1]):
                         self.start_new_job(ini_name)
 
                 # Loop throug the list of running jobs and clean them up if they're finished.
@@ -1224,8 +1224,7 @@ class IvertJob:
                                                         measure_coverage=cargs["measure_coverage"],
                                                         include_photon_level_validation=cargs["include_photons"],
                                                         band_num=cargs["band_num"],
-                                                        quiet=not self.verbose
-                                                        )
+                                                        quiet=(not self.verbose))
 
             self.jobs_db.update_file_status(self.username, self.job_id, os.path.basename(dem_files[0]), "processed",
                                             upload_to_s3=False)
