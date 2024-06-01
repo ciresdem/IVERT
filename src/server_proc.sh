@@ -1,20 +1,18 @@
 #!/bin/bash
-# This should be run as a server process only, using in-shell notation ('. server_proc.sh').
-# To start the server, run ". server_proc.sh"
-# To end/kill the server, add the -k flag: ". server_proc.sh -k"
-
-kill=0
+# To start the server, run "server_proc.sh"
+# To end/kill the server, add the -k flag: "server_proc.sh -k"
+# To list the process running, add the -l flag: "server_proc.sh -l"
 
 while getopts "kl" OPTION;
 do
   case "$OPTION" in
     k)
       pkill -e -f "python3 ivert_server_job_manager.py"
-      return 0
+      exit 0
       ;;
     l)
       pgrep -a python3 | grep ivert_server_job_manager.py
-      return 0
+      exit 0
       ;;
   esac
 done
