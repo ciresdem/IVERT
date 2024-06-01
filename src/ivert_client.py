@@ -47,7 +47,7 @@ def define_and_parse_args(return_parser: bool = False):
     parser_validate.add_argument("files_or_directory", type=str, nargs="+",
                                  help="Enter a file, list of files, or a directory. "
                                       "May use bash-style wildcards such as 'dirname/ncei*.tif'. If a directory is "
-                                      "given, all *.tif files in that directory will be sent for validation.")
+                                      "given, all *.tif files in that directory (non-recursive) will be sent for validation.")
     parser_validate.add_argument("-ivd", "--input_vdatum", dest="input_vdatum", type=str, default="egm2008",
                                  help="Input DEM vertical datum. (Default: 'egm2008')"
                                       " Type 'vdatums --list-epsg' to see a list of available options.")
