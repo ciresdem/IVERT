@@ -221,14 +221,14 @@ def validate_list_of_dems(dem_list_or_dir,
     #     summary_csv_name = os.path.join(this_output_dir, stats_and_plots_base + ".csv")
     #     write_summary_csv_file(total_results_df, summary_csv_name)
     #
-    #     retfiles.append(summary_csv_name)
+    #     files_to_export.append(summary_csv_name)
 
     # Output the statistics summary file.
     validate_dem.write_summary_stats_file(total_results_df,
                                           statsfile_name,
                                           verbose=verbose)
 
-    retfiles.append(statsfile_name)
+    files_to_export.append(statsfile_name)
 
     # Output the validation results plot.
     plot_validation_results.plot_histogram_and_error_stats_4_panels(total_results_df,
@@ -236,16 +236,16 @@ def validate_list_of_dems(dem_list_or_dir,
                                                                     place_name=place_name,
                                                                     verbose=verbose)
 
-    retfiles.append(plot_file_name)
+    files_to_export.append(plot_file_name)
 
     if results_h5 is not None:
         total_results_df.to_hdf(results_h5, key="results", complib="zlib", complevel=3)
         if verbose:
             print(results_h5, "written.")
 
-    retfiles.append(results_h5)
+    files_to_export.append(results_h5)
 
-    return retfiles
+    return files_to_export
 
 def define_and_parse_args():
     parser = argparse.ArgumentParser(
