@@ -462,13 +462,29 @@ class IvertJob:
 
         # The directory where the job will be run and files stored. This will be populated and created in
         # start()-->create_local_job_folder()
-        self.job_dir = ""
-        self.job_config_local = ""
+        data_basedir = self.ivert_config.ivert_jobs_directory_local
+
+        self.job_dir = os.path.join(data_basedir, self.ivert_config.s3_ivert_job_subdirs_template
+                                                      .replace('[command]', self.command)
+                                                      .replace('[username]', self.username)
+                                                      .replace('[job_id]', self.job_id))
+
+        self.job_config_local = os.path.join(self.job_dir, self.job_config_s3_key.split("/")[-1])
+
         self.job_config_object: typing.Union[utils.configfile.config, None] = None
-        self.output_dir = ""
-        self.export_prefix = ""
+        self.output_dir = os.path.join(self.job_dir, "outputs")
+        # Define the export prefix.
+        self.export_prefix = self.ivert_config.s3_export_prefix_base + \
+                             ("" if self.ivert_config.s3_export_prefix_base[-1] == "/" else "") + \
+                             (self.ivert_config.s3_ivert_job_subdirs_template \
+                                  .replace('[command]', self.command) \
+                                  .replace('[username]', self.username) \
+                                  .replace('[job_id]', self.job_id))
+
+        # The logfile to write output text and status messages.
+        self.logfile = os.path.join(self.output_dir,
+                                    self.job_config_s3_key.split("/")[-1].replace(".ini", "_log.txt"))
         self.export_bucket_type = "export"
-        self.logfile = ""
 
         # A copy of the S3Manager used to upload and download files from the S3 bucket.
         self.s3m = s3.S3Manager()
@@ -566,12 +582,6 @@ class IvertJob:
 
     def create_local_job_folders(self):
         """Create a local folder to store the job input files and write output files."""
-        data_basedir = self.ivert_config.ivert_jobs_directory_local
-
-        self.job_dir = os.path.join(data_basedir, self.ivert_config.s3_ivert_job_subdirs_template
-                                                      .replace('[command]', self.command)
-                                                      .replace('[username]', self.username)
-                                                      .replace('[job_id]', self.job_id))
 
         # Create the job directory if it doesn't exist.
         if not os.path.exists(self.job_dir):
@@ -583,21 +593,8 @@ class IvertJob:
         if not os.path.exists(self.job_dir):
             os.makedirs(self.job_dir)
 
-        self.output_dir = os.path.join(self.job_dir, "outputs")
         if not os.path.exists(self.output_dir):
             os.mkdir(self.output_dir)
-
-        # Define the export prefix.
-        self.export_prefix = self.ivert_config.s3_export_prefix_base + \
-                             ("" if self.ivert_config.s3_export_prefix_base[-1] == "/" else "") + \
-                             (self.ivert_config.s3_ivert_job_subdirs_template \
-                                  .replace('[command]', self.command) \
-                                  .replace('[username]', self.username) \
-                                  .replace('[job_id]', self.job_id))
-
-        # The logfile to write output text and status messages.
-        self.logfile = os.path.join(self.output_dir,
-                                    self.job_config_s3_key.split("/")[-1].replace(".ini", "_log.txt"))
 
         return
 
@@ -624,8 +621,6 @@ class IvertJob:
 
     def download_job_config_file(self):
         """Download the job configuration file from the S3 bucket."""
-        self.job_config_local = os.path.join(self.job_dir, self.job_config_s3_key.split("/")[-1])
-
         if self.verbose:
             print(f"Downloading {os.path.basename(self.job_config_local)}")
 
