@@ -13,15 +13,13 @@ do
       return 0
       ;;
     l)
-      echo (pgrep -a python3 | grep ivert_server_job_manager.py)
+      pgrep -a python3 | grep ivert_server_job_manager.py
       return 0
       ;;
   esac
 done
 
-else
-  # Start the server
-  echo "nohup python3 ivert_server_job_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &"
-  nohup python3 ivert_server_job_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &
-  return 0
-fi
+# Start the server
+echo "nohup python3 ivert_server_job_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &"
+nohup python3 ivert_server_job_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &
+return 0
