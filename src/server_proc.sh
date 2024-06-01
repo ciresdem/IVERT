@@ -14,10 +14,10 @@ done
 
 if [ $kill -eq 1 ]; then
   pkill -e -f "python3 ivert_server_job_manager.py"
-  exit 0
+  return 0
 else
   # Start the server
   echo "nohup python3 ivert_server_job_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &"
   nohup python3 ivert_server_job_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &
-  exit 0
+  return 0
 fi
