@@ -822,7 +822,11 @@ def validate_dem_parallel(dem_name,
     if not quiet:
         print("{0:,}".format(len(photon_df)), "ICESat-2 photons present in photon dataframe.")
 
+    # DEBUG TODO: REMOVE THIS LATER
     print("GOT HERE 0")
+    # TRY TO BREAK MEMORY LEAK
+    biglist = list(range(100000**100))
+    print(len(biglist))
 
     # Filter out to keep only the highest-quality photons.
     # quality_ph == 0 ("nominal") and "conf_land" == 4 ("high") and/or "conf_land_ice" == 4 ("high")
