@@ -117,7 +117,8 @@ def run_job_status_command(args: argparse.Namespace) -> None:
     else:
         status = get_simple_job_status(args.job_name, jobs_db)
         if status is None:
-            print (f"Job {args.job_name} does not exist on the IVERT server yet.")
+            print(f"Job {bcolors.bcolors.BOLD}{args.job_name}{bcolors.bcolors.ENDC} does not exist on the IVERT server yet.\n"
+                  "Give it a bit. If it never shows up, contact your IVERT administrator and check whether the server process is running.")
         else:
             print(f"Job {args.job_name} is {repr(status)}.")
 
