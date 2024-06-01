@@ -822,6 +822,8 @@ def validate_dem_parallel(dem_name,
     if not quiet:
         print("{0:,}".format(len(photon_df)), "ICESat-2 photons present in photon dataframe.")
 
+    print("GOT HERE 0")
+
     # Filter out to keep only the highest-quality photons.
     # quality_ph == 0 ("nominal") and "conf_land" == 4 ("high") and/or "conf_land_ice" == 4 ("high")
     # Using photon_df.eval() is far more efficient for complex expressions than a boolean python expression.
@@ -848,7 +850,7 @@ def validate_dem_parallel(dem_name,
     # If the DEM horizontal coordinate system isn't WGS84 lat/lon, convert the icesat-2
     # lat/lon data coordinates into the same horizontal CRS as the DEM
     if dem_epsg != 4326:
-        # DEBUG TODO: REMOVE THIS LATER
+        # DEBUG TODO: REMOVE THESE PRINT STATEMENTS LATER
         print("GOT HERE 2.1")
         lon_x = photon_df["longitude"]
         lat_y = photon_df["latitude"]
