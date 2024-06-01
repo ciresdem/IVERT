@@ -507,6 +507,40 @@ def validate_dem_parallel(dem_name,
     """The main function. Do it all here. But do it on more than one processor.
     TODO: Document all these method parameters. There are a bunch and they need better explanation.
     """
+
+    # DEBUG TODO: Delete these statements.
+    print("dem_name", dem_name)
+    print("output_dir", output_dir)
+    print("icesat2_photon_database_obj is None", icesat2_photon_database_obj is None)
+    print("dem_vertical_datum", dem_vertical_datum)
+    print("output_vertical_datum", output_vertical_datum)
+    print("s3_input_dir", s3_input_dir)
+    print("s3_input_bucket_type", s3_input_bucket_type)
+    print("s3_output_dir", s3_output_dir)
+    print("s3_output_bucket_type", s3_output_bucket_type)
+    print("""interim_data_dir is None""", interim_data_dir is None)
+    print("overwrite", overwrite)
+    print("delete_datafiles", delete_datafiles)
+    print("mask_out_lakes", mask_out_lakes)
+    print("mask_out_buildings", mask_out_buildings)
+    print("use_osm_planet", use_osm_planet)
+    print("mask_out_urban", mask_out_urban)
+    print("include_gmrt_mask", include_gmrt_mask)
+    print("write_reuslt_tifs", write_result_tifs)
+    print("write_summary_stats", write_summary_stats)
+    print("export_coastline_mask", export_coastline_mask)
+    print("outliers_sd_threshold", outliers_sd_threshold)
+    print("include_photon_level_validation", include_photon_level_validation)
+    print("plot_results", plot_results)
+    print("location_name", location_name)
+    print("mark_empty_results", mark_empty_results)
+    print("omit_bad_granules", omit_bad_granules)
+    print("measure_coverage", measure_coverage)
+    print("max_photons_per_cell", max_photons_per_cell)
+    print("numprocs", numprocs)
+    print("quiet", quiet)
+    return []
+
     # If an S3 directory is specified to grab the input file *and* the file doesn't exist locally, grab it from the S3
     # and put it in the local directory.
     if not os.path.exists(dem_name) and s3_input_dir:
@@ -791,6 +825,7 @@ def validate_dem_parallel(dem_name,
     photon_df = photon_df[good_photon_mask].copy()
 
     if len(photon_df) == 0:
+        print("GOT HERE 1")
         if mark_empty_results:
             # Just create an empty file to mark this dataset as done.
             with open(empty_results_filename, 'w') as f:
