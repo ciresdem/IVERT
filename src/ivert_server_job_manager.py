@@ -1175,6 +1175,9 @@ class IvertJob:
         # Handle logic of coastline_only. Don't call validate, just generate the coastline mask.
         if cargs["coastlines_only"]:
             for fn in dem_files:
+
+                self.jobs_db.update_file_status(self.username, self.job_id, os.path.basname(fn), "processing", upload_to_s3=False)
+
                 rfile = coastline_mask.create_coastline_mask(fn,
                                                              mask_out_lakes=True,
                                                              mask_out_buildings=cargs["mask_buildings"],
@@ -1184,9 +1187,15 @@ class IvertJob:
                                                              horizontal_datum_only=True,
                                                              verbose=self.verbose)
 
+                self.jobs_db.update_file_status(self.username, self.job_id, os.path.basname(fn), "processed", upload_to_s3=False)
+
                 retfiles.append(rfile)
 
         elif len(dem_files) == 1:
+
+            self.jobs_db.update_file_status(self.username, self.job_id, os.path.basename(dem_files[0]), "processing",
+                                            upload_to_s3=False)
+
             # If there's only one file, run the validate_dem module.
             rfiles = validate_dem.validate_dem_parallel(dem_files[0],
                                                         output_dir=outputs_dir,
@@ -1210,10 +1219,17 @@ class IvertJob:
                                                         quiet=not self.verbose
                                                         )
 
+            self.jobs_db.update_file_status(self.username, self.job_id, os.path.basename(dem_files[0]), "processed",
+                                            upload_to_s3=False)
+
             retfiles.extend(rfiles)
 
         else:
             # Run the validate_dem_collection module.
+            for fn in dem_files:
+                self.jobs_db.update_file_status(self.username, self.job_id, os.path.basename(fn), "processing",
+                                                upload_to_s3=False)
+
             rfiles = validate_dem_collection.validate_list_of_dems(dem_files,
                                                                    output_dir=outputs_dir,
                                                                    fname_filter=None,
@@ -1234,6 +1250,10 @@ class IvertJob:
                                                                    measure_coverage=cargs["measure_coverage"],
                                                                    outliers_sd_threshold=cargs["outlier_sd_threshold"],
                                                                    verbose=self.verbose)
+
+            for fn in dem_files:
+                self.jobs_db.update_file_status(self.username, self.job_id, os.path.basename(fn), "processed",
+                                                upload_to_s3=False)
 
             retfiles.extend(rfiles)
 
