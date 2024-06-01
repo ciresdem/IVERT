@@ -42,6 +42,11 @@ import pyproj
 import re
 import time
 
+# Just for debugging memory issues. TODO: REmove later.
+import psutil
+import utils.sizeof_format as sizeof
+
+
 # NOTE: This eliminates a Deprecation error in GDAL v3.x. In GDAL 4.0, they will use Exceptions by default and this
 # command will be unnecessary.
 gdal.UseExceptions()
@@ -852,14 +857,12 @@ def validate_dem_parallel(dem_name,
         print("GOT HERE 2.2")
 
         # IT'S STOPPING RIGHT HERE. SILENTLY. I'VE NO IDEA WHY.
-        # is it a memory error? Is that what we're hitting here?
-        big_array = numpy.zeros([1000000, 1000000, 100000], dtype=float)
-        # This should result in a memory error. Let's see if it just quits silently while doing this.
 
-        print(big_array.shape)
-        print("GOT HERE 2.2.5")
+        print(sizeof.sizeof_fmt(psutil.Process().memory_info().rss))
 
         points = numpy.array(is2_to_dem.TransformPoints(latlon_array))
+
+        print(sizeof.sizeof_fmt(psutil.Process().memory_info().rss))
 
         print("GOT HERE 2.3")
         p_x = points[:, 0]
