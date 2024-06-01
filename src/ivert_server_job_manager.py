@@ -145,8 +145,9 @@ class IvertJobManager:
                 if isinstance(e, KeyboardInterrupt):
                     raise e
 
-                print(f"Error: {e}", file=sys.stderr)
-                print(f"Continuing to iterate. Will try again in {self.time_interval_s} seconds.", file=sys.stderr)
+                if self.verbose:
+                    print(traceback.format_exc(), file=sys.stderr)
+                    print(f"Continuing to iterate. Will try again in {self.time_interval_s} seconds.", file=sys.stderr)
 
                 time.sleep(self.time_interval_s)
                 continue
