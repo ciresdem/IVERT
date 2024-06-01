@@ -765,6 +765,10 @@ def validate_dem_parallel(dem_name,
         icesat2_srs.SetWellKnownGeogCS("EPSG:4326")
         dem_srs = osr.SpatialReference(wkt=dem_proj_wkt)
 
+        # DEBUG TODO: REMOVE LATER
+        print(icesat2_srs)
+        print(dem_srs)
+
         is2_to_dem = osr.CoordinateTransformation(icesat2_srs, dem_srs)
     else:
         is2_to_dem = None
