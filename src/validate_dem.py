@@ -761,8 +761,10 @@ def validate_dem_parallel(dem_name,
     if dem_epsg != 4326:
         dem_proj_wkt = dem_ds.GetProjection()
         # Right now we're having a bug where occasionally the WKT is None in datasets converted to WGS84 vertical coordinates.
-        # JUST ON THE IVERT EC2 we're having this bug (not sure why).
-        # If this is the case, we'll try to pull the WKT from the original DEM, hopefully that help.
+        # JUST ON THE IVERT EC2 we're having this bug (not sure why). It's fine on other machines.
+        # If this is the case, if no projection is written to the converted DEM, we'll try to pull the WKT from the
+        # original DEM. All we need is the horizontal projection here so it should be fine. Not sure what's going on there.
+        # TODO: FIX THE BUG DESCRIBED ABOVE and remove this if-clause.
         if dem_proj_wkt is None or len(dem_proj_wkt) == 0:
             dem_proj_wkt = gdal.Open(dem_name, gdal.GA_ReadOnly).GetProjection()
 
@@ -773,12 +775,6 @@ def validate_dem_parallel(dem_name,
         icesat2_srs.SetWellKnownGeogCS("EPSG:4326")
         dem_srs = osr.SpatialReference(wkt=dem_proj_wkt)
 
-        # DEBUG TODO: REMOVE LATER
-        print(dem_ds, dem_ds.GetFileList())
-        print("icesat2_srs:", icesat2_srs)
-        print("dem_proj_wkt:", dem_proj_wkt)
-        print("dem_srs", dem_srs)
-
         is2_to_dem = osr.CoordinateTransformation(icesat2_srs, dem_srs)
     else:
         is2_to_dem = None
@@ -786,17 +782,11 @@ def validate_dem_parallel(dem_name,
     if not quiet:
         print("{0:,}".format(len(photon_df)), "ICESat-2 photons present in photon dataframe.")
 
-    # DEBUG TODO: REMOVE LATER
-    print("GOT HERE 1")
-
     # Filter out to keep only the highest-quality photons.
     # quality_ph == 0 ("nominal") and "conf_land" == 4 ("high") and/or "conf_land_ice" == 4 ("high")
     # Using photon_df.eval() is far more efficient for complex expressions than a boolean python expression.
     good_photon_mask = photon_df.eval("(quality_ph == 0) & ((conf_land == 4) | (conf_land_ice == 4))")
     photon_df = photon_df[good_photon_mask].copy()
-
-    # DEBUG TODO: REMOVE LATER
-    print("GOT HERE 2")
 
     if len(photon_df) == 0:
         if mark_empty_results:
@@ -806,9 +796,6 @@ def validate_dem_parallel(dem_name,
             if not quiet:
                 print("Created", empty_results_filename, "to indicate no data was returned here.")
         return None
-
-    # DEBUG TODO: REMOVE LATER
-    print("GOT HERE 3")
 
     # If the DEM horizontal coordinate system isn't WGS84 lat/lon, convert the icesat-2
     # lat/lon data coordinates into the same horizontal CRS as the DEM
@@ -865,9 +852,6 @@ def validate_dem_parallel(dem_name,
     ph_xcoords = ph_xcoords[ph_bbox_mask]
     ph_ycoords = ph_ycoords[ph_bbox_mask]
 
-    # DEBUG TODO: REMOVE LATER
-    print("GOT HERE 4")
-
     # Omit any photons from "bad granules" found from find_bad_icesat2_granules.py
     # NOTE: After we've filtered out bad granules from the ICESat-2 database, we can
     # un-set the "omit_bad_granules" flag because the database will have already globally been
@@ -921,10 +905,6 @@ def validate_dem_parallel(dem_name,
 
     dem_overlap_i, dem_overlap_j = numpy.where(dem_overlap_mask)
     dem_overlap_elevs = dem_array[dem_overlap_mask]
-
-    # DEBUG TODO: REMOVE LATER
-    print("GOT HERE 5")
-
 
     if measure_coverage:
         dem_overlap_xmin = xstart + (xstep * dem_overlap_j)
@@ -1036,10 +1016,6 @@ def validate_dem_parallel(dem_name,
             print("Limiting processing to {0} photons per grid cell.".format(max_photons_per_cell))
 
         print("Performing ICESat-2/DEM cell validation...")
-
-    # DEBUG TODO: REMOVE LATER
-    print("GOT HERE 6")
-
 
     # Gather a list of all the little results mini-dataframes from all the sub-processes running.
     # Concatenate them into a master results dataframe at the end.
