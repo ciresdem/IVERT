@@ -843,15 +843,22 @@ def validate_dem_parallel(dem_name,
     # If the DEM horizontal coordinate system isn't WGS84 lat/lon, convert the icesat-2
     # lat/lon data coordinates into the same horizontal CRS as the DEM
     if dem_epsg != 4326:
+        # DEBUG TODO: REMOVE THIS LATER
+        print("GOT HERE 2.1")
         lon_x = photon_df["longitude"]
         lat_y = photon_df["latitude"]
         latlon_array = numpy.array([lon_x, lat_y]).transpose()
 
+        print("GOT HERE 2.2")
+
         points = numpy.array(is2_to_dem.TransformPoints(latlon_array))
+        print("GOT HERE 2.3")
         p_x = points[:, 0]
         p_y = points[:, 1]
         photon_df["dem_x"] = p_x
         photon_df["dem_y"] = p_y
+
+        print("GOT HERE 2.4")
 
         ph_xcoords = p_x
         ph_ycoords = p_y
@@ -859,14 +866,18 @@ def validate_dem_parallel(dem_name,
     # Subset the dataframe to photons within the DEM bounding box.
     # Also, filter out all noise photons.
     else:
+        # DEBUG TODO: REMOVE THIS LATER
+        print("GOT HERE 2.5")
         ph_xcoords = photon_df["longitude"]
         ph_ycoords = photon_df["latitude"]
         # If we're measuring the coverage, we'll just use the "dem_x" and "dem_y" values.
         # We don't need this extra field if we're not measuring the coverage, since the photons are just taken
         # from the ph_xcoords and ph_ycoords variables assigned above.
+        print("GOT HERE 2.6")
         if measure_coverage:
             photon_df["dem_x"] = ph_xcoords
             photon_df["dem_y"] = ph_ycoords
+        print("GOT HERE 2.7")
 
     # DEBUG TODO: REMOVE THIS LATER
     print("GOT HERE 3")
