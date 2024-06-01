@@ -462,8 +462,6 @@ class IvertJob:
 
         # The directory where the job will be run and files stored. This will be populated and created in
         # start()-->create_local_job_folder()
-        data_basedir = self.ivert_config.ivert_jobs_directory_local
-
         self.job_dir = os.path.join(data_basedir, self.ivert_config.s3_ivert_job_subdirs_template
                                                       .replace('[command]', self.command)
                                                       .replace('[username]', self.username)
@@ -582,6 +580,7 @@ class IvertJob:
 
     def create_local_job_folders(self):
         """Create a local folder to store the job input files and write output files."""
+        data_basedir = self.ivert_config.ivert_jobs_directory_local
 
         # Create the job directory if it doesn't exist.
         if not os.path.exists(self.job_dir):
