@@ -14,7 +14,7 @@ import types
 import tabulate
 import warnings
 
-print(vars(sys.modules[__name__])['__package__'])
+print(vars(sys.modules[__name__]))
 
 if vars(sys.modules[__name__])['__package__'] in ('ivert', 'ivert_utils'):
     # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
