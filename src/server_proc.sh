@@ -5,17 +5,20 @@
 
 kill=0
 
-while getopts "k" OPTION;
+while getopts "kl" OPTION;
 do
   case "$OPTION" in
     k)
-      kill=1;;
+      pkill -e -f "python3 ivert_server_job_manager.py"
+      return 0
+      ;;
+    l)
+      echo (pgrep -a python3 | grep ivert_server_job_manager.py)
+      return 0
+      ;;
   esac
 done
 
-if [ $kill -eq 1 ]; then
-  pkill -e -f "python3 ivert_server_job_manager.py"
-  return 0
 else
   # Start the server
   echo "nohup python3 ivert_server_job_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &"
