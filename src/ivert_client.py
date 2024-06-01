@@ -71,7 +71,7 @@ def define_and_parse_args(return_parser: bool = False):
                                       "(Measures how may of the 15x15 (225 total) sub-regions within each grid cell contain ICESat-2 photons, "
                                       "allowing to post-process filter only higher-coverage grid cells in "
                                       "course-resolution DEMs where sampling bias might be an issue. This is typically only used for lower-resoultion DEMs. Default: False")
-    parser_validate.add_argument("-ph" "--include_photons", dest="include_photons", default=False, action="store_true",
+    parser_validate.add_argument("-ph", "--include_photons", dest="include_photons", default=False, action="store_true",
                                  help="In additional to returning .h5 and .tif files of ICESat-2 cell results, also "
                                       "return a .h5 point database of individual ICESat-2 photons used to validate each DEM. Use if you want to 'see the photons'. Default: False")
     parser_validate.add_argument("-bn", "--band_num", dest="band_num", type=int, default=1,
