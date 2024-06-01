@@ -11,13 +11,14 @@ import sys
 import typing
 from osgeo import gdal
 
-if vars(sys.modules[__name__])['__package__'] == 'ivert_utils':
-    import ivert.s3 as s3
-else:
-    sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-    import s3
-
 gdal.UseExceptions()
+
+
+def contains_glob_flags(s3_key):
+    """Return True if a string contains any glob-style wildcard flags."""
+
+    return ("*" in s3_key) or ("?" in s3_key) or ("[" in s3_key and "]" in s3_key)
+
 
 def split(dem_name: str,
           factor: int = 2,
@@ -38,7 +39,7 @@ def split(dem_name: str,
     if output_dir is None:
         output_dir = os.path.dirname(dem_name)
 
-    if s3.S3Manager.contains_glob_flags(dem_name):
+    if contains_glob_flags(dem_name):
         files = glob.glob(dem_name)
     else:
         files = [dem_name]
