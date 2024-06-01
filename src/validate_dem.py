@@ -825,8 +825,12 @@ def validate_dem_parallel(dem_name,
     # DEBUG TODO: REMOVE THIS LATER
     print("GOT HERE 0")
     # TRY TO BREAK MEMORY LEAK
-    biglist = list(range(100000**100))
-    print(len(biglist))
+    arr1 = numpy.arange(1000000)
+    arr2 = numpy.arange(1000000)
+    arr3 = numpy.arange(1000000)
+    # Cross these two, it'll be huge. See if numpy just error's out.
+    bigarr = numpy.meshgrid(arr1, arr2, arr3)
+    print(bigarr.shape)
 
     # Filter out to keep only the highest-quality photons.
     # quality_ph == 0 ("nominal") and "conf_land" == 4 ("high") and/or "conf_land_ice" == 4 ("high")

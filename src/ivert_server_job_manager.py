@@ -479,8 +479,10 @@ class IvertJob:
             # 9. Upload the logfile (if exists) and enter in database. (Upload to s3)
             self.export_logfile_if_exists(upload_db_to_s3=False)
 
-            # 10. Mark the job as finished in the jobs database. (Upload to s3)
-            self.update_job_status("complete", upload_to_s3=False)
+            if self.jobs_db.job_status(self.username, self.job_id) not in ("killed", "error", "complete", "unknown"):
+                # 10. Mark the job as finished in the jobs database. (Upload to s3). If the job was already marked as
+                # an error or killed, keep it that way.
+                self.update_job_status("complete", upload_to_s3=False)
 
             # 11. Send SNS notification that the job has finished.
             self.push_sns_notification(start_or_finish="finish", upload_to_s3=True)
@@ -494,6 +496,7 @@ class IvertJob:
             self.write_to_logfile(traceback.format_exc())
 
             self.update_job_status("killed")
+            self.export_logfile_if_exists(upload_db_to_s3=False)
             return
 
         except Exception:
@@ -503,6 +506,7 @@ class IvertJob:
                 print(trace, file=sys.stderr)
 
             self.update_job_status("error")
+            self.export_logfile_if_exists(upload_db_to_s3=False)
             return
 
 
