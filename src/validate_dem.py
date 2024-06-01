@@ -676,12 +676,12 @@ def validate_dem_parallel(dem_name,
         elif results_dataframe is None and not quiet:
             print("Work already done here. Moving on.")
 
-        return
+        return files_to_export
 
     elif mark_empty_results and os.path.exists(empty_results_filename):
         if not quiet:
             print("No valid data produced during previous ICESat-2 analysis of", dem_name + ". Returning.")
-        return
+        return []
 
     # Collect the metadata from the DEM.
     dem_ds, dem_array, dem_bbox, dem_epsg, dem_step_xy, \
@@ -755,7 +755,9 @@ def validate_dem_parallel(dem_name,
             if not quiet:
                 print("Created", empty_results_filename, "to indicate no valid ICESat-2 data was returned here.")
 
-        return None
+            return [empty_results_filename]
+        else:
+            return []
 
     # If the DEM is not in WGS84 coordinates, create a conversion funtion to pass to sub-functions.
     if dem_epsg != 4326:
@@ -795,7 +797,9 @@ def validate_dem_parallel(dem_name,
                 f.close()
             if not quiet:
                 print("Created", empty_results_filename, "to indicate no data was returned here.")
-        return None
+            return [empty_results_filename]
+        else:
+            return []
 
     # If the DEM horizontal coordinate system isn't WGS84 lat/lon, convert the icesat-2
     # lat/lon data coordinates into the same horizontal CRS as the DEM
@@ -925,7 +929,10 @@ def validate_dem_parallel(dem_name,
                     f.close()
                 if not quiet:
                     print("Created", empty_results_filename, "to indicate no data was returned here.")
-            return None
+                return [empty_results_filename]
+
+            return []
+
         else:
             print("{:,} ICESat-2 photons overlap".format(len(photon_df)),
               "{:,}".format(N),
@@ -943,7 +950,9 @@ def validate_dem_parallel(dem_name,
             if not quiet:
                 print("Created", empty_results_filename, "to indicate no data was returned here.")
 
-        return None
+            return [empty_results_filename]
+
+        return []
 
     # If requested, perform a validation on a photon-by-photon basis, in addition to the grid-cell
     # analysis peformed later on down. First, create a dataframe with just the DEM elevations.
@@ -1182,7 +1191,7 @@ def validate_dem_parallel(dem_name,
                 print("\nException encountered in ICESat-2 processing loop. Exiting.")
             clean_procs_and_pipes(running_procs, open_pipes_parent, open_pipes_child)
             print(e)
-            return None
+            return []
 
     t_end = time.perf_counter()
     if not quiet:
@@ -1200,7 +1209,7 @@ def validate_dem_parallel(dem_name,
     # Concatenate all the results dataframes
     # If there were no overlappying photons, then just return none.
     if len(results_dataframes_list) == 0:
-        return None
+        return []
 
     results_dataframe = pandas.concat(results_dataframes_list)
     # Subset for only valid results out. Eliminate useless nodata values.

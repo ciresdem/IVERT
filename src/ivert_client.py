@@ -87,8 +87,8 @@ def define_and_parse_args(return_parser: bool = False):
     parser_validate.add_argument("-mu", "--mask_urban", dest="mask_urban", type=yes_no.interpret_yes_no,
                                  default=False,
                                  help="Whether to mask out World-Settlement-Footprint heavy urban areas in the "
-                                      "coastline mask. Typically used instead of building footprints for DEMs coarser"
-                                      "than typical building sizes (~20-ish m). Must be followed by 'True', 'False', "
+                                      "coastline mask. Typically used instead of building footprints for coarse DEMs "
+                                      "with grid cells larger than typical buildings (~20-ish m). Must be followed by 'True', 'False', "
                                       "'Yes', 'No', or any abbreviation thereof (case-insensitive). (Default: False)")
     parser_validate.add_argument("-sd", "--outlier_sd_threshold", dest="outlier_sd_threshold", type=float,
                                  default=2.5,
