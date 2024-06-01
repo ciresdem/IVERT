@@ -315,21 +315,18 @@ class IvertJobManager:
             print(f"Job {job_obj.username}_{job_obj.job_id} exited with code {exitcode}. Cleaning up.")
 
         # Re-parse the .ini to get the info from it.
-        print("1)")
         job_obj.parse_job_config_ini()
 
-        print("2)")
+        job_obj.write_to_logfile(f"Job exited unexepctedly with exit code {exitcode}.", upload_to_s3=False)
+        job_obj.write_to_logfile("If no other traceback is shown in this logfile, it may have been a memory-termination.", upload_to_s3=False)
         job_obj.export_logfile_if_exists(upload_db_to_s3=False)
 
-        print("3)")
         if job_obj.jobs_db.job_status(job_obj.username, job_obj.job_id) not in ("complete", "error", "killed"):
             job_obj.jobs_db.update_job_status(job_obj.username, job_obj.job_id, 'error', upload_to_s3=False)
 
-        print("4)")
         # Loop through the job's files.
         job_files_df = self.jobs_db.read_table_as_pandas_df('files', job_obj.username, job_obj.job_id)
 
-        print("5)")
         # Any files that haven't been entered or given a proper status yet, do so.
         for fn in job_obj.job_config_object.files:
             if fn in job_files_df['filename'].values:
@@ -338,17 +335,14 @@ class IvertJobManager:
             else:
                 self.jobs_db.create_new_file_record(fn, job_obj.job_id, job_obj.username, status="unknown", upload_to_s3=False)
 
-        print("6)")
         # If there aren't already 2 notifications in the database for this job (start and finish), push a notification
         # that the job has finished (even if unsuccessfully).
         sns_table = self.jobs_db.read_table_as_pandas_df("messages", job_obj.username, job_obj.job_id)
         if len(sns_table) < 2:
             job_obj.push_sns_notification(start_or_finish="finish", upload_to_s3=False)
 
-        print("7)")
         self.jobs_db.upload_to_s3()
 
-        print("8)")
         # Clean up the local files.
         job_obj.delete_local_job_folders()
 
