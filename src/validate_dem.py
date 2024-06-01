@@ -823,8 +823,10 @@ def validate_dem_parallel(dem_name,
     good_photon_mask = photon_df.eval("(quality_ph == 0) & ((conf_land == 4) | (conf_land_ice == 4))")
     photon_df = photon_df[good_photon_mask].copy()
 
+    # DEBUG TODO: REMOVE THIS LATER
+    print("GOT HERE 1")
+
     if len(photon_df) == 0:
-        print("GOT HERE 1")
         if mark_empty_results:
             # Just create an empty file to mark this dataset as done.
             with open(empty_results_filename, 'w') as f:
@@ -834,6 +836,9 @@ def validate_dem_parallel(dem_name,
             return [empty_results_filename]
         else:
             return []
+
+    # DEBUG TODO: REMOVE THIS LATER
+    print("GOT HERE 2")
 
     # If the DEM horizontal coordinate system isn't WGS84 lat/lon, convert the icesat-2
     # lat/lon data coordinates into the same horizontal CRS as the DEM
@@ -863,6 +868,9 @@ def validate_dem_parallel(dem_name,
             photon_df["dem_x"] = ph_xcoords
             photon_df["dem_y"] = ph_ycoords
 
+    # DEBUG TODO: REMOVE THIS LATER
+    print("GOT HERE 3")
+
     # Compute the (i,j) indices into the array of all the photons collected.
     # Transform photon lat/lons into DEM indices.
     xstart, xstep, _, ystart, _, ystep = dem_ds.GetGeoTransform()
@@ -889,6 +897,9 @@ def validate_dem_parallel(dem_name,
     photon_df = photon_df[ph_bbox_mask].copy()
     ph_xcoords = ph_xcoords[ph_bbox_mask]
     ph_ycoords = ph_ycoords[ph_bbox_mask]
+
+    # DEBUG TODO: REMOVE THIS LATER
+    print("GOT HERE 4")
 
     # Omit any photons from "bad granules" found from find_bad_icesat2_granules.py
     # NOTE: After we've filtered out bad granules from the ICESat-2 database, we can
@@ -917,6 +928,9 @@ def validate_dem_parallel(dem_name,
                 ph_ycoords = ph_ycoords[n_ph_bad_granules_mask]
 
 
+    # DEBUG TODO: REMOVE THIS LATER
+    print("GOT HERE 5")
+
     # Assign a dem (i,j) index location for each photon. We use this for computing.
     photon_df["i"] = numpy.floor((ph_ycoords - ystart) / ystep).astype(int)
     photon_df["j"] = numpy.floor((ph_xcoords - xstart) / xstep).astype(int)
@@ -940,7 +954,6 @@ def validate_dem_parallel(dem_name,
 
     dem_overlap_mask = dem_goodpixel_mask & dem_mask_w_ground_photons
 
-
     dem_overlap_i, dem_overlap_j = numpy.where(dem_overlap_mask)
     dem_overlap_elevs = dem_array[dem_overlap_mask]
 
@@ -950,6 +963,9 @@ def validate_dem_parallel(dem_name,
         dem_overlap_ymax = ystart + (ystep * dem_overlap_i)
         dem_overlap_ymin = dem_overlap_ymax + ystep
     N = len(dem_overlap_i)
+
+    # DEBUG TODO: REMOVE THIS LATER
+    print("GOT HERE 6")
 
     if not quiet:
         num_goodpixels = numpy.count_nonzero(dem_goodpixel_mask)
