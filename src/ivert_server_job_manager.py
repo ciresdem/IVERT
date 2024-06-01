@@ -1109,9 +1109,11 @@ class IvertJob:
             if os.path.exists(f_path):
                 # Upload the file.
                 self.upload_file_to_export_bucket(str(f_path), upload_to_s3=False)
+                self.update_file_status(f_path, "uploaded", upload_to_s3=False)
             elif os.path.exists(f_path_other):
                 # Or, upload the other file if it exists.
                 self.upload_file_to_export_bucket(str(f_path_other), upload_to_s3=False)
+                self.update_file_status(f_path_other, "uploaded", upload_to_s3=False)
             elif row["status"] in ["error", "timeout", "quarantined", "unknown"]:
                 # If we'd already had a problem with this file, leave the status as it was.
                 continue
@@ -1372,12 +1374,6 @@ class IvertJob:
 
                     files_to_transfer.remove(fname)
                     numfiles_processed += 1
-
-                # else:
-                #     # If we can't find the file and its status is not some type of error, mark it as 'error'.
-                #     if self.jobs_db.file_exists(fname, self.username, self.job_id, return_row=True)["status"] not in \
-                #             ("error", "timeout", "quarantined", "unknown"):
-                #         self.jobs_db.update_file_status(self.username, self.job_id, fname, "error", upload_to_s3=False)
 
             # Sleep for a few seconds and then try again.
             time.sleep(3)
