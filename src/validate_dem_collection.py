@@ -24,10 +24,10 @@ import plot_validation_results as plot_validation_results
 # import coastline_mask as coastline_mask
 
 
-def write_summary_csv_file(total_photon_df: pandas.DataFrame,
-                           csv_name: str) -> None:
-    """Write a summary csv of all the results in a collection, after they've been run."""
-    # TODO: Finish
+# def write_summary_csv_file(total_photon_df: pandas.DataFrame,
+#                            csv_name: str) -> None:
+#     """Write a summary csv of all the results in a collection, after they've been run."""
+#     # TODO: Finish
 
 def validate_list_of_dems(dem_list_or_dir,
                           output_dir=None,
@@ -45,7 +45,7 @@ def validate_list_of_dems(dem_list_or_dir,
                           include_photon_validation=True,
                           write_result_tifs=False,
                           omit_bad_granules = True,
-                          write_summary_csv = True,
+                          # write_summary_csv = True,
                           measure_coverage = False,
                           outliers_sd_threshold=2.5,
                           verbose=True):
@@ -147,6 +147,8 @@ def validate_list_of_dems(dem_list_or_dir,
 
     files_to_export = []
     list_of_results_dfs = []
+    this_output_dir = None
+
     for i, dem_path in enumerate(dem_list):
         if verbose:
             print("\n=======", os.path.split(dem_path)[1], "(" + str(i + 1), "of", str(len(dem_list)) + ")", "=======")
@@ -214,11 +216,12 @@ def validate_list_of_dems(dem_list_or_dir,
     #     for bbox in omission_bboxes:
     #         xmin, ymin, xmax, ymax = bbox
 
-    if write_summary_csv:
-        summary_csv_name = os.path.join(this_output_dir, stats_and_plots_base+".csv")
-        write_summary_csv_file(total_results_df, summary_csv_name)
-
-        retfiles.append(summary_csv_name)
+    # TODO: Implement this later.
+    # if write_summary_csv:
+    #     summary_csv_name = os.path.join(this_output_dir, stats_and_plots_base + ".csv")
+    #     write_summary_csv_file(total_results_df, summary_csv_name)
+    #
+    #     retfiles.append(summary_csv_name)
 
     # Output the statistics summary file.
     validate_dem.write_summary_stats_file(total_results_df,
@@ -236,7 +239,7 @@ def validate_list_of_dems(dem_list_or_dir,
     retfiles.append(plot_file_name)
 
     if results_h5 is not None:
-        total_results_df.to_hdf(results_h5, "results", complib="zlib", complevel=3)
+        total_results_df.to_hdf(results_h5, key="results", complib="zlib", complevel=3)
         if verbose:
             print(results_h5, "written.")
 

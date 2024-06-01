@@ -1293,7 +1293,7 @@ class IvertJob:
                                                                    include_photon_validation=cargs["include_photons"],
                                                                    write_result_tifs=True,
                                                                    omit_bad_granules=True,
-                                                                   write_summary_csv=True,
+                                                                   # write_summary_csv=True,
                                                                    measure_coverage=cargs["measure_coverage"],
                                                                    outliers_sd_threshold=cargs["outlier_sd_threshold"],
                                                                    verbose=self.verbose)

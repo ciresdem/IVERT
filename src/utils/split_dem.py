@@ -14,10 +14,10 @@ from osgeo import gdal
 gdal.UseExceptions()
 
 
-def contains_glob_flags(s3_key):
+def contains_glob_flags(fname: str) -> bool:
     """Return True if a string contains any glob-style wildcard flags."""
 
-    return ("*" in s3_key) or ("?" in s3_key) or ("[" in s3_key and "]" in s3_key)
+    return ("*" in fname) or ("?" in fname) or ("[" in fname and "]" in fname)
 
 
 def split(dem_name: str,
