@@ -806,7 +806,6 @@ def validate_dem_parallel(dem_name,
 
         assert dem_proj_wkt is not None and len(dem_proj_wkt) > 0
 
-        # print(dem_proj_wkt)
         icesat2_srs = osr.SpatialReference()
         icesat2_srs.SetWellKnownGeogCS("EPSG:4326")
         dem_srs = osr.SpatialReference(wkt=dem_proj_wkt)
@@ -852,7 +851,16 @@ def validate_dem_parallel(dem_name,
 
         print("GOT HERE 2.2")
 
+        # IT'S STOPPING RIGHT HERE. SILENTLY. I'VE NO IDEA WHY.
+        # is it a memory error? Is that what we're hitting here?
+        big_array = numpy.zeros([1000000, 1000000, 100000], dtype=float)
+        # This should result in a memory error. Let's see if it just quits silently while doing this.
+
+        print(big_array.shape)
+        print("GOT HERE 2.2.5")
+
         points = numpy.array(is2_to_dem.TransformPoints(latlon_array))
+
         print("GOT HERE 2.3")
         p_x = points[:, 0]
         p_y = points[:, 1]
