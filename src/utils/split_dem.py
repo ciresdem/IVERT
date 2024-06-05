@@ -39,45 +39,49 @@ def split(dem_name: str,
     if output_dir is None:
         output_dir = os.path.dirname(dem_name)
 
-    if contains_glob_flags(dem_name):
-        files = glob.glob(dem_name)
-    else:
-        files = [dem_name]
+    outfiles = []
 
-    for fname in files:
-        Y, X = gdal.Open(fname, gdal.GA_ReadOnly).ReadAsArray().shape
-        # How to cover all the DEM when it can't be split evenly?
-        X_steps = evenly_split(X, factor)
-        Y_steps = evenly_split(Y, factor)
+    for dname in dem_name:
+        if contains_glob_flags(dname):
+            infiles = glob.glob(dname)
+        else:
+            infiles = [dem_name]
 
-        for xi, xb in zip(range(factor), X_steps):
-            for yj, yb in zip(range(factor), Y_steps):
-                assert len(xb) == 2
-                assert len(yb) == 2
-                fn_out = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(fname))[0]}_{yj}.{xi}.tif")
+        for fname in infiles:
+            Y, X = gdal.Open(fname, gdal.GA_ReadOnly).ReadAsArray().shape
+            # How to cover all the DEM when it can't be split evenly?
+            X_steps = evenly_split(X, factor)
+            Y_steps = evenly_split(Y, factor)
 
-                if os.path.exists(fn_out):
-                    print(fn_out, "already exists.")
-                    continue
+            for xi, xb in zip(range(factor), X_steps):
+                for yj, yb in zip(range(factor), Y_steps):
+                    assert len(xb) == 2
+                    assert len(yb) == 2
+                    fn_out = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(fname))[0]}_{yj}.{xi}.tif")
 
-                gdal_cmd = f"""gdal_translate -of GTiff
-                              -srcwin {xb[0]} {yb[0]} {xb[1] - xb[0] + 1} {yb[1] - yb[0] + 1}
-                              -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES
-                              {repr(fname)} {repr(fn_out)}"""
+                    if os.path.exists(fn_out):
+                        print(fn_out, "already exists.")
+                        continue
 
-                gdal_args = shlex.split(gdal_cmd.replace("\n", " "))
-                print(" ".join(gdal_args))
+                    gdal_cmd = f"""gdal_translate -of GTiff
+                                  -srcwin {xb[0]} {yb[0]} {xb[1] - xb[0] + 1} {yb[1] - yb[0] + 1}
+                                  -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES
+                                  {repr(fname)} {repr(fn_out)}"""
 
-                subprocess.run(gdal_args)
+                    gdal_args = shlex.split(gdal_cmd.replace("\n", " "))
+                    print(" ".join(gdal_args))
 
-                if os.path.exists(fn_out):
-                    if verbose:
-                        print(fn_out, "written.")
-                else:
-                    if verbose:
-                        print(fn_out, "failed.")
+                    subprocess.run(gdal_args)
 
-        return []
+                    if os.path.exists(fn_out):
+                        if verbose:
+                            print(fn_out, "written.")
+                            outfiles.append(fn_out)
+                    else:
+                        if verbose:
+                            print(fn_out, "failed.")
+
+    return outfiles
 
 
 def evenly_split(N: int, factor: int) -> list:
@@ -107,7 +111,7 @@ def evenly_split(N: int, factor: int) -> list:
 
 def define_and_parse_args():
     parser = argparse.ArgumentParser(description="Split a DEM into sub-segments, each side split by a factor.")
-    parser.add_argument("dem_name",
+    parser.add_argument("dem_name", nargs="+",
                         help="The name of the DEM file. May use bash-style glob flags (*.tif) to select multiple files.")
     parser.add_argument("-f", "--factor", type=int, default=2,
                         help="The factor by which to split each side of the DEM. This will create f^2 files.")
