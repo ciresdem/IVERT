@@ -48,6 +48,7 @@ def split(dem_name: str,
             infiles = [dem_name]
 
         for fname in infiles:
+            fname = str(fname)
             Y, X = gdal.Open(fname, gdal.GA_ReadOnly).ReadAsArray().shape
             # How to cover all the DEM when it can't be split evenly?
             X_steps = evenly_split(X, factor)
