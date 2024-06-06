@@ -7,12 +7,17 @@ while getopts "kl" OPTION;
 do
   case "$OPTION" in
     k)
+      echo "pkill -e -f 'python3 ivert_server_job_manager.py'"
       pkill -e -f "python3 ivert_server_job_manager.py"
       exit 0
       ;;
     l)
       pgrep -a python3 | grep ivert_server_job_manager.py
       exit 0
+      ;;
+    *)
+      echo "Unknown option"
+      exit 1
       ;;
   esac
 done
