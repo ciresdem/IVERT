@@ -20,14 +20,14 @@ def contains_glob_flags(fname: str) -> bool:
     return ("*" in fname) or ("?" in fname) or ("[" in fname and "]" in fname)
 
 
-def split(dem_name: str,
+def split(dem_name: typing.Union[str, list[str]],
           factor: int = 2,
           output_dir: typing.Union[str, None]=None,
           verbose: bool = True) -> list[str]:
     """Split a DEM into sub-segments, each side split by a factor. 2 will create 4 sub-segments.
 
     Args:
-        dem_name (str): The name of the DEM, with path.
+        dem_name (str, list): The name of the DEM, with path, or a list of DEM names.
         factor (int): The factor by which to split the DEM.
         output_dir (str): The directory to which the sub-segments will be written. Defaults to the same directory as the DEM.
         verboase (bool): Whether to print messages.
@@ -35,52 +35,55 @@ def split(dem_name: str,
     Returns:
         list[str]: The names of the new DEM files.
         """
+    if isinstance(dem_name, str):
+        dem_name = [dem_name]
 
     if output_dir is None:
-        output_dir = os.path.dirname(dem_name)
+        output_dir = os.path.dirname(dem_name[0])
 
     outfiles = []
+    infiles = []
 
     for dname in dem_name:
         if contains_glob_flags(dname):
-            infiles = glob.glob(dname)
+            infiles.extend(glob.glob(dname))
         else:
-            infiles = [dem_name]
+            infiles.append(dname)
 
-        for fname in infiles:
-            fname = str(fname)
-            Y, X = gdal.Open(fname, gdal.GA_ReadOnly).ReadAsArray().shape
-            # How to cover all the DEM when it can't be split evenly?
-            X_steps = evenly_split(X, factor)
-            Y_steps = evenly_split(Y, factor)
+    # some bug here?
+    for fname in infiles:
+        Y, X = gdal.Open(fname, gdal.GA_ReadOnly).ReadAsArray().shape
+        # How to cover all the DEM when it can't be split evenly?
+        X_steps = evenly_split(X, factor)
+        Y_steps = evenly_split(Y, factor)
 
-            for xi, xb in zip(range(factor), X_steps):
-                for yj, yb in zip(range(factor), Y_steps):
-                    assert len(xb) == 2
-                    assert len(yb) == 2
-                    fn_out = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(fname))[0]}_{yj}.{xi}.tif")
+        for xi, xb in zip(range(factor), X_steps):
+            for yj, yb in zip(range(factor), Y_steps):
+                assert len(xb) == 2
+                assert len(yb) == 2
+                fn_out = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(fname))[0]}_{yj}.{xi}.tif")
 
-                    if os.path.exists(fn_out):
-                        print(fn_out, "already exists.")
-                        continue
+                if os.path.exists(fn_out):
+                    print(fn_out, "already exists.")
+                    continue
 
-                    gdal_cmd = f"""gdal_translate -of GTiff
-                                  -srcwin {xb[0]} {yb[0]} {xb[1] - xb[0] + 1} {yb[1] - yb[0] + 1}
-                                  -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES
-                                  {repr(fname)} {repr(fn_out)}"""
+                gdal_cmd = f"""gdal_translate -of GTiff
+                              -srcwin {xb[0]} {yb[0]} {xb[1] - xb[0] + 1} {yb[1] - yb[0] + 1}
+                              -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES
+                              {repr(fname)} {repr(fn_out)}"""
 
-                    gdal_args = shlex.split(gdal_cmd.replace("\n", " "))
-                    print(" ".join(gdal_args))
+                gdal_args = shlex.split(gdal_cmd.replace("\n", " "))
+                print(" ".join(gdal_args))
 
-                    subprocess.run(gdal_args)
+                subprocess.run(gdal_args)
 
-                    if os.path.exists(fn_out):
-                        if verbose:
-                            print(fn_out, "written.")
-                            outfiles.append(fn_out)
-                    else:
-                        if verbose:
-                            print(fn_out, "failed.")
+                if os.path.exists(fn_out):
+                    if verbose:
+                        print(fn_out, "written.")
+                        outfiles.append(fn_out)
+                else:
+                    if verbose:
+                        print(fn_out, "failed.")
 
     return outfiles
 
