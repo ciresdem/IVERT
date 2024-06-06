@@ -19,6 +19,7 @@ except:
 import argparse
 import ast
 import multiprocessing as mp
+import multiprocessing.shared_memory as shared_memory
 import numexpr
 import numpy
 from osgeo import gdal, osr
@@ -36,7 +37,7 @@ import utils.pickle_blosc
 import convert_vdatum
 import coastline_mask
 import plot_validation_results
-import classify_icesat2_photons
+# import classify_icesat2_photons
 import icesat2_photon_database
 import find_bad_icesat2_granules
 
@@ -141,15 +142,22 @@ def read_dataframe_file(df_filename: str) -> pandas.DataFrame:
 #     return dataframe
 
 
-def validate_dem_child_process(input_heights,
-                               input_i,
-                               input_j,
-                               photon_codes,
+def validate_dem_child_process(height_array_name,
+                               height_dtype,
+                               i_array_name,
+                               i_dtype,
+                               j_array_name,
+                               j_dtype,
+                               code_array_name,
+                               code_dtype,
+                               array_shape,
                                connection,
                                photon_limit=None,
                                measure_coverage=False,
-                               input_x=None,
-                               input_y=None,
+                               x_array_name=None,
+                               x_dtype=None,
+                               y_array_name=None,
+                               y_dtype=None,
                                num_subdivisions=15):
     """A child process for running the DEM validation in parallel.
 
@@ -168,97 +176,117 @@ def validate_dem_child_process(input_heights,
     # if you have a lot of competing processes going after the same resource that take a
     # while to get out of each others' way. I will have to think about the best way to
     # intelligently handle both these potential scenarios.
-    connection_success = False
+    # connection_success = False
     # MAX_TRIES = 1000
     # counter = 0
-    while not connection_success:
-        # if counter >= MAX_TRIES:
-        #     print(f"validate_dem_child_process: Counter exceeded {MAX_TRIES} attempts to get 'input_heights'. Aborting subprocess.")
-        #     return
-        try:
-            heights = numpy.array(input_heights[:])
-            connection_success = True
-        except ConnectionRefusedError:
-            pass
+    # while not connection_success:
+    #     # if counter >= MAX_TRIES:
+    #     #     print(f"validate_dem_child_process: Counter exceeded {MAX_TRIES} attempts to get 'input_heights'. Aborting subprocess.")
+    #     #     return
+    #     try:
+    #         heights = numpy.array(input_heights[:])
+    #         connection_success = True
+    #     except ConnectionRefusedError:
+    #         pass
             # counter += 1
 
     # Get the dem_indices array into local memory.
     # Loop until it's not conflicting with another process)
-    connection_success = False
+    # connection_success = False
     # counter = 0
-    while not connection_success:
-        # if counter >= MAX_TRIES:
-        #     print(f"validate_dem_child_process: Counter exceeded {MAX_TRIES} attempts to get 'input_i'. Aborting subprocess.")
-        #     return
-        try:
-            photon_i = numpy.array(input_i[:])
-            connection_success = True
-        except ConnectionRefusedError:
-            pass
+    # while not connection_success:
+    #     # if counter >= MAX_TRIES:
+    #     #     print(f"validate_dem_child_process: Counter exceeded {MAX_TRIES} attempts to get 'input_i'. Aborting subprocess.")
+    #     #     return
+    #     try:
+    #         photon_i = numpy.array(input_i[:])
+    #         connection_success = True
+    #     except ConnectionRefusedError:
+    #         pass
             # counter += 1
 
     # Get the dem_indices array into local memory.
     # Loop until it's not conflicting with another process)
-    connection_success = False
+    # connection_success = False
     # counter = 0
-    while not connection_success:
-        # if counter >= MAX_TRIES:
-        #     print(f"validate_dem_child_process: Counter exceeded {MAX_TRIES} attempts to get 'input_j'. Aborting subprocess.")
-        #     return
-        try:
-            photon_j = numpy.array(input_j[:])
-            connection_success = True
-        except ConnectionRefusedError:
-            pass
+    # while not connection_success:
+    #     # if counter >= MAX_TRIES:
+    #     #     print(f"validate_dem_child_process: Counter exceeded {MAX_TRIES} attempts to get 'input_j'. Aborting subprocess.")
+    #     #     return
+    #     try:
+    #         photon_j = numpy.array(input_j[:])
+    #         connection_success = True
+    #     except ConnectionRefusedError:
+    #         pass
             # counter += 1
 
     # Get the photon_codes array into local memory.
     # Loop until it's not conflicting with another process)
-    connection_success = False
+    # connection_success = False
     # counter = 0
-    while not connection_success:
-        # if counter >= MAX_TRIES:
-        #     print(f"validate_dem_child_process: Counter exceeded {MAX_TRIES} attempts to get 'photon_codes'. Aborting subprocess.")
-        #     return
-        try:
-            ph_codes = numpy.array(photon_codes[:])
-            connection_success = True
-        except ConnectionRefusedError:
-            pass
+    # while not connection_success:
+    #     # if counter >= MAX_TRIES:
+    #     #     print(f"validate_dem_child_process: Counter exceeded {MAX_TRIES} attempts to get 'photon_codes'. Aborting subprocess.")
+    #     #     return
+    #     try:
+    #         ph_codes = numpy.array(photon_codes[:])
+    #         connection_success = True
+    #     except ConnectionRefusedError:
+    #         pass
             # counter += 1
 
     # If we're measuring the coverage of the photons, we need the latitudes and longitudes as well to get the
     # photon locations within a grid-cell.
+    # if measure_coverage:
+    #     assert (input_x is not None) and (input_y is not None)
+    #
+    #     connection_success = False
+    #     # counter = 0
+    #     while not connection_success:
+    #         # if counter >= MAX_TRIES:
+    #         #     print(f"validate_dem_child_process: Counter exceeded {MAX_TRIES} attempts to get 'photon_codes'. Aborting subprocess.")
+    #         #     return
+    #         try:
+    #             ph_x = numpy.array(input_x[:])
+    #             connection_success = True
+    #         except ConnectionRefusedError:
+    #             pass
+    #
+    #     connection_success = False
+    #     # counter = 0
+    #     while not connection_success:
+    #         # if counter >= MAX_TRIES:
+    #         #     print(f"validate_dem_child_process: Counter exceeded {MAX_TRIES} attempts to get 'photon_codes'. Aborting subprocess.")
+    #         #     return
+    #         try:
+    #             ph_y = numpy.array(input_y[:])
+    #             connection_success = True
+    #         except ConnectionRefusedError:
+    #             pass
+
+    # Define shared memory arrays here.
+    h_shm = shared_memory.SharedMemory(name=height_array_name)
+    heights = numpy.ndarray(array_shape, dtype=height_dtype, buffer=h_shm.buf)
+
+    pi_shm = shared_memory.SharedMemory(name=i_array_name)
+    photon_i = numpy.ndarray(array_shape, dtype=i_dtype, buffer=pi_shm.buf)
+
+    pj_shm = shared_memory.SharedMemory(name=j_array_name)
+    photon_j = numpy.ndarray(array_shape, dtype=j_dtype, buffer=pj_shm.buf)
+
+    pc_shm = shared_memory.SharedMemory(name=code_array_name)
+    ph_codes = numpy.ndarray(array_shape, dtype=code_dtype, buffer=pc_shm.buf)
+
     if measure_coverage:
-        assert (input_x is not None) and (input_y is not None)
-
-        connection_success = False
-        # counter = 0
-        while not connection_success:
-            # if counter >= MAX_TRIES:
-            #     print(f"validate_dem_child_process: Counter exceeded {MAX_TRIES} attempts to get 'photon_codes'. Aborting subprocess.")
-            #     return
-            try:
-                ph_x = numpy.array(input_x[:])
-                connection_success = True
-            except ConnectionRefusedError:
-                pass
-
-        connection_success = False
-        # counter = 0
-        while not connection_success:
-            # if counter >= MAX_TRIES:
-            #     print(f"validate_dem_child_process: Counter exceeded {MAX_TRIES} attempts to get 'photon_codes'. Aborting subprocess.")
-            #     return
-            try:
-                ph_y = numpy.array(input_y[:])
-                connection_success = True
-            except ConnectionRefusedError:
-                pass
-
-        assert len(heights) == len(ph_x) == len(ph_y)
-
-    assert len(heights) == len(photon_i) == len(photon_j) == len(ph_codes)
+        x_shm = shared_memory.SharedMemory(name=x_array_name)
+        ph_x = numpy.ndarray(array_shape, dtype=x_dtype, buffer=x_shm.buf)
+        y_shm = shared_memory.SharedMemory(name=y_array_name)
+        ph_y = numpy.ndarray(array_shape, dtype=y_dtype, buffer=y_shm.buf)
+    else:
+        x_shm = None
+        y_shm = None
+        ph_x = None
+        ph_y = None
 
     # Just keep looping and checking the connection pipe. When we get
     # a stop command, return from the function.
@@ -273,13 +301,26 @@ def validate_dem_child_process(input_heights,
                 cell_xmax_list, \
                 cell_ymin_list, \
                 cell_ymax_list = connection.recv()
+
             else:
                 dem_i_list, \
                 dem_j_list, \
                 dem_elev_list = connection.recv()
 
-            # Break out of the infinite loop and return when we get a "STOP" message.
+                cell_xmin_list = None
+                cell_ymin_list = None
+                cell_xmax_list = None
+                cell_ymax_list = None
+
+            # Upon the "STOP" mesage, break the loop, close the shared memory objects, and return.
             if (type(dem_i_list) == str) and (dem_i_list == "STOP"):
+                h_shm.close()
+                pi_shm.close()
+                pj_shm.close()
+                pc_shm.close()
+                if measure_coverage:
+                    x_shm.close()
+                    y_shm.close()
                 return
 
             assert len(dem_i_list) == len(dem_j_list)
@@ -299,12 +340,12 @@ def validate_dem_child_process(input_heights,
             r_dem_elev = numpy.zeros((N,), dtype=float)
             r_mean_diff = numpy.zeros((N,), dtype=float)
             r_med_diff = numpy.zeros((N,), dtype=float)
-
             if measure_coverage:
-                # r_min_distance_to_center = numpy.zeros((N,), dtype=float)
                 r_coverage_frac = numpy.zeros((N,), dtype=float)
+            else:
+                r_coverage_frac = None
 
-            for counter,(i,j) in enumerate(zip(dem_i_list, dem_j_list)):
+            for counter, (i, j) in enumerate(zip(dem_i_list, dem_j_list)):
                 # Using numexpr.evaluate here is far more memory-and-time efficient than just doing it with the numpy arrays.
                 ph_subset_mask = numexpr.evaluate("(photon_i == i) & (photon_j == j)")
                 # Generate a small pandas dataframe from the subset
@@ -331,23 +372,6 @@ def validate_dem_child_process(input_heights,
 
                     subset_df['subset_i'] = numpy.floor((subset_df.ycoord - cell_ymax) / cell_ystep).astype(int)
                     subset_df['subset_j'] = numpy.floor((subset_df.xcoord - cell_xmin) / cell_xstep).astype(int)
-                    # These are good assupmtions but the "numpy.all() command slows things down for big datasets, and
-                    # we've never needed it so it's probably unnecessary. So skip it.
-                    # assert numpy.all((subset_df.subset_i >= 0) & (subset_df.subset_i < num_subdivisions))
-                    # assert numpy.all((subset_df.subset_j >= 0) & (subset_df.subset_j < num_subdivisions))
-
-                    # NOTE: I had been calculating the minimum distance of the closest photon to the center of the grid-cell,
-                    # but this proves not to be a good measure of coverage. For efficiency's sake, omit it now.
-
-                    # cell_xcenter = cell_xmin + ((cell_xmax - cell_xmin) / 2)
-                    # cell_ycenter = cell_ymin + ((cell_ymax - cell_ymin) / 2)
-
-                    # Calcluate minimum distance from cell center, i.e. distance of the "closest photon."
-                    # cell_min_distance_from_center = numpy.power(numpy.power(subset_df.xcoord - cell_xcenter, 2) + \
-                    #                                             numpy.power(subset_df.ycoord - cell_ycenter, 2),
-                    #                                             0.5).min()
-                    #
-                    # r_min_distance_to_center[counter] = cell_min_distance_from_center
 
                     # By taking i * (number_of_rows) + j, we come up with unique single values for the sub-cell this is in.
                     subset_df['subset_ij'] = (subset_df.subset_i * num_subdivisions) + subset_df.subset_j
@@ -434,46 +458,73 @@ def validate_dem_child_process(input_heights,
 
             connection.send(results_df)
 
-    return
+    raise RuntimeError("Something went wrong in dem_validate child process. Should not get here.")
 
 
-def clean_procs_and_pipes(procs, pipes1, pipes2):
+def clean_procs_and_pipes(procs, pipes1, pipes2, memory_objs):
     """Join all processes and close all pipes.
 
     Useful for cleaning up after multiprocessing."""
+    # Close up all processes.
     for pr in procs:
         if isinstance(pr, mp.Process):
             if pr.is_alive():
                 pr.kill()
             pr.join()
+
+    # Close all pipes.
     for p1 in pipes1:
         if isinstance(p1, mp.connection.Connection):
             p1.close()
     for p2 in pipes2:
         if isinstance(p2, mp.connection.Connection):
             p2.close()
+
+    # Clean up shared memory objoects.
+    for smo in memory_objs:
+        smo.close()
+        try:
+            smo.unlink()
+        except FileNotFoundError:
+            pass
+
     return
 
-def kick_off_new_child_process(height_array,
-                               i_array,
-                               j_array,
-                               code_array,
+
+def kick_off_new_child_process(height_array_name,
+                               height_dtype,
+                               i_array_name,
+                               i_dtype,
+                               j_array_name,
+                               j_dtype,
+                               code_array_name,
+                               code_dtype,
+                               array_shape,
                                photon_limit=None,
                                measure_coverage=False,
-                               input_x=None,
-                               input_y=None,
+                               x_array_name=None,
+                               x_dtype=None,
+                               y_array_name=None,
+                               y_dtype=None,
                                num_subdivisions=15):
     """Start a new subprocess to handle and process data."""
     pipe_parent, pipe_child = mp.Pipe(duplex=True)
     proc = mp.Process(target=validate_dem_child_process,
-                      args=(height_array,
-                            i_array,
-                            j_array,
-                            code_array,
+                      args=(height_array_name,
+                            height_dtype,
+                            i_array_name,
+                            i_dtype,
+                            j_array_name,
+                            j_dtype,
+                            code_array_name,
+                            code_dtype,
+                            array_shape,
                             pipe_child),
                       kwargs={"measure_coverage": measure_coverage,
-                              "input_x": input_x,
-                              "input_y": input_y,
+                              "x_array_name": x_array_name,
+                              "x_dtype": x_dtype,
+                              "y_array_name": y_array_name,
+                              "y_dtype": y_dtype,
                               "photon_limit": photon_limit,
                               "num_subdivisions": num_subdivisions}
                       )
@@ -969,8 +1020,6 @@ def validate_dem_parallel(dem_name,
             height_field = photon_df_with_dem_elevs.h_ellipsoid
         elif output_vertical_datum in ("geoid", "egm2008"):
             height_field = photon_df_with_dem_elevs.h_geoid
-        elif output_vertical_datum == "meantide":
-            height_field = photon_df_with_dem_elevs.h_meantide
         else:
             raise ValueError("Should not have gotten here. Unhandled vdatum: {}".format(output_vertical_datum))
 
@@ -1007,163 +1056,240 @@ def validate_dem_parallel(dem_name,
     # Set up subprocessing data structures for parallelization.
     cpu_count = numprocs
     dt_dict = parallel_funcs.dtypes_dict
-    with mp.Manager() as manager:
 
-        # Create a multiprocessing shared-memory objects for photon heights, i, j. and codes.
-        if output_vertical_datum in ("ellipsoid", "wgs84"):
-            height_field = photon_df.h_ellipsoid
-        elif output_vertical_datum in ("geoid", "egm2008"):
-            height_field = photon_df.h_geoid
-        elif output_vertical_datum == "meantide":
-            height_field = photon_df.h_meantide
-        else:
-            raise ValueError("Should not have gotten here. Unhandled vdatum: {}".format(output_vertical_datum))
+    # Create a multiprocessing shared-memory objects for photon heights, i, j. and codes.
+    if output_vertical_datum in ("ellipsoid", "wgs84"):
+        height_field = photon_df.h_ellipsoid
+    elif output_vertical_datum in ("geoid", "egm2008"):
+        height_field = photon_df.h_geoid
+    else:
+        raise ValueError("Should not have gotten here. Unhandled vdatum: {}".format(output_vertical_datum))
 
-        height_array = manager.Array(dt_dict[height_field.dtype], height_field)
-        i_array = manager.Array(dt_dict[photon_df.i.dtype], photon_df.i)
-        j_array = manager.Array(dt_dict[photon_df.j.dtype], photon_df.j)
-        code_array = manager.Array(dt_dict[photon_df.class_code.dtype], photon_df.class_code)
+    # height_array = manager.Array(dt_dict[height_field.dtype], height_field)
+    # i_array = manager.Array(dt_dict[photon_df.i.dtype], photon_df.i)
+    # j_array = manager.Array(dt_dict[photon_df.j.dtype], photon_df.j)
+    # code_array = manager.Array(dt_dict[photon_df.class_code.dtype], photon_df.class_code)
 
-        if measure_coverage:
-            x_array = manager.Array(dt_dict[photon_df.dem_x.dtype], photon_df.dem_x)
-            y_array = manager.Array(dt_dict[photon_df.dem_y.dtype], photon_df.dem_y)
-        else:
-            x_array = None
-            y_array = None
+    # Create "shared memory" arrays for the sub-processes to read.
+    proc_id = os.getpid()
+    height_array_name = f"heights_{proc_id}"
+    i_array_name = f"i_{proc_id}"
+    j_array_name = f"j_{proc_id}"
+    code_array_name = f"codes_{proc_id}"
+    assert height_field.shape == photon_df.i.shape == photon_df.j.shape == photon_df.class_code.shape
 
-        running_procs     = [None] * cpu_count
-        open_pipes_parent = [None] * cpu_count
-        open_pipes_child  = [None] * cpu_count
+    # Create the shared memory arrays and copy the data into them.
+    height_smo = shared_memory.SharedMemory(size=height_field.nbytes,
+                                            name=height_array_name,
+                                            create=True)
+    height_smo.buf[:] = height_field.to_numpy().tobytes()
+    height_dtype = height_field.dtype
 
-        counter_started = 0 # The number of data cells handed off to child processes.
-        counter_finished = 0 # The number of data cells completed by child processes.
-        num_chunks_started = 0
-        num_chunks_finished = 0
-        items_per_process_chunk = 20
+    i_smo = shared_memory.SharedMemory(size=photon_df.i.nbytes,
+                                       name=i_array_name,
+                                       create=True)
+    i_smo.buf[:] = photon_df.i.to_numpy().tobytes()
+    i_dtype = photon_df.i.dtype
 
-        # Set up the processes and pipes, then start them.
-        try:
-            # First, set up each child process and start it (importing arguments)
-            for i in range(cpu_count):
-                if counter_started >= N:
-                    # DEBUG print statement
-                    # print(counter_started, N, "Delegated all the data before finishing setting up processes, now will go on to process it.")
-                    # Shorten the list of processes we are using.
-                    running_procs     = running_procs[:i]
-                    open_pipes_parent = open_pipes_parent[:i]
-                    open_pipes_child  = open_pipes_child[:i]
-                    break
+    j_smo = shared_memory.SharedMemory(size=photon_df.j.nbytes,
+                                       name=j_array_name,
+                                       create=True)
+    j_smo.buf[:] = photon_df.j.to_numpy().tobytes()
+    j_dtype = photon_df.j.dtype
 
-                # Generate a new parallel subprocess to handle the data.
-                running_procs[i], open_pipes_parent[i], open_pipes_child[i] = \
-                    kick_off_new_child_process(height_array, i_array, j_array, code_array,
-                                               photon_limit=max_photons_per_cell,
-                                               measure_coverage=measure_coverage,
-                                               input_x=x_array,
-                                               input_y=y_array)
+    code_smo = shared_memory.SharedMemory(size=photon_df.class_code.nbytes,
+                                          name=code_array_name,
+                                          create=True)
+    code_smo.buf[:] = photon_df.class_code.to_numpy().tobytes()
+    code_dtype = photon_df.class_code.dtype
 
-                # Send the first batch of (i,j) pixel locations & elevs to processes now.
-                # Kick off the computations.
-                counter_chunk_end = min(counter_started + items_per_process_chunk, N)
-                if measure_coverage:
-                    open_pipes_parent[i].send((dem_overlap_i[counter_started: counter_chunk_end],
-                                               dem_overlap_j[counter_started: counter_chunk_end],
-                                               dem_overlap_elevs[counter_started: counter_chunk_end],
-                                               dem_overlap_xmin[counter_started: counter_chunk_end],
-                                               dem_overlap_xmax[counter_started: counter_chunk_end],
-                                               dem_overlap_ymin[counter_started: counter_chunk_end],
-                                               dem_overlap_ymax[counter_started: counter_chunk_end]))
-                else:
-                    open_pipes_parent[i].send((dem_overlap_i[counter_started: counter_chunk_end],
-                                               dem_overlap_j[counter_started: counter_chunk_end],
-                                               dem_overlap_elevs[counter_started: counter_chunk_end]))
-                counter_started = counter_chunk_end
-                num_chunks_started += 1
+    if measure_coverage:
+        # If we're trying to measure coverage, then we really do need the floating point x and y locations as well.
+        # x_array = manager.Array(dt_dict[photon_df.dem_x.dtype], photon_df.dem_x)
+        # y_array = manager.Array(dt_dict[photon_df.dem_y.dtype], photon_df.dem_y)
+        assert height_field.shape == photon_df.dem_x.shape == photon_df.dem_y.shape
+        x_array_name = f"x_{proc_id}"
+        x_smo = shared_memory.SharedMemory(size=photon_df.dem_x.nbytes,
+                                           name=x_array_name,
+                                           create=True)
+        x_smo.buf[:] = photon_df.dem_x.to_numpy().tobytes()
+        x_dtype = photon_df.dem_x.dtype
 
-            # Delegate the work. Keep looping through until all processes have finished up.
-            # When everything is done, just send "STOP" connections to the remaining processes.
-            # while counter_finished < N:
-            while num_chunks_finished < num_chunks_started:
-                # First, look for processes that have returned values.
-                for i, (proc, pipe, pipe_child) in enumerate(zip(running_procs, open_pipes_parent, open_pipes_child)):
+        y_array_name = f"y_{proc_id}"
+        y_smo = shared_memory.SharedMemory(size=photon_df.dem_y.nbytes,
+                                           name=y_array_name,
+                                           create=True)
+        y_smo[:] = photon_df.dem_y.to_numpy().tobytes()
+        y_dtype = photon_df.dem_y.dtype
 
-                    if proc is None:
-                        continue
+    else:
+        x_array_name = None
+        y_array_name = None
+        x_smo = None
+        y_smo = None
+        x_dtype = None
+        y_dtype = None
 
-                    elif not proc.is_alive():
-                        # If for some reason the child process has terminated (likely from an error), join it and kick off a new one.
-                        if not quiet:
-                            # raise UserWarning("Sub-process terminated unexpectedly. Some data may be missing. Restarting a new process.")
-                            print("\nSub-process terminated unexpectedly. Some data may be missing. Restarting a new process.")
-                        # Close out the dead process and its pipes
-                        proc.join()
-                        pipe.close()
-                        pipe_child.close()
-                        # Kick off a shiny new process
-                        proc, pipe, pipe_child = kick_off_new_child_process(height_array, i_array, j_array, code_array,
-                                                                            photon_limit=max_photons_per_cell,
-                                                                            measure_coverage=measure_coverage,
-                                                                            input_x=x_array,
-                                                                            input_y=y_array)
-                        # Put that process and pipes into the lists of active procs & pipes.
-                        running_procs[i] = proc
-                        open_pipes_parent[i] = pipe
-                        open_pipes_child[i] = pipe_child
+    # Keep a list of the active shared memory objects, so we can close them later.
+    if measure_coverage:
+        memory_objs = [height_smo, i_smo, j_smo, code_smo, x_smo, y_smo]
+    else:
+        memory_objs = [height_smo, i_smo, j_smo, code_smo]
 
-                        num_chunks_finished += 1
+    running_procs     = [None] * cpu_count
+    open_pipes_parent = [None] * cpu_count
+    open_pipes_child  = [None] * cpu_count
 
-                    # Check to see if our receive pipe has any data sitting in it.
-                    if pipe.poll():
-                        # Get the data from the pipe.
-                        chunk_result_df = pipe.recv()
+    counter_started = 0 # The number of data cells handed off to child processes.
+    counter_finished = 0 # The number of data cells completed by child processes.
+    num_chunks_started = 0
+    num_chunks_finished = 0
+    items_per_process_chunk = 20
 
-                        # Advance the "finished" counter.
-                        counter_finished += len(chunk_result_df)
-                        num_chunks_finished += 1
-                        results_dataframes_list.append(chunk_result_df)
-                        if not quiet:
-                            progress_bar.ProgressBar(counter_finished, N, suffix=("{0:>" +str(len(str(N))) + "d}/{1:d}").format(counter_finished, N))
+    # Set up the processes and pipes, then start them.
+    try:
+        # First, set up each child process and start it (importing arguments)
+        for i in range(cpu_count):
+            if counter_started >= N:
+                # DEBUG print statement
+                # print(counter_started, N, "Delegated all the data before finishing setting up processes, now will go on to process it.")
+                # Shorten the list of processes we are using.
+                running_procs     = running_procs[:i]
+                open_pipes_parent = open_pipes_parent[:i]
+                open_pipes_child  = open_pipes_child[:i]
+                break
 
-                        # If we still have more data to process, send another chunk along.
-                        if counter_started < N:
-                            # Send a new task to the child process, consisting of the i,j pairs to process now.
-                            counter_chunk_end = min(counter_started + items_per_process_chunk, N)
-                            # DEBUG statement
-                            # print("counter_started:", counter_started, "counter_chunk_end", counter_chunk_end)
-                            if measure_coverage:
-                                pipe.send((dem_overlap_i[counter_started: counter_chunk_end],
+            # Generate a new parallel subprocess to handle the data.
+            running_procs[i], open_pipes_parent[i], open_pipes_child[i] = \
+                kick_off_new_child_process(height_array_name,
+                                           height_dtype,
+                                           i_array_name,
+                                           i_dtype,
+                                           j_array_name,
+                                           j_dtype,
+                                           code_array_name,
+                                           code_dtype,
+                                           height_field.shape,
+                                           photon_limit=max_photons_per_cell,
+                                           measure_coverage=measure_coverage,
+                                           x_array_name=x_array_name,
+                                           x_dtype=x_dtype,
+                                           y_array_name=y_array_name,
+                                           y_dtype=y_dtype)
+
+            # Send the first batch of (i,j) pixel locations & elevs to processes now.
+            # Kick off the computations.
+            counter_chunk_end = min(counter_started + items_per_process_chunk, N)
+            if measure_coverage:
+                open_pipes_parent[i].send((dem_overlap_i[counter_started: counter_chunk_end],
                                            dem_overlap_j[counter_started: counter_chunk_end],
                                            dem_overlap_elevs[counter_started: counter_chunk_end],
                                            dem_overlap_xmin[counter_started: counter_chunk_end],
                                            dem_overlap_xmax[counter_started: counter_chunk_end],
                                            dem_overlap_ymin[counter_started: counter_chunk_end],
                                            dem_overlap_ymax[counter_started: counter_chunk_end]))
-                            else:
-                                pipe.send((dem_overlap_i[counter_started: counter_chunk_end],
+            else:
+                open_pipes_parent[i].send((dem_overlap_i[counter_started: counter_chunk_end],
                                            dem_overlap_j[counter_started: counter_chunk_end],
                                            dem_overlap_elevs[counter_started: counter_chunk_end]))
-                            # Increment the "started" counter. Let it run free on the data.
-                            counter_started = counter_chunk_end
-                            num_chunks_started += 1
-                        else:
-                            # Nothing more to send. Send a "STOP" command to the child proc.
-                            if measure_coverage:
-                                pipe.send(("STOP", None, None, None, None, None, None))
-                            else:
-                                pipe.send(("STOP", None, None))
-                            proc.join()
-                            pipe.close()
-                            pipe_child.close()
-                            running_procs[i] = None
-                            open_pipes_parent[i] = None
-                            open_pipes_child[i] = None
+            counter_started = counter_chunk_end
+            num_chunks_started += 1
 
-        except Exception as e:
-            if not quiet:
-                print("\nException encountered in ICESat-2 processing loop. Exiting.")
-            clean_procs_and_pipes(running_procs, open_pipes_parent, open_pipes_child)
-            print(e)
-            return []
+        # Delegate the work. Keep looping through until all processes have finished up.
+        # When everything is done, just send "STOP" connections to the remaining processes.
+        # while counter_finished < N:
+        while num_chunks_finished < num_chunks_started:
+            # First, look for processes that have returned values.
+            for i, (proc, pipe, pipe_child) in enumerate(zip(running_procs, open_pipes_parent, open_pipes_child)):
+
+                if proc is None:
+                    continue
+
+                elif not proc.is_alive():
+                    # If for some reason the child process has terminated (likely from an error), join it and kick off a new one.
+                    if not quiet:
+                        # raise UserWarning("Sub-process terminated unexpectedly. Some data may be missing. Restarting a new process.")
+                        print("\nSub-process terminated unexpectedly. Some data may be missing. Restarting a new process.")
+                    # Close out the dead process and its pipes
+                    proc.join()
+                    pipe.close()
+                    pipe_child.close()
+                    # Kick off a shiny new process
+                    proc, pipe, pipe_child = kick_off_new_child_process(height_array_name,
+                                                                        height_dtype,
+                                                                        i_array_name,
+                                                                        i_dtype,
+                                                                        j_array_name,
+                                                                        j_dtype,
+                                                                        code_array_name,
+                                                                        code_dtype,
+                                                                        height_field.shape,
+                                                                        photon_limit=max_photons_per_cell,
+                                                                        measure_coverage=measure_coverage,
+                                                                        x_array_name=x_array_name,
+                                                                        x_dtype=x_dtype,
+                                                                        y_array_name=y_array_name,
+                                                                        y_dtype=y_dtype)
+                    # Put that process and pipes into the lists of active procs & pipes.
+                    running_procs[i] = proc
+                    open_pipes_parent[i] = pipe
+                    open_pipes_child[i] = pipe_child
+
+                    num_chunks_finished += 1
+
+                # Check to see if our receive pipe has any data sitting in it.
+                if pipe.poll():
+                    # Get the data from the pipe.
+                    chunk_result_df = pipe.recv()
+
+                    # Advance the "finished" counter.
+                    counter_finished += len(chunk_result_df)
+                    num_chunks_finished += 1
+                    results_dataframes_list.append(chunk_result_df)
+                    if not quiet:
+                        progress_bar.ProgressBar(counter_finished, N, suffix=("{0:>" +str(len(str(N))) + "d}/{1:d}").format(counter_finished, N))
+
+                    # If we still have more data to process, send another chunk along.
+                    if counter_started < N:
+                        # Send a new task to the child process, consisting of the i,j pairs to process now.
+                        counter_chunk_end = min(counter_started + items_per_process_chunk, N)
+                        # DEBUG statement
+                        # print("counter_started:", counter_started, "counter_chunk_end", counter_chunk_end)
+                        if measure_coverage:
+                            pipe.send((dem_overlap_i[counter_started: counter_chunk_end],
+                                       dem_overlap_j[counter_started: counter_chunk_end],
+                                       dem_overlap_elevs[counter_started: counter_chunk_end],
+                                       dem_overlap_xmin[counter_started: counter_chunk_end],
+                                       dem_overlap_xmax[counter_started: counter_chunk_end],
+                                       dem_overlap_ymin[counter_started: counter_chunk_end],
+                                       dem_overlap_ymax[counter_started: counter_chunk_end]))
+                        else:
+                            pipe.send((dem_overlap_i[counter_started: counter_chunk_end],
+                                       dem_overlap_j[counter_started: counter_chunk_end],
+                                       dem_overlap_elevs[counter_started: counter_chunk_end]))
+                        # Increment the "started" counter. Let it run free on the data.
+                        counter_started = counter_chunk_end
+                        num_chunks_started += 1
+                    else:
+                        # Nothing more to send. Send a "STOP" command to the child proc.
+                        if measure_coverage:
+                            pipe.send(("STOP", None, None, None, None, None, None))
+                        else:
+                            pipe.send(("STOP", None, None))
+                        proc.join()
+                        pipe.close()
+                        pipe_child.close()
+                        running_procs[i] = None
+                        open_pipes_parent[i] = None
+                        open_pipes_child[i] = None
+
+    except Exception as e:
+        if not quiet:
+            print("\nException encountered in ICESat-2 processing loop. Exiting.")
+
+        clean_procs_and_pipes(running_procs, open_pipes_parent, open_pipes_child, memory_objs)
+        print(e)
+        return []
 
     t_end = time.perf_counter()
     if not quiet:
@@ -1177,7 +1303,9 @@ def validate_dem_parallel(dem_name,
             print("{0:0.1f} seconds total, ({1:0.4f} s/iteration)".format(total_time_s,
                                                                           ((total_time_s / N) if N > 0 else 0)))
 
-    clean_procs_and_pipes(running_procs, open_pipes_parent, open_pipes_child)
+    # Clean up any remaining processes and pipes
+    clean_procs_and_pipes(running_procs, open_pipes_parent, open_pipes_child, memory_objs)
+
     # Concatenate all the results dataframes
     # If there were no overlappying photons, then just return none.
     if len(results_dataframes_list) == 0:
@@ -1365,12 +1493,11 @@ def read_and_parse_args():
                         help='The input DEM.')
     parser.add_argument('output_dir', type=str, nargs="?", default="",
                         help='Directory to write output results. Default: Will put in the same directory as input filename')
-    parser.add_argument('--input_vdatum','-ivd', type=str, default="wgs84",
-                        help="Input DEM vertical datum. (Default: 'wgs84')" + \
+    parser.add_argument('--input_vdatum','-ivd', type=str, default="emg2008",
+                        help="Input DEM vertical datum. (Default: 'egm2008')" + \
                         " Currently supported datum arguments, not case-sensitive: ({})".format(",".join([str(vd) for vd in convert_vdatum.SUPPORTED_VDATUMS])))
-    parser.add_argument('--output_vdatum','-ovd', type=str, default="wgs84",
-                        help="Output vertical datum. (Default: 'wgs84')" + \
-                        " Supports same datum list as input_vdatum, except for egm96 and equivalent.")
+    parser.add_argument('--output_vdatum','-ovd', type=str, default="egm2008",
+                        help="Output vertical datum. ICESat-2 only supports 'wgs84' and 'egm2008'. (Default: 'egm2008')")
     parser.add_argument('--datadir', type=str, default="",
                         help="A scratch directory to write interim data files. Useful if user would like to save temp files elsewhere. Defaults to the output_dir directory.")
     parser.add_argument('--band_num', type=int, default=1,
