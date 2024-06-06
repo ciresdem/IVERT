@@ -8,7 +8,8 @@ import ast
 import os
 import pandas
 import numpy
-from osgeo import gdal, osr
+# from osgeo import gdal, osr
+import typing
 import argparse
 import re
 
@@ -24,10 +25,55 @@ import plot_validation_results as plot_validation_results
 # import coastline_mask as coastline_mask
 
 
-# def write_summary_csv_file(total_photon_df: pandas.DataFrame,
-#                            csv_name: str) -> None:
-#     """Write a summary csv of all the results in a collection, after they've been run."""
-#     # TODO: Finish
+def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFrame, str],
+                           csv_name: str,
+                           verbose: bool = True) -> pandas.DataFrame:
+    """Write a summary csv of all the results in a collection, after they've been run."""
+    if type(total_results_df_or_file) is str:
+        total_df = pandas.read_hdf(total_results_df_or_file)
+    else:
+        assert isinstance(total_results_df_or_file, pandas.DataFrame)
+        total_df = total_results_df_or_file
+
+    if 'filename' not in total_df.columns:
+        raise ValueError("total_df must have a 'filename' column.")
+
+    unique_files = total_df['filename'].unique()
+    N = len(unique_files)
+    means = numpy.empty((N,), dtype=float)
+    stds = numpy.empty((N,), dtype=float)
+    rmses = numpy.empty((N,), dtype=float)
+    n_cells = numpy.empty((N,), dtype=int)
+    photons_per_cell = numpy.empty((N,), dtype=float)
+    canopy_mean = numpy.empty((N,), dtype=float)
+    canopy_mean_gt0 = numpy.empty((N,), dtype=float)
+
+    for i, fname in enumerate(unique_files):
+        temp_df = total_df[total_df['filename'] == fname]
+        means[i] = temp_df['diff_mean'].mean()
+        stds[i] = temp_df['diff_mean'].std()
+        rmses[i] = (sum((temp_df['diff_mean'] ** 2)) / (len(temp_df) - 1)) ** 0.5
+        n_cells[i] = len(temp_df)
+        photons_per_cell[i] = temp_df['numphotons_intd'].mean()
+        canopy_mean[i] = temp_df['canopy_fraction'].mean()
+        canopy_mean_gt0[i] = temp_df[temp_df['canopy_fraction'] > 0]['canopy_fraction'].mean()
+
+    output_df = pandas.DataFrame(data={'filename': unique_files,
+                                       "rmse": rmses,
+                                       "mean_bias": means,
+                                       "stddev_from_mean": stds,
+                                       "n_cells_validated": n_cells,
+                                       "mean_photons_per_cell": photons_per_cell,
+                                       "canopy_mean": canopy_mean,
+                                       "canopy_mean_gt0": canopy_mean_gt0
+                                       }
+                                 )
+
+    output_df.to_csv(csv_name, index=False)
+    if verbose:
+        print(csv_name, "written.")
+
+    return output_df
 
 def validate_list_of_dems(dem_list_or_dir,
                           output_dir=None,
@@ -45,7 +91,7 @@ def validate_list_of_dems(dem_list_or_dir,
                           include_photon_validation=True,
                           write_result_tifs=False,
                           omit_bad_granules = True,
-                          # write_summary_csv = True,
+                          write_summary_csv = True,
                           measure_coverage = False,
                           outliers_sd_threshold=2.5,
                           verbose=True):
@@ -147,8 +193,8 @@ def validate_list_of_dems(dem_list_or_dir,
 
     files_to_export = []
     list_of_results_dfs = []
-    this_output_dir = None
 
+    # For each DEM, validate it.
     for i, dem_path in enumerate(dem_list):
         if verbose:
             print("\n=======", os.path.split(dem_path)[1], "(" + str(i + 1), "of", str(len(dem_list)) + ")", "=======")
@@ -191,6 +237,7 @@ def validate_list_of_dems(dem_list_or_dir,
         files_to_export.extend(retfiles)
 
         if os.path.exists(results_h5_file):
+            # Append the filename as a column
             list_of_results_dfs.append(results_h5_file)
 
     # An extra newline is appreciated here just for readability's sake.
@@ -203,25 +250,16 @@ def validate_list_of_dems(dem_list_or_dir,
 
     # Generate the overall summary stats file.
     total_results_df = plot_validation_results.get_data_from_h5_or_list(list_of_results_dfs,
+                                                                        orig_filenames=dem_list,
+                                                                        include_filenames=True,
                                                                         verbose=verbose)
 
-    # if omission_bboxes != None:
-    #     # We have chosen to omit results from one or more bounding boxes. The should be a list of length-4 lists, or just a single length-4 list of [xmin,ymin,xmax,ymax].
-    #     # We want to OMIT any pixels that are included in any of those boxes. We can do that here.
+    if write_summary_csv:
+        summary_csv_name = os.path.join(stats_and_plots_dir, stats_and_plots_base + ".csv")
+        write_summary_csv_file(total_results_df, summary_csv_name,
+                               verbose=verbose)
 
-    #     # If it's just a 4-tuple of numbers, make it a list of lists to the next loop works.
-    #     if len(omission_bboxes) == 4 and type(omission_bboxes[0]) in (int, float):
-    #         omission_bboxes = [omission_bboxes]
-
-    #     for bbox in omission_bboxes:
-    #         xmin, ymin, xmax, ymax = bbox
-
-    # TODO: Implement this later.
-    # if write_summary_csv:
-    #     summary_csv_name = os.path.join(this_output_dir, stats_and_plots_base + ".csv")
-    #     write_summary_csv_file(total_results_df, summary_csv_name)
-    #
-    #     files_to_export.append(summary_csv_name)
+        files_to_export.append(summary_csv_name)
 
     # Output the statistics summary file.
     validate_dem.write_summary_stats_file(total_results_df,
@@ -291,10 +329,10 @@ def define_and_parse_args():
         help="By default, all data files generted in this process are kept. If this option is chosen, delete them.")
 
     parser.add_argument("--outlier_sd_threshold", default="2.5",
-                        help="Number of standard-deviations away from the mean to omit outliers. Default 2.5. May choose 'None' if no filtering is requested.")
+        help="Number of standard-deviations away from the mean to omit outliers. Default 2.5. May choose 'None' if no filtering is requested.")
 
     parser.add_argument("--measure_coverage", "-mc", action="store_true", default=False,
-                        help="Measure the coverage %age of icesat-2 data in each of the output DEM cells.")
+        help="Measure the coverage %age of icesat-2 data in each of the output DEM cells.")
 
     parser.add_argument("--write_result_tifs", action='store_true', default=False,
         help="""Write output geotiff with the errors in cells that have ICESat-2 photons, NDVs elsewhere.""")

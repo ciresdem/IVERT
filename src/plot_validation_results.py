@@ -9,41 +9,53 @@ import os
 import collections
 import six
 import math
+import typing
 
 ####################################3
 # Include the base /src/ directory of thie project, to add all the other modules.
 # import import_parent_dir; import_parent_dir.import_src_dir_via_pythonpath()
 ####################################3
 import utils.configfile
-my_config = utils.configfile.config()
 import utils.progress_bar
 
+ivert_config = utils.configfile.config()
 
 def is_iterable(obj):
     """Tell whether an object is a non-string iterable. (list, tuple, etc)."""
     return (isinstance(obj, collections.abc.Iterable)
             and not isinstance(obj, six.string_types))
 
-def get_data_from_h5_or_list(h5_name_or_list,
-                             empty_val = my_config.dem_default_ndv,
-                             include_filenames = False,
-                             verbose=True):
+def get_data_from_h5_or_list(h5_name_or_list: typing.Union[str, typing.List[str]],
+                             orig_filenames: typing.Union[None, str, typing.List[str]] = None,
+                             empty_val: float = ivert_config.dem_default_ndv,
+                             include_filenames: bool = False,
+                             verbose: bool = True) -> pandas.DataFrame:
     """Return the data either from a single hdf5 results file, or a list of them. Filter out empty (bad data) values."""
-    if type(h5_name_or_list) == str:
+    if type(h5_name_or_list) is str:
         data = pandas.read_hdf(h5_name_or_list)
         if include_filenames:
-            data["filename"] = os.path.basename(h5_name_or_list)
+            if orig_filenames is None:
+                data["filename"] = os.path.basename(h5_name_or_list)
+            else:
+                assert type(orig_filenames) is str
+                data["filename"] = os.path.basename(orig_filenames)
+
     elif is_iterable(h5_name_or_list):
 
         if verbose:
             print("Reading {0} h5 results files.".format(len(h5_name_or_list)))
         data_list = []
 
-        for i,h5_file in enumerate(h5_name_or_list):
+        for i, h5_file in enumerate(h5_name_or_list):
             if os.path.exists(h5_file):
                 temp_data = pandas.read_hdf(h5_file)
                 if include_filenames:
-                    temp_data["filename"] = os.path.basename(h5_file)
+                    if orig_filenames is None:
+                        temp_data["filename"] = os.path.basename(h5_file)
+                    else:
+                        assert is_iterable(orig_filenames)
+                        temp_data["filename"] = os.path.basename(orig_filenames[i])
+
                 data_list.append(temp_data)
 
             if verbose:
@@ -75,7 +87,7 @@ def get_data_from_h5_or_list(h5_name_or_list,
 
 def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
                                             output_figure_name,
-                                            empty_val = my_config.dem_default_ndv,
+                                            empty_val = ivert_config.dem_default_ndv,
                                             place_name=None,
                                             figsize=None,
                                             labels_uppercase = True,
@@ -344,144 +356,7 @@ def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
     return
 
 
-# def plot_histograms(results_h5_name_or_list, empty_val = my_config.dem_default_ndv):
-#     data = get_data_from_h5_or_list(results_h5_name_or_list, empty_val = empty_val)
-#
-#     meddiff         = data['diff_median']
-#     cellstd         = data['stddev'].astype(float)
-#     meandiff        = data['diff_mean']
-#     numphotons      = data['numphotons']
-#     numphotons_intd = data['numphotons_intd']
-#     canopy_fraction = data["canopy_fraction"]
-#
-#     # Get rid of data with 3 or less ground photons in the inter-decile range, and all nans.
-#     good_data_mask = numphotons_intd > 3 & ~numpy.isnan(meandiff) & ~numpy.isnan(meddiff) & ~numpy.isnan(canopy_fraction) \
-#                      & (meandiff != empty_val) & (meddiff != empty_val) & (canopy_fraction != empty_val) & (cellstd != empty_val)
-#     meandiff           =        meandiff[good_data_mask]
-#     cellstd            =         cellstd[good_data_mask]
-#     meddiff            =         meddiff[good_data_mask]
-#     canopy_fraction    = canopy_fraction[good_data_mask]
-#     numphotons         =      numphotons[good_data_mask]
-#     numphotons_intd    = numphotons_intd[good_data_mask]
-#
-#     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2,2, dpi=600, tight_layout=True) #, sharey=True)
-#
-#     print("Means:", numpy.mean(meandiff), "+/-", numpy.std(meandiff))
-#     print("Medians:", numpy.mean(meddiff), "+/-", numpy.std(meddiff))
-#     print("Canopy:", numpy.mean(canopy_fraction), "+/-", numpy.std(canopy_fraction))
-#     print("Numphotons:", numpy.mean(numphotons), "+/-", numpy.std(numphotons))
-#     print("Numphotons in Interdecile Range:", numpy.mean(numphotons_intd), "+/-", numpy.std(numphotons_intd))
-#
-#     nbins = 300
-#
-#     #############################################################################
-#     # Plot 1, differences from iceast-2 mean.
-#     ax1.hist(meandiff, bins=nbins)
-#     ax1.set_title("DEM - ICESat-2 mean (m)")
-#     ax1.set_ylabel("Grid cells")
-#     ax1.set_xlabel("Elevation diff (m)")
-#
-#     # Crop the left & right 1% tails.
-#     cutoffs = numpy.percentile(meandiff, [1, 99])
-#     # cutoffs = [-max(numpy.abs(cutoffs)), max(numpy.abs(cutoffs))]
-#     ax1.set_xlim(cutoffs)
-#
-#     # Add the lines for mean +- std
-#     center = numpy.mean(meandiff)
-#     std = numpy.std(meandiff)
-#     ax1.axvline(x=center, color="darkred", linewidth=1)
-#     ax1.axvline(x=center+std, color="darkred", linestyle="--", linewidth=0.75)
-#     ax1.axvline(x=center-std, color="darkred", linestyle="--", linewidth=0.75)
-#
-#     text_left = (abs(cutoffs[0]) > abs(cutoffs[1]))
-#     txt = ax1.text(0.03 if text_left else 0.97, 0.95, "{0:.2f} $\pm$ {1:.2f} m".format(center, std), ha="left" if text_left else "right", va="top", transform=ax1.transAxes)
-#     txt.set_bbox(dict(facecolor="white", alpha=0.7, edgecolor="white", boxstyle="square,pad=0"))
-#     #############################################################################
-#     # Plot 2, differences from icesat-2 median
-#     ax2.hist(cellstd, bins=nbins, color="darkred")
-#     ax2.set_title("Intra-cell variation (roughness) ")
-#     ax2.set_xlabel("std.dev. within cells (m)")
-#     # ax2.set_xlim([-2,4])
-#
-#     # Crop the left & right
-#     # print(numpy.count_nonzero(numpy.isnan(cellstd)), "NaNs in cellstd", cellstd.count(), "total.")
-#     # cutoffs = numpy.nanpercentile(cellstd, [0.5, 99.5])
-#     # ax2.set_xlim(cutoffs)
-#     cutoffs = numpy.nanpercentile(cellstd, [0, 99])
-#     xmin = ax2.get_xlim()[0]
-#     ax2.set_xlim(cutoffs)
-#
-#
-#     # Add the lines for mean +- std
-#     # center = numpy.mean(meddiff)
-#     # std = numpy.std(meddiff)
-#     # ax2.axvline(x=center, color="darkred", linewidth=1)
-#     # ax2.axvline(x=center+std, color="darkred", linestyle="--", linewidth=0.75)
-#     # ax2.axvline(x=center-std, color="darkred", linestyle="--", linewidth=0.75)
-#
-#     # ax2.text(0.95, 0.95, "{0:.2f} $\pm$ {1:.2f} m".format(center, std), ha="right", va="top", transform=ax2.transAxes)
-#
-#
-#     #############################################################################
-#     # Plot 3, percent canopy cover
-#     canopy_fraction = (canopy_fraction * 100).astype(float)
-#     # print(canopy_fraction)
-#     print("min", min(canopy_fraction), "max", max(canopy_fraction), "median", numpy.median(canopy_fraction), "mean", numpy.mean(canopy_fraction))
-#     ax3.hist(canopy_fraction, bins=50,color="darkgreen")
-#     ax3.set_title("Canopy Cover (%)")
-#     ax3.set_xlabel("% Canopy Cover")
-#     ax3.set_ylabel("Grid cells")
-#     # ax4.set_xlim([-3,75])
-#
-#     # Crop the left & right
-#     cutoff = numpy.percentile(canopy_fraction, 97)
-#     xmin = ax3.get_xlim()[0]
-#     ax4.set_xlim(xmin, cutoff)
-#
-#     # center = numpy.mean(canopy_fraction)
-#     # # std = numpy.std(canopy_fraction)
-#     # median = numpy.median(canopy_fraction)
-#     canopy_mask = (canopy_fraction > 0.0) & numpy.isfinite(canopy_fraction) & ~numpy.isnan(canopy_fraction)
-#
-#     ax3.text(0.95, 0.95, "In {0:0.1f} % with >0 cover:\n{1:0.1f} $\pm$ {2:0.1f} %".format( \
-#                          numpy.count_nonzero(canopy_mask) * 100 / canopy_fraction.size,
-#                          numpy.mean(canopy_fraction[canopy_mask]),
-#                          numpy.std(canopy_fraction[canopy_mask])),
-#              ha="right", va="top", transform=ax3.transAxes)
-#
-#     #############################################################################
-#     # Plot 4, number of photons in interdecile range
-#     ax4.hist(numphotons_intd, bins=nbins, color="darkblue")
-#     ax4.set_title("# photons (interdecile)")
-#     ax4.set_xlabel("Photon count per cell")
-#     # ax3.set_xlim([-20,550])
-#
-#     # Crop the left & right
-#     cutoff = numpy.percentile(numphotons_intd, 97)
-#     xmin = ax4.get_xlim()[0]
-#     ax4.set_xlim(xmin*0.5, cutoff)
-#
-#     center = numpy.mean(numphotons_intd)
-#     std = numpy.std(numphotons_intd)
-#
-#     ax4.text(0.95, 0.95, "{0:d} $\pm$ {1:d} per cell".format(int(numpy.round(center)), int(numpy.round(std))), ha="right", va="top", transform=ax4.transAxes)
-#
-#     #############################################################################
-#     # Figure finishing
-#     # fig.suptitle(figure_titles_dict[fname] + " Distributions")
-#     fig.suptitle("NE DEMs Data Distributions\n(N = {0:,} cells)".format(len(data)))
-#     fig.tight_layout()
-#
-#     # figname = os.path.splitext(fname)[0] + "_distributions.png"
-#     figname = os.path.join(os.path.split(results_h5_name_or_list[0])[0], os.path.split(os.path.split(results_h5_name_or_list[0])[0])[1]) + "_distributions.png"
-#     fig.savefig(figname)
-#     print(figname, "written.")
-#
-#     plt.clf()
-#     # plt.close()
-#     # fig.show()
-
-def plot_error_stats(results_h5_name_or_list, empty_val = my_config.dem_default_ndv):
+def plot_error_stats(results_h5_name_or_list, empty_val = ivert_config.dem_default_ndv):
     # print(fname)
     data = get_data_from_h5_or_list(results_h5_name_or_list, empty_val = empty_val)
 
