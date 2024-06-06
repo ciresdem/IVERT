@@ -16,18 +16,6 @@ except:
     raise ModuleNotFoundError("Module 'cudem/waffles.py' required. Update paths, or refer to https://github.com/ciresdem/cudem for installation instructions.")
 # EMPTY_VAL = -9999
 
-import utils.progress_bar as progress_bar
-import utils.parallel_funcs as parallel_funcs
-import utils.configfile
-import utils.pickle_blosc
-import convert_vdatum
-import coastline_mask
-import plot_validation_results
-import classify_icesat2_photons
-import icesat2_photon_database
-import find_bad_icesat2_granules
-import s3
-
 import argparse
 import ast
 import multiprocessing as mp
@@ -39,10 +27,22 @@ import pandas
 import pyproj
 import re
 import time
+import typing
 
-# Just for debugging memory issues. TODO: REmove later.
-import psutil
-import utils.sizeof_format as sizeof
+import utils.progress_bar as progress_bar
+import utils.parallel_funcs as parallel_funcs
+import utils.configfile
+import utils.pickle_blosc
+import convert_vdatum
+import coastline_mask
+import plot_validation_results
+import classify_icesat2_photons
+import icesat2_photon_database
+import find_bad_icesat2_granules
+
+# # Just for debugging memory issues. TODO: REmove later.
+# import psutil
+# import utils.sizeof_format as sizeof
 
 
 # NOTE: This eliminates a Deprecation error in GDAL v3.x. In GDAL 4.0, they will use Exceptions by default and this
@@ -53,13 +53,8 @@ osr.UseExceptions()
 ivert_config = utils.configfile.config()
 EMPTY_VAL = ivert_config.dem_default_ndv
 
-# 1: DEM Preprocessing:
-    # a) For Worldview, apply the bitmask and matchtag filters to get rid of noise
-    # b) Get an ocean/land mask for it
-        # i) Use the CUDEM "waffles" command to do this.
-    # c) Generate a bounding-box for the ICESat-2 data
 
-def read_dataframe_file(df_filename):
+def read_dataframe_file(df_filename: str) -> pandas.DataFrame:
     """Read a dataframe file, either from a picklefile, HDF, CSV, or feather.
 
     (Can handle other formats by adding more "elif ..." statements in the function.)
@@ -82,71 +77,80 @@ def read_dataframe_file(df_filename):
 
     return dataframe
 
-def collect_raw_photon_data(dem_bbox,
-                            photon_dataframe_file,
-                            granule_ids,
-                            dem_bbox_converter = None,
-                            overwrite=False,
-                            verbose=True):
-    """Get the photon data (lat, lon, elev, code) of the ICESat-2.
 
-    Several options here, but only one data source is needed.
+# def collect_raw_photon_data(dem_bbox,
+#                             photon_dataframe_file,
+#                             granule_ids,
+#                             dem_bbox_converter = None,
+#                             overwrite=False,
+#                             verbose=True):
+#     """Get the photon data (lat, lon, elev, code) of the ICESat-2.
+#
+#     Several options here, but only one data source is needed.
+#
+#     If dem_bbox (only) is provided and photon_dataframe_files exists on disk (and not overwrite):
+#         - Read that dataframe from disk.
+#         - Crop out photons that don't lie within the bounding box
+#         - Return the pandas dataframe subset.
+#
+#     If photon_dataframe_file does not exist on disk (or overwrite is true) and granule_ids is None:
+#         - Get a list of ICESat-2 granules within the bounding box (check for existing files in the directory).
+#         - Process the data inside the granules, save it to a pandas dataframe.
+#         - Save that dataframe to disk.
+#         - Crop out photons that don't lie within the bounding box
+#         - Return the pandas dataframe subset.
+#
+#     If granule_ids are provided:
+#         - Read the icesat-2 granules (download ones that don't exist in the icesat-2 folder)
+#         - Process the data inside the granules, save it to a pandas dataframe.
+#         - Save that dataframe to disk.
+#         - Crop out photons that don't lie within the bounding box
+#         - Return the pandas dataframe subset.
+#
+#     If dem_bbox_converter is provided, it should be an instantiated instance of osgeo.osr.CoordinateTransformation.
+#     That class module is used to convert icesat-2 points from their original projection into the
+#     projection that the DEM is using.
+#     """
+#     # Get icesat-2 land/veg photon data within the bounding-box of our DEM.
+#     dataframe = None
+#
+#     if os.path.exists(photon_dataframe_file) and not overwrite:
+#         dataframe = read_dataframe_file(photon_dataframe_file)
+#         # dataframe = dataframe.loc()
+#
+#     else:
+#
+#         dataframe = classify_icesat2_photons.get_photon_data_multiple_granules(granule_ids,
+#                                                                                bounding_box=dem_bbox,
+#                                                                                bbox_converter = dem_bbox_converter,
+#                                                                                return_type=pandas.DataFrame,
+#                                                                                verbose = verbose)
+#
+#         base, ext = os.path.splitext(photon_dataframe_file)
+#         # if ext.lower() in (".gz", ".bz2", ".zip", ".xz"):
+#         #     compression = "infer"
+#         # else:
+#         #     compression = "zip"
+#         dataframe.to_hdf(photon_dataframe_file, "icesat2", complib="zlib", mode='w')
+#         if verbose:
+#             print(photon_dataframe_file, "written.")
+#
+#     if dataframe is None:
+#         print("No dataframe read. 'collect_raw_photon_data() returning None.")
+#
+#     return dataframe
 
-    If dem_bbox (only) is provided and photon_dataframe_files exists on disk (and not overwrite):
-        - Read that dataframe from disk.
-        - Crop out photons that don't lie within the bounding box
-        - Return the pandas dataframe subset.
 
-    If photon_dataframe_file does not exist on disk (or overwrite is true) and granule_ids is None:
-        - Get a list of ICESat-2 granules within the bounding box (check for existing files in the directory).
-        - Process the data inside the granules, save it to a pandas dataframe.
-        - Save that dataframe to disk.
-        - Crop out photons that don't lie within the bounding box
-        - Return the pandas dataframe subset.
-
-    If granule_ids are provided:
-        - Read the icesat-2 granules (download ones that don't exist in the icesat-2 folder)
-        - Process the data inside the granules, save it to a pandas dataframe.
-        - Save that dataframe to disk.
-        - Crop out photons that don't lie within the bounding box
-        - Return the pandas dataframe subset.
-
-    If dem_bbox_converter is provided, it should be an instantiated instance of osgeo.osr.CoordinateTransformation.
-    That class module is used to convert icesat-2 points from their original projection into the
-    projection that the DEM is using.
-    """
-    # Get icesat-2 land/veg photon data within the bounding-box of our DEM.
-    dataframe = None
-
-    if os.path.exists(photon_dataframe_file) and not overwrite:
-        dataframe = read_dataframe_file(photon_dataframe_file)
-        # dataframe = dataframe.loc()
-
-    else:
-
-        dataframe = classify_icesat2_photons.get_photon_data_multiple_granules(granule_ids,
-                                                                               bounding_box=dem_bbox,
-                                                                               bbox_converter = dem_bbox_converter,
-                                                                               return_type=pandas.DataFrame,
-                                                                               verbose = verbose)
-
-        base, ext = os.path.splitext(photon_dataframe_file)
-        # if ext.lower() in (".gz", ".bz2", ".zip", ".xz"):
-        #     compression = "infer"
-        # else:
-        #     compression = "zip"
-        dataframe.to_hdf(photon_dataframe_file, "icesat2", complib="zlib", mode='w')
-        if verbose:
-            print(photon_dataframe_file, "written.")
-
-
-    if dataframe is None:
-        print("No dataframe read. 'collect_raw_photon_data() returning None.")
-
-    return dataframe
-
-def validate_dem_child_process(input_heights, input_i, input_j, photon_codes, connection, photon_limit=None,
-                               measure_coverage=False, input_x=None, input_y=None, num_subdivisions=15):
+def validate_dem_child_process(input_heights,
+                               input_i,
+                               input_j,
+                               photon_codes,
+                               connection,
+                               photon_limit=None,
+                               measure_coverage=False,
+                               input_x=None,
+                               input_y=None,
+                               num_subdivisions=15):
     """A child process for running the DEM validation in parallel.
 
     It takes the input_height (m) and the dem_indices (flattened), as well
@@ -483,10 +487,7 @@ def validate_dem_parallel(dem_name,
                           band_num: int = 1,
                           dem_vertical_datum="egm2008",
                           output_vertical_datum="egm2008",
-                          s3_input_dir=None,
-                          s3_input_bucket_type="trusted",
-                          s3_output_dir=None,
-                          s3_output_bucket_type="export",
+                          ivert_job_name = None,
                           interim_data_dir=None,
                           overwrite=False,
                           delete_datafiles=False,
@@ -1372,14 +1373,6 @@ def read_and_parse_args():
                         " Supports same datum list as input_vdatum, except for egm96 and equivalent.")
     parser.add_argument('--datadir', type=str, default="",
                         help="A scratch directory to write interim data files. Useful if user would like to save temp files elsewhere. Defaults to the output_dir directory.")
-    parser.add_argument("--s3_input_dir", "-s3i", type=str, default="",
-                        help="S3 directory to read input data. (Default: do not read from S3.)")
-    parser.add_argument("--s3_input_bucket_type", "-s3ib", type=str, default="trusted",
-                        help="The category of S3 bucket. Choices: 'database', 'trusted', 'untrusted', 'export' (Default: 'trusted')")
-    parser.add_argument("--s3_output_dir", "-s3o", "-s3x", type=str, default="",
-                        help="S3 directory to write output results. (Default: do not export to S3.)")
-    parser.add_argument("--s3_output_bucket_type", "-s3ob", "-s3xb", type=str, default="export",
-                        help="The category of S3 bucket. Choices: 'database', 'trusted', 'untrusted', 'export' (Default: 'export')")
     parser.add_argument('--band_num', type=int, default=1,
                         help="The band number (1-indexed) of the input_dem. (Default: 1)")
     parser.add_argument("--export_coastline_mask", "--coast", "-c", action='store_true', default=False,
@@ -1439,10 +1432,6 @@ if __name__ == "__main__":
                           outliers_sd_threshold=ast.literal_eval(args.outlier_sd_threshold),
                           mask_out_buildings=not args.use_urban_mask,
                           mask_out_urban=args.use_urban_mask,
-                          s3_input_dir=(None if not args.s3_input_dir else args.s3_input_dir),
-                          s3_input_bucket_type=args.s3_input_bucket_type,
-                          s3_output_dir=(None if not args.s3_output_dir else args.s3_output_dir),
-                          s3_output_bucket_type=args.s3_output_bucket_type,
                           measure_coverage=args.measure_coverage,
                           numprocs=args.numprocs,
                           band_num=args.band_num,
