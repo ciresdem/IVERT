@@ -26,8 +26,6 @@ import plot_validation_results
 import classify_icesat2_photons
 import icesat2_photon_database
 import find_bad_icesat2_granules
-# TODO: Remove references to ivert_server_file_manager and s3. Should handle those outside of the validate_dem methods.
-import ivert_server_file_manager
 import s3
 
 import argparse
@@ -513,29 +511,9 @@ def validate_dem_parallel(dem_name,
     """The main function. Do it all here. But do it on more than one processor.
     TODO: Document all these method parameters. There are a bunch and they need better explanation.
     """
-    # If an S3 directory is specified to grab the input file *and* the file doesn't exist locally, grab it from the S3
-    # and put it in the local directory.
-    if not os.path.exists(dem_name) and s3_input_dir:
-        s3_key = "/".join([s3_input_dir, os.path.basename(dem_name)]).replace("//", "/")
-        if not quiet:
-            print(f"Importing '{os.path.basename(dem_name)}' from S3.")
-        local_file_list = ivert_server_file_manager.import_ivert_input_data(s3_key,
-                                                                            os.path.dirname(dem_name),
-                                                                            s3_bucket_type=s3_input_bucket_type,
-                                                                            create_local_dir=True,
-                                                                            verbose=not quiet)
-        assert len(local_file_list) <= 1
-
     # If we still don't have the input dem, raise an error.
     if not os.path.exists(dem_name):
-        if s3_input_dir:
-            file_not_found_msg = "Could not find file {0} locally nor in s3://{1}/{2}'.".format(
-                os.path.basename(dem_name),
-                s3.S3Manager().get_bucketname(s3_input_bucket_type),
-                s3_input_dir.strip("/")
-            )
-        else:
-            file_not_found_msg = f"Could not find file {dem_name}."
+        file_not_found_msg = f"Could not find file {dem_name}."
         raise FileNotFoundError(file_not_found_msg)
 
     # Just get this variable defined so all the code-branches can use it.
@@ -665,18 +643,6 @@ def validate_dem_parallel(dem_name,
                                                      verbose=not quiet)
 
             files_to_export.append(coastline_mask_filename)
-
-        # If we've asked to output this data to S3, do that now.
-        if ivert_config.is_aws and s3_output_dir and len(files_to_export) > 0:
-            if not quiet:
-                print("Writing outputs to S3...", end="")
-            files_to_export = []
-            ivert_server_file_manager.export_ivert_output_data(files_to_export,
-                                                               s3_output_dir,
-                                                               s3_bucket_type=s3_output_bucket_type,
-                                                               verbose=not quiet)
-            if not quiet:
-                print("Done.")
 
         # If we didn't have to open the dataframe or export anything, it was all already done.
         elif results_dataframe is None and not quiet:
@@ -1293,17 +1259,6 @@ def validate_dem_parallel(dem_name,
                                                                         place_name=location_name,
                                                                         verbose=not quiet)
         files_to_export.append(plot_filename)
-
-    if len(files_to_export) > 0 and ivert_config.is_aws and s3_output_dir:
-        if not quiet:
-            print("Exporting results to S3...", end="")
-
-        ivert_server_file_manager.export_ivert_output_data(files_to_export,
-                                                           s3_output_dir,
-                                                           s3_bucket_type=s3_output_bucket_type,
-                                                           verbose=not quiet)
-        if not quiet:
-            print("Done.")
 
     if delete_datafiles:
         del dem_ds
