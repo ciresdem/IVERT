@@ -1225,6 +1225,9 @@ if __name__ == "__main__":
         elif args.version:
             print(idb.fetch_ivert_version_from_s3_metadata())
 
+        elif args.latest:
+            print(idb.fetch_latest_job_number_from_s3_metadata())
+
         else:
             if args.all:
                 with pandas.option_context('display.max_columns', None):
