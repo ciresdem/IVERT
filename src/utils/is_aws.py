@@ -13,8 +13,7 @@ def is_aws():
     try:
         return os.path.exists(datasource_path) and "DataSourceEc2" in open(datasource_path, 'r').read()
 
-    except NameError:
-    except FileNotFoundError:
+    except (NameError, FileNotFoundError):
         # During process shutdown, as the process is no longer running we can hit an error here. Just return False if
         # if that happens.
         return False
