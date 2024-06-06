@@ -8,12 +8,15 @@ import sys
 if vars(sys.modules[__name__])['__package__'] == 'ivert_utils':
     # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
     import ivert_utils.is_aws as is_aws
+    import ivert_utils.version as version
 else:
     # If running as a script, import this way.
     try:
         import is_aws
+        import version
     except ModuleNotFoundError:
         import utils.is_aws as is_aws
+        import utils.version as version
 
 ivert_default_configfile = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                                         "..", "..", "config", "ivert_config.ini"))
@@ -67,6 +70,10 @@ class config:
         # If we're importing the primary IVERT config file, add the user variables and S3 creds to the config as well.
         if os.path.basename(self._configfile) == os.path.basename(ivert_default_configfile):
             self._add_user_variables_and_s3_creds_to_config_obj()
+
+        if hasattr(self, "ivert_version") and self.ivert_version is None:
+            self.ivert_version = version.__version__
+
 
     def _abspath(self, path, only_if_actual_path_doesnt_exist=False):
         """Retreive the absolute path of a file path contained in the configfile.
