@@ -71,9 +71,9 @@ class config:
         if os.path.basename(self._configfile) == os.path.basename(ivert_default_configfile):
             self._add_user_variables_and_s3_creds_to_config_obj()
 
+        # If 'ivert_version' is present and not already set, set it.
         if hasattr(self, "ivert_version") and self.ivert_version is None:
             self.ivert_version = version.__version__
-
 
     def _abspath(self, path, only_if_actual_path_doesnt_exist=False):
         """Retreive the absolute path of a file path contained in the configfile.
