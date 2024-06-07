@@ -33,7 +33,7 @@ class PersistentIvertServer:
                     # If no other instance of ivert_server_job_manager.py is running, start one.
                     iv_args = ["python3", "ivert_server_job_manager.py"]
                     if self.verbose:
-                        args.append("-v")
+                        iv_args.append("-v")
 
                     print(" ".join(iv_args))
                     self.subproc = subprocess.Popen(iv_args, cwd=os.path.dirname(__file__))
