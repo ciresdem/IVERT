@@ -1468,7 +1468,7 @@ if __name__ == "__main__":
         other_manager = is_another_manager_running()
         if other_manager:
             print(
-                f"Process {other_manager.pid}: {' '.join(other_manager.cmdline())}' is already running.")
+                f"Process {other_manager.pid}: '{' '.join(other_manager.cmdline())}' is already running.")
             exit(0)
 
         # Start the job manager
