@@ -7,12 +7,12 @@ while getopts "kl" OPTION;
 do
   case "$OPTION" in
     k)
-      echo "pkill -e -f 'python3 ivert_server_job_manager.py'"
-      pkill -e -f "python3 ivert_server_job_manager.py"
+      echo "pkill -e -f 'python3 maintain_server_manager.py'"
+      pkill -e -f "python3 maintain_server_manager.py"
       exit 0
       ;;
     l)
-      pgrep -a python3 | grep ivert_server_job_manager.py
+      pgrep -a python3 | grep maintain_server_manager.py
       exit 0
       ;;
     *)
@@ -22,7 +22,8 @@ do
   esac
 done
 
+# Echo the command back to the user.
+echo "nohup python3 maintain_server_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &"
 # Start the server
-echo "nohup python3 ivert_server_job_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &"
-nohup python3 ivert_server_job_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &
+nohup python3 maintain_server_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &
 
