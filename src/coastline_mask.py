@@ -110,7 +110,7 @@ def create_coastline_mask(input_dem,
                    "-E", str("{0:.16f}/{1:.16f}".format(step_xy[0], step_xy[1])),
                    "-D", ivert_config.cudem_cache_directory,
                    "--keep-cache",
-                   "--nodata", str(ivert_config.dem_default_ndv)
+                   "--nodata", str(ivert_config.dem_default_ndv),
                    "-co", "COMPRESS=DEFLATE",
                    "-co", "PREDICTOR=2",
                    "-co", "TILED=YES",
