@@ -21,7 +21,7 @@ class PersistentIvertServer:
         while True:
             if self.subproc is None:
                 existing_proc = ivert_server_job_manager.is_another_manager_running()
-                if existing_proc is not None:
+                if existing_proc:
                     # If another instance of ivert_server_job_manager.py is already running, keep it going.
                     self.subproc = existing_proc
                     self.sub_pid = self.subproc.pid
