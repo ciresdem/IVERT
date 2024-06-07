@@ -54,7 +54,7 @@ def is_another_manager_running() -> typing.Union[bool, psutil.Process]:
     processes = psutil.process_iter()
     for p in processes:
         try:
-            if "python" in p.name() or "python3" in p.name() and numpy.any([opt.endswith(os.path.basename(__file__)) for opt in p.cmdline()]):
+            if ("python" in p.name() or "python3" in p.name()) and numpy.any([opt.endswith(os.path.basename(__file__)) for opt in p.cmdline()]):
                 if p.pid != os.getpid():
                     return p
         except psutil.ZombieProcess:
