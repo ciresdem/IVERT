@@ -79,6 +79,7 @@ def validate_list_of_dems(dem_list_or_dir,
                           output_dir=None,
                           fname_filter=r"\.tif\Z",
                           fname_omit=None,
+                          ivert_job_name=None,
                           band_num: int=1,
                           input_vdatum="wgs84",
                           output_vdatum="wgs84",
@@ -99,6 +100,7 @@ def validate_list_of_dems(dem_list_or_dir,
 
     DEMs should encompass a contiguous area so as to use the same set of ICESat-2 granules for
     validation."""
+    # TODO: If ivert_job_name is defined, then use it to update the database with file statuses as the job goes on.
 
     if output_dir is None:
         if os.path.isdir(dem_list_or_dir):
@@ -217,6 +219,7 @@ def validate_list_of_dems(dem_list_or_dir,
                                                       output_dir,
                                                       band_num=band_num,
                                                       icesat2_photon_database_obj=photon_db_obj,
+                                                      ivert_job_name=ivert_job_name,
                                                       dem_vertical_datum=input_vdatum,
                                                       output_vertical_datum=output_vdatum,
                                                       interim_data_dir=this_output_dir,

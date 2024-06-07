@@ -563,6 +563,9 @@ def validate_dem_parallel(dem_name,
     """The main function. Do it all here. But do it on more than one processor.
     TODO: Document all these method parameters. There are a bunch and they need better explanation.
     """
+
+    # TODO: If 'ivert_job_name' is defined, use it to update file statuses as the job is being processed.
+
     # If we still don't have the input dem, raise an error.
     if not os.path.exists(dem_name):
         file_not_found_msg = f"Could not find file {dem_name}."
