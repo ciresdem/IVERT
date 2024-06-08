@@ -30,20 +30,6 @@ import validate_dem
 import validate_dem_collection
 import coastline_mask
 
-### TEMPORARY FIX ###
-# Until we get this as a permanent daemon process on the server, here is a way to start this file and leave it running
-# after we log out from the EC2 server. It uses the linux "nohup" utility.
-# > nohup python3 ivert_server_job_manager.py -v >> /mnt/uvol0//ivert_data/ivert_manager.log 2>&1 <&- &
-
-# To see which processes are running, do a pgrep command.
-# pgrep -a python3
-
-# To kill the process, running this script with the --kill option will do it.
-# python ivert_server_job_manager.py --kill
-
-# This comment section will be removed once we get this as a permanent daemon process on the server.
-#####################
-
 
 def is_another_manager_running() -> typing.Union[bool, psutil.Process]:
     """Returns a Process if another instance of this script is already running. If none is found, returns False.
@@ -1196,6 +1182,8 @@ class IvertJob:
         return
 
     def run_validate_command(self):
+        # TODO: Just have this call server_job_validate.py directly, and skip doing it here.
+
         job_row = self.jobs_db.job_exists(self.username, self.job_id, return_row=True)
         assert job_row
 
@@ -1250,6 +1238,7 @@ class IvertJob:
             rfiles = validate_dem.validate_dem_parallel(dem_files[0],
                                                         output_dir=outputs_dir,
                                                         icesat2_photon_database_obj=None,
+                                                        ivert_job_name=f"{self.username}_{self.job_id}",
                                                         dem_vertical_datum=cargs["input_vdatum"],
                                                         output_vertical_datum=cargs["output_vdatum"],
                                                         mask_out_lakes=True,
@@ -1283,6 +1272,7 @@ class IvertJob:
                                                                    output_dir=outputs_dir,
                                                                    fname_filter=None,
                                                                    fname_omit=None,
+                                                                   ivert_job_name=f"{self.username}_{self.job_id}",
                                                                    band_num=cargs["band_num"],
                                                                    input_vdatum=cargs["input_vdatum"],
                                                                    output_vdatum=cargs["output_vdatum"],
@@ -1306,14 +1296,21 @@ class IvertJob:
 
             retfiles.extend(rfiles)
 
+        # Add the resulting files to the database.
+        updated_at_least_one_file = False
         for i, rfile in enumerate(retfiles):
             # Add the resulting file to the list of output files in the database. It will be uploaded later.
-            self.jobs_db.create_new_file_record(rfile,
-                                                self.job_id,
-                                                self.username,
-                                                import_or_export=1, # mark for export.
-                                                status="processed",
-                                                upload_to_s3=((i + 1) == len(retfiles))) # Only upload the database on the last record.
+            if not self.jobs_db.file_exists(rfile, self.username, self.job_id, return_row=False):
+                self.jobs_db.create_new_file_record(rfile,
+                                                    self.job_id,
+                                                    self.username,
+                                                    import_or_export=1, # mark for export.
+                                                    status="processed",
+                                                    upload_to_s3=False)
+                updated_at_least_one_file = True
+
+        if updated_at_least_one_file:
+            self.jobs_db.upload_to_s3(only_if_newer=False)
 
         return
 
