@@ -100,7 +100,8 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     # Create the "setup" subparser
     ###############################################################
-    setup_help_msg = ("Install the IVERT client and user-settings on the local machine. "
+    setup_help_msg = ("Install client user-settings, AWS profiles, and directories on the local machine. "
+                      "Also subscribes you to the SNS for IVERT notifications if you're not already. "
                       "Run once before using IVERT on a new machine.")
     # Use the parent parser from new_user_setup.py to define the arguments for the subparser
     subparsers.add_parser("setup",
