@@ -39,7 +39,7 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     # Create the "validate" subparser
     ###############################################################
-    validate_help_msg = "Validate DEMs using IVERT (the core functionality)."
+    validate_help_msg = "Validate DEMs (IVERT's core functionality)."
     # NOTE: The script client_test_job.py creates an identical copy of this argument list to send off a test job.
     # If any of these options are changed, go change the equivalent lines in that script as well to match the same
     # field names.

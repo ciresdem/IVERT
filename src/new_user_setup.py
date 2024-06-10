@@ -163,8 +163,14 @@ def collect_inputs(args: argparse.Namespace, only_if_not_provided: bool = True) 
     if not args.email.strip() or not only_if_not_provided:
         args.email = input("\n" + bcolors.UNDERLINE + "Your email address" + bcolors.ENDC + ": ").strip()
 
+    # Convert email to lowercase.
+    args.email = args.email.lower()
+
     if not args.username.strip():
         args.username = args.email.split("@")[0]
+
+    # Make sure the username is lowercase.
+    args.username = args.username.lower()
 
     # Check for valid AWS profile names (they can basically be anyting except empty strings)
     # If we weren't provided a profile name or we aren't using the defaults, prompt for them.
