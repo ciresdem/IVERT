@@ -168,101 +168,6 @@ def validate_dem_child_process(height_array_name,
 
     'measure_coverage' is a boolean parameter to measure how well a given pixel is covered by ICESat-2 photons.
     We'll measure a couple of different measures (centrality and coverage), and insert those parameters in the output."""
-    # Copy the "input_heights" array to local memory.
-    # Loop until it's not conflicting with another process.
-    # NOTE: This could potentially cause a blocking issue of ConnectionRefusedError happens
-    # for other reasons (some sort of failure in the system). A way around this is to enable
-    # MAX_TRIES cutoffs, but this inserts the risk of accidentally "cutting off" valid data
-    # if you have a lot of competing processes going after the same resource that take a
-    # while to get out of each others' way. I will have to think about the best way to
-    # intelligently handle both these potential scenarios.
-    # connection_success = False
-    # MAX_TRIES = 1000
-    # counter = 0
-    # while not connection_success:
-    #     # if counter >= MAX_TRIES:
-    #     #     print(f"validate_dem_child_process: Counter exceeded {MAX_TRIES} attempts to get 'input_heights'. Aborting subprocess.")
-    #     #     return
-    #     try:
-    #         heights = numpy.array(input_heights[:])
-    #         connection_success = True
-    #     except ConnectionRefusedError:
-    #         pass
-            # counter += 1
-
-    # Get the dem_indices array into local memory.
-    # Loop until it's not conflicting with another process)
-    # connection_success = False
-    # counter = 0
-    # while not connection_success:
-    #     # if counter >= MAX_TRIES:
-    #     #     print(f"validate_dem_child_process: Counter exceeded {MAX_TRIES} attempts to get 'input_i'. Aborting subprocess.")
-    #     #     return
-    #     try:
-    #         photon_i = numpy.array(input_i[:])
-    #         connection_success = True
-    #     except ConnectionRefusedError:
-    #         pass
-            # counter += 1
-
-    # Get the dem_indices array into local memory.
-    # Loop until it's not conflicting with another process)
-    # connection_success = False
-    # counter = 0
-    # while not connection_success:
-    #     # if counter >= MAX_TRIES:
-    #     #     print(f"validate_dem_child_process: Counter exceeded {MAX_TRIES} attempts to get 'input_j'. Aborting subprocess.")
-    #     #     return
-    #     try:
-    #         photon_j = numpy.array(input_j[:])
-    #         connection_success = True
-    #     except ConnectionRefusedError:
-    #         pass
-            # counter += 1
-
-    # Get the photon_codes array into local memory.
-    # Loop until it's not conflicting with another process)
-    # connection_success = False
-    # counter = 0
-    # while not connection_success:
-    #     # if counter >= MAX_TRIES:
-    #     #     print(f"validate_dem_child_process: Counter exceeded {MAX_TRIES} attempts to get 'photon_codes'. Aborting subprocess.")
-    #     #     return
-    #     try:
-    #         ph_codes = numpy.array(photon_codes[:])
-    #         connection_success = True
-    #     except ConnectionRefusedError:
-    #         pass
-            # counter += 1
-
-    # If we're measuring the coverage of the photons, we need the latitudes and longitudes as well to get the
-    # photon locations within a grid-cell.
-    # if measure_coverage:
-    #     assert (input_x is not None) and (input_y is not None)
-    #
-    #     connection_success = False
-    #     # counter = 0
-    #     while not connection_success:
-    #         # if counter >= MAX_TRIES:
-    #         #     print(f"validate_dem_child_process: Counter exceeded {MAX_TRIES} attempts to get 'photon_codes'. Aborting subprocess.")
-    #         #     return
-    #         try:
-    #             ph_x = numpy.array(input_x[:])
-    #             connection_success = True
-    #         except ConnectionRefusedError:
-    #             pass
-    #
-    #     connection_success = False
-    #     # counter = 0
-    #     while not connection_success:
-    #         # if counter >= MAX_TRIES:
-    #         #     print(f"validate_dem_child_process: Counter exceeded {MAX_TRIES} attempts to get 'photon_codes'. Aborting subprocess.")
-    #         #     return
-    #         try:
-    #             ph_y = numpy.array(input_y[:])
-    #             connection_success = True
-    #         except ConnectionRefusedError:
-    #             pass
 
     # Define shared memory arrays here.
     h_shm = shared_memory.SharedMemory(name=height_array_name)
@@ -280,6 +185,7 @@ def validate_dem_child_process(height_array_name,
     if measure_coverage:
         x_shm = shared_memory.SharedMemory(name=x_array_name)
         ph_x = numpy.ndarray(array_shape, dtype=x_dtype, buffer=x_shm.buf)
+
         y_shm = shared_memory.SharedMemory(name=y_array_name)
         ph_y = numpy.ndarray(array_shape, dtype=y_dtype, buffer=y_shm.buf)
     else:
@@ -313,7 +219,7 @@ def validate_dem_child_process(height_array_name,
                 cell_ymax_list = None
 
             # Upon the "STOP" mesage, break the loop, close the shared memory objects, and return.
-            if (type(dem_i_list) == str) and (dem_i_list == "STOP"):
+            if (type(dem_i_list) is str) and (dem_i_list == "STOP"):
                 h_shm.close()
                 pi_shm.close()
                 pj_shm.close()
@@ -532,34 +438,35 @@ def kick_off_new_child_process(height_array_name,
     return proc, pipe_parent, pipe_child
 
 
-def validate_dem_parallel(dem_name,
-                          output_dir=None,
-                          icesat2_photon_database_obj=None, # Used only if we've already created this, for efficiency.
+def validate_dem_parallel(dem_name: str,
+                          output_dir: typing.Union[str, None] = None,
+                          icesat2_photon_database_obj: typing.Union[icesat2_photon_database.ICESat2_Database, None] \
+                                                     = None, # Used only if we've already created this, for efficiency.
                           band_num: int = 1,
-                          dem_vertical_datum="egm2008",
-                          output_vertical_datum="egm2008",
-                          ivert_job_name = None,
-                          interim_data_dir=None,
-                          overwrite=False,
-                          delete_datafiles=False,
-                          mask_out_lakes=True,
-                          mask_out_buildings=True,
-                          use_osm_planet=False,
-                          mask_out_urban=False,
-                          include_gmrt_mask=False,
-                          write_result_tifs=True,
-                          write_summary_stats=True,
-                          export_coastline_mask=True,
-                          outliers_sd_threshold=2.5,
-                          include_photon_level_validation=False,
-                          plot_results=True,
-                          location_name=None,
-                          mark_empty_results=True,
-                          omit_bad_granules=True,
-                          measure_coverage=False,
-                          max_photons_per_cell=None,
-                          numprocs=parallel_funcs.physical_cpu_count(),
-                          quiet=False):
+                          dem_vertical_datum: typing.Union[str, int] = "egm2008",
+                          output_vertical_datum: typing.Union[str, int] = "egm2008",
+                          ivert_job_name: typing.Union[str, None] = None,
+                          interim_data_dir: typing.Union[str, None] = None,
+                          overwrite: bool = False,
+                          delete_datafiles: bool = False,
+                          mask_out_lakes: bool = True,
+                          mask_out_buildings: bool = True,
+                          use_osm_planet: bool = False,
+                          mask_out_urban: bool = False,
+                          include_gmrt_mask: bool = False,
+                          write_result_tifs: bool = True,
+                          write_summary_stats: bool = True,
+                          export_coastline_mask: bool = True,
+                          outliers_sd_threshold: float = 2.5,
+                          include_photon_level_validation: bool = False,
+                          plot_results: bool = True,
+                          location_name: typing.Union[str, None] = None,
+                          mark_empty_results: bool = True,
+                          omit_bad_granules: bool = True,
+                          measure_coverage: bool = False,
+                          max_photons_per_cell: typing.Union[int, None] = None,
+                          numprocs: int = parallel_funcs.physical_cpu_count(),
+                          verbose: bool = True):
     """The main function. Do it all here. But do it on more than one processor.
     TODO: Document all these method parameters. There are a bunch and they need better explanation.
     """
@@ -577,7 +484,7 @@ def validate_dem_parallel(dem_name,
     if not output_dir:
         output_dir = os.path.dirname(os.path.abspath(dem_name))
     if not os.path.exists(output_dir):
-        if not quiet:
+        if verbose:
             print("Creating output directory", output_dir)
         os.makedirs(output_dir)
 
@@ -588,7 +495,7 @@ def validate_dem_parallel(dem_name,
     if interim_data_dir is None:
         interim_data_dir = output_dir
     if not os.path.exists(interim_data_dir):
-        if not quiet:
+        if verbose:
             print("Creating interim data directory", interim_data_dir)
         os.makedirs(interim_data_dir)
 
@@ -635,13 +542,13 @@ def validate_dem_parallel(dem_name,
         if write_summary_stats:
             if not os.path.exists(summary_stats_filename):
                 if results_dataframe is None:
-                    if not quiet:
+                    if verbose:
                         print("Reading", results_dataframe_file, '...', end="")
                     results_dataframe = read_dataframe_file(results_dataframe_file)
-                    if not quiet:
+                    if verbose:
                         print("done.")
 
-                write_summary_stats_file(results_dataframe, summary_stats_filename, verbose=not quiet)
+                write_summary_stats_file(results_dataframe, summary_stats_filename, verbose=verbose)
             files_to_export.append(summary_stats_filename)
 
         if write_result_tifs:
@@ -650,13 +557,13 @@ def validate_dem_parallel(dem_name,
                     dem_ds = gdal.Open(dem_name, gdal.GA_ReadOnly)
 
                 if results_dataframe is None:
-                    if not quiet:
+                    if verbose:
                         print("Reading", results_dataframe_file, '...', end="")
                     results_dataframe = read_dataframe_file(results_dataframe_file)
-                    if not quiet:
+                    if verbose:
                         print("done.")
 
-                generate_result_geotiff(results_dataframe, dem_ds, result_tif_filename, verbose=not quiet)
+                generate_result_geotiff(results_dataframe, dem_ds, result_tif_filename, verbose=verbose)
 
             files_to_export.append(result_tif_filename)
 
@@ -666,26 +573,26 @@ def validate_dem_parallel(dem_name,
                     location_name = os.path.split(dem_name)[1]
 
                 if results_dataframe is None:
-                    if not quiet:
+                    if verbose:
                         print("Reading", results_dataframe_file, '...', end="")
                     results_dataframe = read_dataframe_file(results_dataframe_file)
-                    if not quiet:
+                    if verbose:
                         print("done.")
 
                 plot_validation_results.plot_histogram_and_error_stats_4_panels(results_dataframe,
                                                                                 plot_filename,
                                                                                 place_name=location_name,
-                                                                                verbose=not quiet)
+                                                                                verbose=verbose)
 
             files_to_export.append(plot_filename)
 
         if export_coastline_mask:
             if not os.path.exists(coastline_mask_filename):
                 if results_dataframe is None:
-                    if not quiet:
+                    if verbose:
                         print("Reading", results_dataframe_file, '...', end="")
                     results_dataframe = read_dataframe_file(results_dataframe_file)
-                    if not quiet:
+                    if verbose:
                         print("done.")
 
                 coastline_mask.create_coastline_mask(dem_name,
@@ -695,18 +602,18 @@ def validate_dem_parallel(dem_name,
                                                      use_osm_planet = use_osm_planet,
                                                      include_gmrt = include_gmrt_mask,
                                                      output_file = coastline_mask_filename,
-                                                     verbose=not quiet)
+                                                     verbose=verbose)
 
             files_to_export.append(coastline_mask_filename)
 
         # If we didn't have to open the dataframe or export anything, it was all already done.
-        elif results_dataframe is None and not quiet:
+        elif results_dataframe is None and verbose:
             print("Work already done here. Moving on.")
 
         return files_to_export
 
     elif mark_empty_results and os.path.exists(empty_results_filename):
-        if not quiet:
+        if verbose:
             print("No valid data produced during previous ICESat-2 analysis of", dem_name + ". Returning.")
         return []
 
@@ -721,7 +628,7 @@ def validate_dem_parallel(dem_name,
                                                              include_gmrt=include_gmrt_mask,
                                                              target_fname_or_dir=coastline_mask_filename,
                                                              band_num=band_num,
-                                                             verbose=not quiet)
+                                                             verbose=verbose)
 
     # Test for compound CRSs. If it's that, just get the horizontal crs from it.
     dem_crs_obj = pyproj.CRS.from_epsg(dem_epsg)
@@ -758,7 +665,7 @@ def validate_dem_parallel(dem_name,
                                                    converted_dem_name,
                                                    input_vertical_datum=dem_vertical_datum,
                                                    output_vertical_datum=output_vertical_datum,
-                                                   verbose=not quiet)
+                                                   verbose=verbose)
             if (retval != 0) or (not os.path.exists(converted_dem_name)):
                 raise FileNotFoundError(f"{dem_name} not converted correctly to {converted_dem_name}. Aborting.")
 
@@ -774,12 +681,12 @@ def validate_dem_parallel(dem_name,
 
     photon_df = icesat2_photon_database_obj.get_photon_database(dem_bbox,
                                                                 build_tiles_if_nonexistent=False,
-                                                                verbose=not quiet)
+                                                                verbose=verbose)
     if photon_df is None:
         if mark_empty_results:
             with open(empty_results_filename, 'w') as f:
                 f.close()
-            if not quiet:
+            if verbose:
                 print("Created", empty_results_filename, "to indicate no valid ICESat-2 data was returned here.")
 
             return [empty_results_filename]
@@ -807,7 +714,7 @@ def validate_dem_parallel(dem_name,
     else:
         is2_to_dem = None
 
-    if not quiet:
+    if verbose:
         print("{0:,}".format(len(photon_df)), "ICESat-2 photons present in photon dataframe.")
 
     # Filter out to keep only the highest-quality photons.
@@ -821,7 +728,7 @@ def validate_dem_parallel(dem_name,
             # Just create an empty file to mark this dataset as done.
             with open(empty_results_filename, 'w') as f:
                 f.close()
-            if not quiet:
+            if verbose:
                 print("Created", empty_results_filename, "to indicate no data was returned here.")
             return [empty_results_filename]
         else:
@@ -891,7 +798,7 @@ def validate_dem_parallel(dem_name,
         bad_granules_gid_list = \
             find_bad_icesat2_granules.get_list_of_granules_to_reject(refind_bad_granules = False,
                                                                      return_as_gid_numbers = True,
-                                                                     verbose=not quiet)
+                                                                     verbose=verbose)
 
         if len(bad_granules_gid_list) > 0:
             ph_bad_granule_mask = None
@@ -943,7 +850,7 @@ def validate_dem_parallel(dem_name,
         dem_overlap_ymin = dem_overlap_ymax + ystep
     N = len(dem_overlap_i)
 
-    if not quiet:
+    if verbose:
         num_goodpixels = numpy.count_nonzero(dem_goodpixel_mask)
         print("{:,}".format(num_goodpixels), "nonzero land cells exist in the DEM.")
         if num_goodpixels == 0:
@@ -953,7 +860,7 @@ def validate_dem_parallel(dem_name,
                 # Just create an empty file to makre this dataset as done.
                 with open(empty_results_filename, 'w') as f:
                     f.close()
-                if not quiet:
+                if verbose:
                     print("Created", empty_results_filename, "to indicate no data was returned here.")
                 return [empty_results_filename]
 
@@ -966,14 +873,14 @@ def validate_dem_parallel(dem_name,
 
     # If we have no data overlapping the valid land DEM cells, just return None
     if numpy.count_nonzero(dem_overlap_mask) == 0:
-        if not quiet:
+        if verbose:
             print("No overlapping ICESat-2 data with valid land cells. Stopping and moving on.")
 
         if mark_empty_results:
             # Just create an empty file to makre this dataset as done.
             with open(empty_results_filename, 'w') as f:
                 f.close()
-            if not quiet:
+            if verbose:
                 print("Created", empty_results_filename, "to indicate no data was returned here.")
 
             return [empty_results_filename]
@@ -983,17 +890,17 @@ def validate_dem_parallel(dem_name,
     # If requested, perform a validation on a photon-by-photon basis, in addition to the grid-cell
     # analysis peformed later on down. First, create a dataframe with just the DEM elevations.
     if include_photon_level_validation:
-        if not quiet:
+        if verbose:
             print("Performing photon-level validation...")
 
-        if not quiet:
+        if verbose:
             print("\tSubsetting ground-only photons... ", end="")
         # Get the subset of the dataframe with ground-only photons.
         photon_df_ground_only = photon_df[ph_mask_ground_only]
-        if not quiet:
+        if verbose:
             print("Done.")
 
-        if not quiet:
+        if verbose:
             print("\tGenerating DEM elevation dataframe... ", end="")
 
         # # Generate a dataframe of the dem elevations, indexed by their i,j coordinates.
@@ -1001,7 +908,7 @@ def validate_dem_parallel(dem_name,
                                        index = pandas.MultiIndex.from_arrays((dem_overlap_i, dem_overlap_j),
                                                                              names=("i", "j"))
                                        )
-        if not quiet:
+        if verbose:
             print("Done with {0} records.".format(len(dem_elev_df)))
 
         # print(dem_elev_df)
@@ -1010,12 +917,12 @@ def validate_dem_parallel(dem_name,
         # and "dem_elevations" columns to the photon dataframe.
         # This could take a while to run, depending on the sizes of the dataframes.
         # Both dataframes have (i,j) as their index, so this should be good, I shouldn't need to specify the "on=" parameter.
-        if not quiet:
+        if verbose:
             print("\tJoining photon_df and DEM elevation tables... ", end="")
         photon_df_with_dem_elevs = photon_df_ground_only.join(dem_elev_df, how='left') # on=('i','j')
         # Then, drop all photons that didn't line up with a valid land cell according to the coastline mask (dem_elevation values would be NaN)
         photon_df_with_dem_elevs = photon_df_with_dem_elevs[pandas.notna(photon_df_with_dem_elevs["dem_elevation"])]
-        if not quiet:
+        if verbose:
             print("Done with {0} records.".format(len(photon_df_with_dem_elevs)))
 
         # Get the correct height field from the database.
@@ -1028,23 +935,23 @@ def validate_dem_parallel(dem_name,
 
         # Subtract the elevations and give us a photon_level error bar.
         # This is a single-column subtraction, should be pretty quick.
-        if not quiet:
+        if verbose:
             print("\tCalculating elevation differences... ", end="")
         photon_df_with_dem_elevs["dem_minus_is2_m"] = photon_df_with_dem_elevs["dem_elevation"] - height_field
-        if not quiet:
+        if verbose:
             print("Done.")
 
         # Write out the photon level elevation difference dataset.
         base, ext = os.path.splitext(results_dataframe_file)
         photon_results_dataframe_file = base + "_photon_level_results" + ext
-        if not quiet:
+        if verbose:
             print("\tWriting", os.path.split(photon_results_dataframe_file)[1] + "... ", end="")
         photon_df_with_dem_elevs.to_hdf(photon_results_dataframe_file, "icesat2", complib="zlib", complevel=3)
-        if not quiet:
+        if verbose:
             # Add an extra newline at the end to visually separate it from the next set of steps.
             print("Done.\n")
 
-    if not quiet:
+    if verbose:
         if max_photons_per_cell is not None:
             print("Limiting processing to {0} photons per grid cell.".format(max_photons_per_cell))
 
@@ -1210,7 +1117,7 @@ def validate_dem_parallel(dem_name,
 
                 elif not proc.is_alive():
                     # If for some reason the child process has terminated (likely from an error), join it and kick off a new one.
-                    if not quiet:
+                    if verbose:
                         # raise UserWarning("Sub-process terminated unexpectedly. Some data may be missing. Restarting a new process.")
                         print("\nSub-process terminated unexpectedly. Some data may be missing. Restarting a new process.")
                     # Close out the dead process and its pipes
@@ -1249,7 +1156,7 @@ def validate_dem_parallel(dem_name,
                     counter_finished += len(chunk_result_df)
                     num_chunks_finished += 1
                     results_dataframes_list.append(chunk_result_df)
-                    if not quiet:
+                    if verbose:
                         progress_bar.ProgressBar(counter_finished, N, suffix=("{0:>" +str(len(str(N))) + "d}/{1:d}").format(counter_finished, N))
 
                     # If we still have more data to process, send another chunk along.
@@ -1287,7 +1194,7 @@ def validate_dem_parallel(dem_name,
                         open_pipes_child[i] = None
 
     except Exception as e:
-        if not quiet:
+        if verbose:
             print("\nException encountered in ICESat-2 processing loop. Exiting.")
 
         clean_procs_and_pipes(running_procs, open_pipes_parent, open_pipes_child, memory_objs)
@@ -1295,7 +1202,7 @@ def validate_dem_parallel(dem_name,
         return []
 
     t_end = time.perf_counter()
-    if not quiet:
+    if verbose:
         total_time_s = t_end - t_start
         # If there's 100 or more seconds, state the time with minutes.
         if total_time_s >= 100:
@@ -1317,7 +1224,7 @@ def validate_dem_parallel(dem_name,
     results_dataframe = pandas.concat(results_dataframes_list)
     # Subset for only valid results out. Eliminate useless nodata values.
     results_dataframe = results_dataframe[results_dataframe["mean"] != EMPTY_VAL].copy()
-    if not quiet:
+    if verbose:
         print("{0:,} valid interdecile photon records in {1:,} DEM cells.".format(results_dataframe["numphotons_intd"].sum(), len(results_dataframe)))
 
     # The outliers_sd_threshold is the # of standard deviations outside the mean to call outliers in the data, and omit
@@ -1331,7 +1238,7 @@ def validate_dem_parallel(dem_name,
         hi_cutoff = meanval + (stdval * outliers_sd_threshold)
         valid_mask = (diff_mean >= low_cutoff) & (diff_mean <= hi_cutoff)
         results_dataframe = results_dataframe[valid_mask].copy()
-        if not quiet:
+        if verbose:
             print("{0:,} DEM cells after removing outliers.".format(len(results_dataframe)))
 
     files_to_export = []
@@ -1340,14 +1247,14 @@ def validate_dem_parallel(dem_name,
         files_to_export.append(coastline_mask_filename)
 
     if len(results_dataframe) == 0:
-        if not quiet:
+        if verbose:
             print("No valid results in results dataframe. No outputs computed.")
         if mark_empty_results:
             # Just create an empty file to makre this dataset as done.
             with open(empty_results_filename, 'w') as f:
                 f.write("No ICESat-2 data data overlapping this DEM to validate.")
 
-            if not quiet:
+            if verbose:
                 print("Created", empty_results_filename, "to indicate no data was returned here.")
             files_to_export.append(empty_results_filename)
 
@@ -1363,14 +1270,14 @@ def validate_dem_parallel(dem_name,
         else:
             results_dataframe.to_hdf(results_dataframe_file, key="icesat2", complib="zlib", mode='w')
 
-        if not quiet:
+        if verbose:
             print(results_dataframe_file, "written.")
         files_to_export.append(results_dataframe_file)
 
     if write_summary_stats:
         write_summary_stats_file(results_dataframe,
                                  summary_stats_filename,
-                                 verbose=not quiet)
+                                 verbose=verbose)
         files_to_export.append(summary_stats_filename)
 
     if write_result_tifs:
@@ -1379,7 +1286,7 @@ def validate_dem_parallel(dem_name,
         generate_result_geotiff(results_dataframe,
                                 dem_ds,
                                 result_tif_filename,
-                                verbose=not quiet)
+                                verbose=verbose)
         files_to_export.append(result_tif_filename)
 
     if plot_results:
@@ -1389,12 +1296,12 @@ def validate_dem_parallel(dem_name,
         plot_validation_results.plot_histogram_and_error_stats_4_panels(results_dataframe,
                                                                         plot_filename,
                                                                         place_name=location_name,
-                                                                        verbose=not quiet)
+                                                                        verbose=verbose)
         files_to_export.append(plot_filename)
 
     if delete_datafiles:
         del dem_ds
-        if not quiet:
+        if verbose:
             print("Cleaning up...", end="")
 
         if os.path.exists(coastline_mask_filename) and not export_coastline_mask:
@@ -1402,7 +1309,7 @@ def validate_dem_parallel(dem_name,
         if (converted_dem_name is not None) and os.path.exists(converted_dem_name):
             os.remove(converted_dem_name)
 
-        if not quiet:
+        if verbose:
             print("Done.")
 
     return files_to_export
@@ -1429,7 +1336,7 @@ def write_summary_stats_file(results_df, statsfile_name, verbose=True):
     percentile_levels = [0, 1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 99, 100]
     percentile_values = numpy.percentile(mean_diff, percentile_levels)
     for l, v in zip(percentile_levels, percentile_values):
-        lines.append("    {0:>3d}-th percentile error level (m): {1}".format(l, v))
+        lines.append("    {0:>3d} percentile error level (m): {1}".format(l, v))
 
     lines.append("Mean canopy cover (% cover): {0:0.02f}".format(results_df["canopy_fraction"].mean()*100))
     lines.append("% of cells with >0 measured canopy (%): {0}".format(len(results_df.canopy_fraction > 0.0) / len(results_df)))
@@ -1565,5 +1472,5 @@ if __name__ == "__main__":
                           measure_coverage=args.measure_coverage,
                           numprocs=args.numprocs,
                           band_num=args.band_num,
-                          quiet=args.quiet)
+                          verbose=not args.quiet)
 

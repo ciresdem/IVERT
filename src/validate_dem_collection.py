@@ -235,7 +235,7 @@ def validate_list_of_dems(dem_list_or_dir,
                                                       mark_empty_results=True,
                                                       omit_bad_granules=omit_bad_granules,
                                                       measure_coverage=measure_coverage,
-                                                      quiet=not verbose)
+                                                      verbose=verbose)
 
         files_to_export.extend(retfiles)
 
