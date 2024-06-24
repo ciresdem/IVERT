@@ -1202,19 +1202,19 @@ class IvertJob:
         assert "mask_urban" in cargs
         assert "outlier_sd_threshold" in cargs
 
-        outputs_dir = os.path.join(self.job_dir, "outputs")
+        outputs_dir = str(os.path.join(self.job_dir, "outputs"))
         if not os.path.exists(outputs_dir):
             os.mkdir(outputs_dir)
 
         retfiles = []
 
-        dem_files = [os.path.join(self.job_dir, f) for f in jco.files]
+        dem_files = [str(os.path.join(self.job_dir, f)) for f in jco.files]
 
         # Handle logic of coastline_only. Don't call validate, just generate the coastline mask.
         if cargs["coastlines_only"]:
             for fn in dem_files:
 
-                self.jobs_db.update_file_status(self.username, self.job_id, os.path.basname(fn), "processing", upload_to_s3=False)
+                self.jobs_db.update_file_status(self.username, self.job_id, os.path.basename(fn), "processing", upload_to_s3=False)
 
                 rfile = coastline_mask.create_coastline_mask(fn,
                                                              mask_out_lakes=True,
@@ -1225,8 +1225,10 @@ class IvertJob:
                                                              horizontal_datum_only=True,
                                                              verbose=self.verbose)
 
-                self.jobs_db.update_file_status(self.username, self.job_id, os.path.basname(fn), "processed", upload_to_s3=False)
+                # Mark the input file as "processed."
+                self.jobs_db.update_file_status(self.username, self.job_id, os.path.basename(fn), "processed", upload_to_s3=False)
 
+                # Append the output file.
                 retfiles.append(rfile)
 
         elif len(dem_files) == 1:
@@ -1238,7 +1240,7 @@ class IvertJob:
             rfiles = validate_dem.validate_dem_parallel(dem_files[0],
                                                         output_dir=outputs_dir,
                                                         icesat2_photon_database_obj=None,
-                                                        ivert_job_name=f"{self.username}_{self.job_id}",
+                                                        ivert_job_obj=self,
                                                         dem_vertical_datum=cargs["input_vdatum"],
                                                         output_vertical_datum=cargs["output_vdatum"],
                                                         mask_out_lakes=True,
@@ -1255,7 +1257,7 @@ class IvertJob:
                                                         measure_coverage=cargs["measure_coverage"],
                                                         include_photon_level_validation=cargs["include_photons"],
                                                         band_num=cargs["band_num"],
-                                                        quiet=(not self.verbose))
+                                                        verbose=self.verbose)
 
             self.jobs_db.update_file_status(self.username, self.job_id, os.path.basename(dem_files[0]), "processed",
                                             upload_to_s3=False)
@@ -1272,7 +1274,7 @@ class IvertJob:
                                                                    output_dir=outputs_dir,
                                                                    fname_filter=None,
                                                                    fname_omit=None,
-                                                                   ivert_job_name=f"{self.username}_{self.job_id}",
+                                                                   ivert_job_obj=self,
                                                                    band_num=cargs["band_num"],
                                                                    input_vdatum=cargs["input_vdatum"],
                                                                    output_vdatum=cargs["output_vdatum"],
@@ -1339,6 +1341,8 @@ class IvertJob:
             for fname in files_to_transfer.copy():
                 fkey_src = str(os.path.join(os.path.dirname(self.job_config_s3_key), fname))
                 fkey_dst = str(os.path.join(dest_prefix, fname))
+
+                print("src:", fkey_src, "\ndst:", fkey_dst)
 
                 if self.s3m.exists(fkey_src, bucket_type="trusted"):
                     # Transfer the file to the database bucket from the trusted bucket.

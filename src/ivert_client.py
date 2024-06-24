@@ -183,7 +183,7 @@ def define_and_parse_args(return_parser: bool = False):
     parser_import = subparsers.add_parser("import", help=import_help_msg, description=import_help_msg)
     parser_import.add_argument("files_or_directory", type=str, nargs="+",
                                help="Enter a file, list of files, or a directory to import into the IVERT work bucket."
-                                    " May use bash-style wildcards such as src*.feather.")
+                                    " May use bash-style wildcards such as *.tif.")
     parser_import.add_argument("-d", "-dest", "--destination_prefix", dest="destination_prefix",
                                type=str, default="",
                                help="Destintion prefix to place files into the IVERT work bucket."
