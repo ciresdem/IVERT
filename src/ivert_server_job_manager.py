@@ -1342,15 +1342,14 @@ class IvertJob:
                 fkey_src = str(os.path.join(os.path.dirname(self.job_config_s3_key), fname))
                 fkey_dst = str(os.path.join(dest_prefix, fname))
 
-                print("src:", fkey_src, "\ndst:", fkey_dst)
-
                 if self.s3m.exists(fkey_src, bucket_type="trusted"):
                     # Transfer the file to the database bucket from the trusted bucket.
                     self.s3m.transfer(fkey_src,
                                       fkey_dst,
                                       src_bucket_type="trusted",
                                       dst_bucket_type="database",
-                                      include_metadata=True)
+                                      include_metadata=True,
+                                      delete_original=False)
 
                     # Make sure the file uploaded successfully.
                     if self.s3m.exists(fkey_dst, bucket_type="database"):
