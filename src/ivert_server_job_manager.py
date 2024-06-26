@@ -1340,16 +1340,40 @@ class IvertJob:
         while len(files_to_transfer) > 0 and ((time.time() - time_started) < self.download_timeout_s):
             for fname in files_to_transfer.copy():
                 fkey_src = str(os.path.join(os.path.dirname(self.job_config_s3_key), fname))
+                fname_local = str(os.path.join(self.output_dir, fname))
                 fkey_dst = str(os.path.join(dest_prefix, fname))
 
                 if self.s3m.exists(fkey_src, bucket_type="trusted"):
+                    # NOTE: Right now transfers are not working (it's giving "Access Denied" errors for some reason.)
                     # Transfer the file to the database bucket from the trusted bucket.
-                    self.s3m.transfer(fkey_src,
-                                      fkey_dst,
-                                      src_bucket_type="trusted",
-                                      dst_bucket_type="database",
-                                      include_metadata=True,
-                                      delete_original=False)
+                    # self.s3m.transfer(fkey_src,
+                    #                   fkey_dst,
+                    #                   src_bucket_type="trusted",
+                    #                   dst_bucket_type="database",
+                    #                   include_metadata=True,
+                    #                   delete_original=False,
+                    #                   fail_quietly=False)
+
+                    # Download the file from the trusted bucket.
+                    self.s3m.download(fkey_src,
+                                      fname_local,
+                                      bucket_type="trusted",
+                                      delete_original=False,
+                                      recursive=False,
+                                      fail_quietly=False)
+
+                    # Assert it exists locally.
+                    assert os.path.exists(fname_local)
+
+                    # Upload the file to the database bucket, overwriting it if it exists, and deleting the local copy.
+                    self.s3m.upload(fname_local,
+                                    fkey_dst,
+                                    bucket_type="database",
+                                    delete_original=True,
+                                    recursive=False,
+                                    fail_quietly=False,
+                                    include_md5=True)
+
 
                     # Make sure the file uploaded successfully.
                     if self.s3m.exists(fkey_dst, bucket_type="database"):
