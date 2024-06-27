@@ -25,14 +25,15 @@ def write_photon_tiles_to_file(outfile: str):
     """Write all photon tiles in an S3 bucket to a file."""
     ivert_config = configfile.config()
     if ivert_config.is_aws:
-        bucket_type = "database"
         s3m = s3.S3Manager()
         ptile_prefix = ivert_config.s3_photon_tiles_directory_prefix
         # Make sure it ends in a "/"
         ptile_prefix = ptile_prefix + ("" if ptile_prefix[-1] == "/" else "/")
-        fnames = s3m.listdir(ptile_prefix, bucket_type=bucket_type, recursive=False)
+        fnames = s3m.listdir(ptile_prefix, bucket_type="database", recursive=False)
         # Get rid of any subdirectories listed and strip off the prefix.
-        fnames = [fn.split("/")[-1] for fn in fnames if ((fn[-1] != "/") and fn.startswith("photon_tile"))]
+        fnames = [fn.split("/")[-1] for fn in fnames if (fn[-1] != "/")]
+        # Only include files that start with "photon_tile"
+        fnames = [fn for fn in fnames if fn.startswith("photon_tile")]
 
     else:
         dirname = ivert_config.icesat2_photon_tiles_directory
