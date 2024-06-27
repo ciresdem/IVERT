@@ -514,28 +514,33 @@ class S3Manager:
         if len(s3_key) > 0 and not s3_key.endswith("/"):
             s3_key = s3_key + "/"
 
-        bucket_obj = self.get_resource_bucket(bucket_type=bucket_type)
-        # If we're recursing, just return everything that is in that Prefix.
+        # Using a paginator helps us get more than 1000 objects.
+        client = self.get_client(bucket_type=bucket_type)
+        paginator = client.get_paginator('list_objects_v2')
+
         if recursive:
-            files = bucket_obj.objects.filter(Prefix=s3_key).all()
-            return [obj.key for obj in files]
+            # Query all the keys in batches of 1000, ignoring delimiters
+            pages = paginator.paginate(Bucket=self.get_bucketname(bucket_type=bucket_type), Prefix=s3_key)
+
+            # Get all the keys from each page, for all the pages in the paginator
+            return [obj["Key"] for page in pages for obj in page["Contents"]]
 
         else:
-            # Get the full string that occurs after the directory listed, for each subset.
-            result = self.get_client(bucket_type=bucket_type).list_objects(
-                Bucket=self.get_bucketname(bucket_type=bucket_type),
-                Prefix=s3_key,
-                Delimiter="/")
+            # Query all the keys in batches of 1000, but cut off with the delimiter
+            pages = paginator.paginate(Bucket=self.get_bucketname(bucket_type=bucket_type),
+                                       Prefix=s3_key,
+                                       Delimiter="/")
 
-            if "CommonPrefixes" in result.keys():
-                subdirs = [subdir["Prefix"] for subdir in result["CommonPrefixes"]]
-            else:
-                subdirs = []
+            subdirs = []
+            files = []
 
-            if "Contents" in result.keys():
-                files = [f["Key"] for f in result["Contents"]]
-            else:
-                files = []
+            for page in pages:
+                # Subdirectories are listed as "CommonPrefixes", while files are listed as "Contents".
+                if "CommonPrefixes" in page.keys():
+                    subdirs.extend([subdir["Prefix"] for subdir in page["CommonPrefixes"]])
+
+                if "Contents" in page.keys():
+                    files.extend([f["Key"] for f in page["Contents"]])
 
             return subdirs + files
 
