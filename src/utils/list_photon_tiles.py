@@ -15,7 +15,7 @@ else:
     try:
         import configfile
         from ... import s3
-    except ModuleNotFoundError:
+    except (ModuleNotFoundError, ImportError):
         import utils.configfile as configfile
         import s3
 
