@@ -17,10 +17,8 @@ else:
     except (ModuleNotFoundError, ImportError):
         import utils.configfile as configfile
 
-    try:
-        from ... import s3
-    except (ModuleNotFoundError, ImportError):
-        import s3
+    sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+    import s3
 
 
 def write_photon_tiles_to_file(outfile: str):
