@@ -14,9 +14,12 @@ else:
     # If running as a script, import this way.
     try:
         import configfile
-        from ... import s3
     except (ModuleNotFoundError, ImportError):
         import utils.configfile as configfile
+
+    try:
+        from ... import s3
+    except (ModuleNotFoundError, ImportError):
         import s3
 
 
