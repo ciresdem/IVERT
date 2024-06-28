@@ -114,8 +114,9 @@ class S3Manager:
             bucket_type = 'export'
         elif bucket_type in ('q', 'quarantined'):
             bucket_type = 'quarantine'
-        else:
-            raise ValueError(f"Unknown bucket type '{bucket_type}'.")
+
+        if bucket_type not in (self.available_bucket_types + self.available_bucket_aliases):
+            raise ValueError(f"Unknown bucket type '{bucket_type}'. Must be one of {self.available_bucket_types} or {self.available_bucket_aliases}.")
 
         return bucket_type
 
