@@ -220,7 +220,7 @@ class config:
 
         # Read the quarantine bucket from paths.sh
         try:
-            quarantine_line = [line for line in paths_text_lines if line.lower().startswith("s3_bucket_quarantine")][0]
+            quarantine_line = [line for line in paths_text_lines if line.lower().startswith("s3_bucket_import_quarantine")][0]
             self.s3_bucket_quarantine = quarantine_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
         except IndexError:
             self.s3_bucket_quarantine = None
