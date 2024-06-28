@@ -86,7 +86,7 @@ class S3Manager:
     def get_client(self, bucket_type=None) -> boto3.client:
         """Return the open client.
 
-        If it doesn't exist yet, open one."""
+        If it doesn't exist yet, open one and return it."""
         if bucket_type is None:
             bucket_type = self.default_bucket_type
         bucket_type = self.convert_btype(bucket_type)
@@ -115,7 +115,8 @@ class S3Manager:
         elif bucket_type in ('q', 'quarantined'):
             bucket_type = 'quarantine'
 
-        if bucket_type not in (self.available_bucket_types + self.available_bucket_aliases):
+        # Check to make sure this is a valid bucket name.
+        if bucket_type not in self.available_bucket_types:
             raise ValueError(f"Unknown bucket type '{bucket_type}'. Must be one of {self.available_bucket_types} or {self.available_bucket_aliases}.")
 
         return bucket_type
