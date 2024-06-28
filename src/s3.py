@@ -33,7 +33,7 @@ ivert_config = configfile.config()
 class S3Manager:
     """Class for copying files into and out-of the IVERT AWS S3 buckets, as needed."""
 
-    available_bucket_types = ("database", "untrusted", "trusted", "export")
+    available_bucket_types = ("database", "untrusted", "trusted", "export", "quarantine")
     default_bucket_type = "database" if ivert_config.is_aws else "untrusted"
 
     def __init__(self):
@@ -44,7 +44,8 @@ class S3Manager:
         self.bucket_dict = {"database": self.config.s3_bucket_database,
                             "untrusted": self.config.s3_bucket_import_untrusted,
                             "trusted": self.config.s3_bucket_import_trusted,
-                            "export": self.config.s3_bucket_export}
+                            "export": self.config.s3_bucket_export,
+                            "quarantine": self.config.s3_bucket_quarantine}
 
         # Different AWS profiles for each bucket. "None" indicates no profile is needed.
         # Profiles are usually needed on the user machine to use credentials for bucket access.
@@ -109,6 +110,10 @@ class S3Manager:
             bucket_type = 'untrusted'
         elif bucket_type in ('e', 'x'):
             bucket_type = 'export'
+        elif bucket_type in ('q', 'quarantined'):
+            bucket_type = 'quarantine'
+        else:
+            raise ValueError(f"Unknown bucket type '{bucket_type}'.")
 
         return bucket_type
 

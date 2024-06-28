@@ -170,12 +170,14 @@ class config:
     def _fill_bucket_names_from_ivert_setup(self, include_sns_arn=True):
         """Fills in the bucket name entries in the config object.
 
-        If we're server-side, we need to fill in [S3_BUCKET_DATABASE], [S3_BUCKET_TRUSTED], and [S3_BUCKET_EXPORT].
+        If we're server-side, we need to fill in [s3_bucket_database], [s3_bucket_trusted], and [s3_bucket_export],
+        and [s3_bucket_quarantine].
         These can be found in the ivert_setup/setup/paths.sh file from the ivert_setup repository."""
         assert hasattr(self, "s3_bucket_database")
         assert hasattr(self, "s3_bucket_import_untrusted")
         assert hasattr(self, "s3_bucket_import_trusted")
         assert hasattr(self, "s3_bucket_export")
+        assert hasattr(self, "s3_bucket_quarantine")
         if include_sns_arn:
             assert hasattr(self, "sns_topic_arn")
 
@@ -188,27 +190,40 @@ class config:
         # Get the S3 bucket names from the paths.sh file
         # For each variable, look for the line that starts with it, extract the value after the =, and strip off any comments.
 
+        # Read the database bucket from paths.sh
         try:
             db_line = [line for line in paths_text_lines if line.lower().startswith("s3_bucket_database")][0]
             self.s3_bucket_database = db_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
         except IndexError:
             self.s3_bucket_database = None
 
+        # Read the import bucket from paths.sh
         try:
             trusted_line = [line for line in paths_text_lines if line.lower().startswith("s3_bucket_import_trusted")][0]
             self.s3_bucket_import_trusted = trusted_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
         except IndexError:
             self.s3_bucket_import_trusted = None
+
+        # Read the untrusted bucket from paths.sh (if it exists there. It usually shouldn't, but it'll read it if it's there.)
         try:
             untrusted_line = [line for line in paths_text_lines if line.lower().startswith("s3_bucket_import_untrusted")][0]
             self.s3_bucket_import_untrusted = untrusted_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
         except IndexError:
             self.s3_bucket_import_untrusted = None
+
+        # Read the export bucket from paths.sh
         try:
             export_line = [line for line in paths_text_lines if line.lower().startswith("s3_bucket_export")][0]
             self.s3_bucket_export = export_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
         except IndexError:
             self.s3_bucket_export = None
+
+        # Read the quarantine bucket from paths.sh
+        try:
+            quarantine_line = [line for line in paths_text_lines if line.lower().startswith("s3_bucket_quarantine")][0]
+            self.s3_bucket_quarantine = quarantine_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
+        except IndexError:
+            self.s3_bucket_quarantine = None
 
         if include_sns_arn:
             try:
