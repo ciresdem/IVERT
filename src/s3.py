@@ -34,6 +34,8 @@ class S3Manager:
     """Class for copying files into and out-of the IVERT AWS S3 buckets, as needed."""
 
     available_bucket_types = ("database", "untrusted", "trusted", "export", "quarantine")
+    available_bucket_aliases = ("d", "t", "u", "e", "x", "q",
+                                "D", "T", "U", "E", "X", "Q")
     default_bucket_type = "database" if ivert_config.is_aws else "untrusted"
 
     def __init__(self):
@@ -733,7 +735,7 @@ def pretty_print_bucket_list(use_formatting=True):
 def add_subparser_bucket_param(subparser):
     """All the sub-parsers use the same bucket optional argument. Add it here."""
 
-    subparser.add_argument("--bucket", "-b", default=None, choices=list(S3Manager.available_bucket_types) + [None],
+    subparser.add_argument("--bucket", "-b", default=None, choices=list(S3Manager.available_bucket_types + S3Manager.available_bucket_aliases) + [None],
                            help="Shorthand alias of the src S3 bucket. "
                                 "Options are: 'database' 'd' (server work bucket, only accessible within the S3); "
                                 "'trusted' 't' (files that passed secure ingest, only accessible within the S3); "
