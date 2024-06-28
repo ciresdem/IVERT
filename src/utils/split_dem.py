@@ -22,7 +22,7 @@ def contains_glob_flags(fname: str) -> bool:
 
 def split(dem_name: typing.Union[str, list[str]],
           factor: int = 2,
-          output_dir: typing.Union[str, None]=None,
+          output_dir: typing.Union[str, None] = None,
           verbose: bool = True) -> list[str]:
     """Split a DEM into sub-segments, each side split by a factor. 2 will create 4 sub-segments.
 
@@ -30,7 +30,7 @@ def split(dem_name: typing.Union[str, list[str]],
         dem_name (str, list): The name of the DEM, with path, or a list of DEM names.
         factor (int): The factor by which to split the DEM.
         output_dir (str): The directory to which the sub-segments will be written. Defaults to the same directory as the DEM.
-        verboase (bool): Whether to print messages.
+        verbose (bool): Whether to print messages.
 
     Returns:
         list[str]: The names of the new DEM files.
