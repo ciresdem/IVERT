@@ -20,10 +20,11 @@ else:
     import new_user_setup
     import client_subscriptions
     import client_job_download
-    import client_test_job
+    import client_job_import
     import client_job_status
     import client_job_validate
-    import client_job_import
+    import client_job_update
+    import client_test_job
     import utils.query_yes_no as yes_no
     import utils.version as version
 
@@ -96,6 +97,9 @@ def define_and_parse_args(return_parser: bool = False):
                                       "outside this threshold of the mean-of-errors will be removed as noise. "
                                       "-1 (or any negative number) will disable outlier filtering. Don't use 0 here, "
                                       "that'd filter everything out. (Default: 2.5 s.d.)")
+    parser_validate.add_argument("-sns", "--sns_notifications", dest="sns_notifications",
+                                 type=yes_no.interpret_yes_no, default=True,
+                                 help="Whether to send SNS notifications. Must be followed by 'True' or 'False'. Default 'True'")
 
     ###############################################################
     # Create the "setup" subparser
@@ -152,8 +156,8 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     update_help_msg = "Update photon data in the IVERT photon database. [NOT YET IMPLEMENTED]"
     parser_update = subparsers.add_parser("update", help=update_help_msg, description=update_help_msg)
-    parser_update.add_argument("polygon_file", type=str,
-                               help="Enter a polygon file (.shp, .json, .geojson, or .gkpg).")
+    parser_update.add_argument("polygon_file", type=str, default="", required=False,
+                               help="Enter a polygon file (.shp, .json, .geojson, or .gpkg).")
     parser_update.add_argument( "-s", "--start_date", dest="start_date", type=str, default="1 year ago",
                                help="Any date string readable by python dateparser."
                                     " See https://dateparser.readthedocs.io/en/latest/ for details."
@@ -173,8 +177,11 @@ def define_and_parse_args(return_parser: bool = False):
                                     " This may results in data redundancy if new data periods overlap existing data periods. Old"
                                     " records should be removed manually sometime after this operation."
                                     " Default: False (delete old data after writing new data.")
-    parser_update.add_argument("-p", "--prompt", default=False, action="store_true",
-                               help="Prompt the user to verify settings before uploading files to IVERT. Default: False")
+    parser_update.add_argument("-w", "--wait", default=False, action="store_true",
+                               help="Wait for the job to finish before exiting. Default: False")
+    parser_validate.add_argument("-sns", "--sns_notifications", dest="sns_notifications", type=yes_no.interpret_yes_no,
+                                 default=True,
+                                 help="Whether to send SNS notifications. Must be followed by 'True', 'False'. Default 'True'")
 
     ###############################################################
     # Create the "import" subparser
@@ -199,6 +206,9 @@ def define_and_parse_args(return_parser: bool = False):
     parser_import.add_argument("-mf", "--max_files_per_chunk", dest="max_files_per_chunk", type=int, default=100,
                                help="The maximum number of files to import in a single chunk. Default: 100. If the import is larger,"
                                     "this will be performed in more than one chunk. Negative values will be treated as 'no limit.'")
+    parser_validate.add_argument("-sns", "--sns_notifications", dest="sns_notifications", type=yes_no.interpret_yes_no,
+                                 default=True,
+                                 help="Whether to send SNS notifications. Must be followed by 'True', 'False'. Default 'True'")
 
     ###############################################################
     # Create the "subscribe" subparser
@@ -212,6 +222,9 @@ def define_and_parse_args(return_parser: bool = False):
                                   help="Subscribe to all IVERT email notifications. Default: Only get notified for jobs coming from your username.")
     parser_subscribe.add_argument("-u", "--username", dest="username", type=str, default=None,
                                   help="The username of the IVERT user upon which to filter the sns notificaions, if different from the default. Default: Username is derived from your email (before the '@' symbol). You usually shouldn't need this option. Ignored if --all is set.")
+    parser_validate.add_argument("-sns", "--sns_notifications", dest="sns_notifications", type=yes_no.interpret_yes_no,
+                                 default=True,
+                                 help="Whether to send SNS notifications. Must be followed by 'True', 'False'. Default 'True'")
 
     ###############################################################
     # Create the "unsubscribe" subparser
@@ -266,9 +279,12 @@ def ivert_client_cli():
 
     # Update part of the IVERT database.
     elif args.command == "update":
-        # TODO: Implement this
-        raise NotImplementedError("Command 'update' not yet implemented.")
-        pass
+        if args.listdir:
+            client_job_update.run_update_command(args)
+        else:
+            # TODO: Implement this
+            raise NotImplementedError("Command 'update' not yet implemented.")
+            pass
 
     # Test the IVERT client and server in an end-to-end "test run."
     elif args.command == "test":

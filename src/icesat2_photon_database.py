@@ -12,7 +12,7 @@ import numpy
 import shapely.geometry
 import shutil
 import tables
-# import time
+import time
 import itertools
 
 #####################################

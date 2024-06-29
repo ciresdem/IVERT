@@ -23,6 +23,7 @@ import typing
 import jobs_database
 import quarantine_manager
 import s3
+import server_job_validate
 import sns
 import utils.configfile
 import utils.sizeof_format as sizeof
@@ -791,6 +792,11 @@ class IvertJob:
 
         This notifies the IVERT user that the job has finished and that they can download the results.
         """
+        # If we've flagged to not send notifications, do nothing.
+        if "sns_notifications" in self.job_config_object.cmd_args and \
+                not self.job_config_object.cmd_args["sns_notifications"]:
+            return
+
         # Certain jobs, we don't want to send a notification.
         # For instance, "unsubscribe" commands send no notifications. "subscribe" only send a notification at
         # job completion.
@@ -884,7 +890,7 @@ class IvertJob:
                                                                     sizeof.sizeof_fmt(ofile["size_bytes"]),
                                                                     ofile["status"])
 
-                    if len(ofiles_text) > (512 if len(ifiles_text) < 512 else 256):
+                    if len(ofiles_text) > (512 if (len(ifiles_text) < 512) else 256):
                         ofiles_text += "[Other files omitted for brevity.]\n"
                         break
 
@@ -1051,8 +1057,10 @@ class IvertJob:
 
         f_key = export_prefix + ("" if export_prefix.endswith("/") else "/") + os.path.basename(fname)
 
-        # Upload the file.
-        self.s3m.upload(fname, f_key, bucket_type=self.export_bucket_type)
+        # Upload the file, only if it doesn't already exist in the export bucket.
+        if not self.s3m.exists(f_key, bucket_type=self.export_bucket_type, return_head=False):
+            self.s3m.upload(fname, f_key, bucket_type=self.export_bucket_type)
+
         # Add an export file entry into the database for this job.
         if self.jobs_db.file_exists(self.username, self.job_id, fname):
             self.jobs_db.update_file_status(self.username, self.job_id, fname, "uploaded",
@@ -1100,7 +1108,7 @@ class IvertJob:
                 # Or, upload the other file if it exists.
                 self.upload_file_to_export_bucket(str(f_path_other), upload_to_s3=False)
                 self.update_file_status(f_path_other, "uploaded", upload_to_s3=False)
-            elif row["status"] in ["error", "timeout", "quarantined", "unknown"]:
+            elif row["status"] in ["error", "timeout", "quarantined"]:
                 # If we'd already had a problem with this file, leave the status as it was.
                 continue
             else:
@@ -1121,7 +1129,8 @@ class IvertJob:
 
     def update_file_status(self, filename, status, upload_to_s3=True):
         """Update the file status in the database."""
-        self.jobs_db.update_file_status(self.username, self.job_id, filename, status,
+        self.jobs_db.update_file_status(self.username, self.job_id,
+                                        os.path.basename(filename), status,
                                         increment_vnum=True, upload_to_s3=upload_to_s3)
 
     def run_subscribe_command(self):
@@ -1181,138 +1190,16 @@ class IvertJob:
         self.write_to_logfile(f"Test job {self.username}_{self.job_id} has completed.")
         return
 
+    def run_update_command(self):
+        # TODO: Implement this.
+        raise NotImplementedError("Command 'update' not yet implemented.")
+
     def run_validate_command(self):
-        # TODO: Just have this call server_job_validate.py directly, and skip doing it here.
+        """Run the validate command.
 
-        job_row = self.jobs_db.job_exists(self.username, self.job_id, return_row=True)
-        assert job_row
-
-        jco = self.job_config_object
-        assert hasattr(jco, "cmd_args") and type(jco.cmd_args) is dict
-        assert hasattr(jco, "files") and isinstance(jco.files, list) and len(jco.files) > 0
-        cargs = jco.cmd_args
-        assert "input_vdatum" in cargs
-        assert "output_vdatum" in cargs
-        assert "region_name" in cargs
-        assert "measure_coverage" in cargs
-        assert "include_photons" in cargs
-        assert "band_num" in cargs
-        assert "coastlines_only" in cargs
-        assert "mask_buildings" in cargs
-        assert "mask_urban" in cargs
-        assert "outlier_sd_threshold" in cargs
-
-        outputs_dir = str(os.path.join(self.job_dir, "outputs"))
-        if not os.path.exists(outputs_dir):
-            os.mkdir(outputs_dir)
-
-        retfiles = []
-
-        dem_files = [str(os.path.join(self.job_dir, f)) for f in jco.files]
-
-        # Handle logic of coastline_only. Don't call validate, just generate the coastline mask.
-        if cargs["coastlines_only"]:
-            for fn in dem_files:
-
-                self.jobs_db.update_file_status(self.username, self.job_id, os.path.basename(fn), "processing", upload_to_s3=False)
-
-                rfile = coastline_mask.create_coastline_mask(fn,
-                                                             mask_out_lakes=True,
-                                                             mask_out_buildings=cargs["mask_buildings"],
-                                                             mask_out_urban=cargs["mask_urban"],
-                                                             mask_out_nhd=True,
-                                                             run_in_tempdir=True,
-                                                             horizontal_datum_only=True,
-                                                             verbose=self.verbose)
-
-                # Mark the input file as "processed."
-                self.jobs_db.update_file_status(self.username, self.job_id, os.path.basename(fn), "processed", upload_to_s3=False)
-
-                # Append the output file.
-                retfiles.append(rfile)
-
-        elif len(dem_files) == 1:
-
-            self.jobs_db.update_file_status(self.username, self.job_id, os.path.basename(dem_files[0]), "processing",
-                                            upload_to_s3=False)
-
-            # If there's only one file, run the validate_dem module.
-            rfiles = validate_dem.validate_dem_parallel(dem_files[0],
-                                                        output_dir=outputs_dir,
-                                                        icesat2_photon_database_obj=None,
-                                                        ivert_job_obj=self,
-                                                        dem_vertical_datum=cargs["input_vdatum"],
-                                                        output_vertical_datum=cargs["output_vdatum"],
-                                                        mask_out_lakes=True,
-                                                        mask_out_buildings=cargs["mask_buildings"],
-                                                        mask_out_urban=cargs["mask_urban"],
-                                                        write_result_tifs=True,
-                                                        write_summary_stats=True,
-                                                        export_coastline_mask=True,
-                                                        plot_results=True,
-                                                        outliers_sd_threshold=cargs["outlier_sd_threshold"],
-                                                        location_name=cargs["region_name"],
-                                                        mark_empty_results=True,
-                                                        omit_bad_granules=True,
-                                                        measure_coverage=cargs["measure_coverage"],
-                                                        include_photon_level_validation=cargs["include_photons"],
-                                                        band_num=cargs["band_num"],
-                                                        verbose=self.verbose)
-
-            self.jobs_db.update_file_status(self.username, self.job_id, os.path.basename(dem_files[0]), "processed",
-                                            upload_to_s3=False)
-
-            retfiles.extend(rfiles)
-
-        else:
-            # Run the validate_dem_collection module.
-            for fn in dem_files:
-                self.jobs_db.update_file_status(self.username, self.job_id, os.path.basename(fn), "processing",
-                                                upload_to_s3=False)
-
-            rfiles = validate_dem_collection.validate_list_of_dems(dem_files,
-                                                                   output_dir=outputs_dir,
-                                                                   fname_filter=None,
-                                                                   fname_omit=None,
-                                                                   ivert_job_obj=self,
-                                                                   band_num=cargs["band_num"],
-                                                                   input_vdatum=cargs["input_vdatum"],
-                                                                   output_vdatum=cargs["output_vdatum"],
-                                                                   overwrite=False,
-                                                                   place_name=cargs["region_name"],
-                                                                   mask_buildings=cargs["mask_buildings"],
-                                                                   use_urban_mask=cargs["mask_urban"],
-                                                                   create_individual_results=True,
-                                                                   delete_datafiles=False,
-                                                                   include_photon_validation=cargs["include_photons"],
-                                                                   write_result_tifs=True,
-                                                                   omit_bad_granules=True,
-                                                                   # write_summary_csv=True,
-                                                                   measure_coverage=cargs["measure_coverage"],
-                                                                   outliers_sd_threshold=cargs["outlier_sd_threshold"],
-                                                                   verbose=self.verbose)
-
-            for fn in dem_files:
-                self.jobs_db.update_file_status(self.username, self.job_id, os.path.basename(fn), "processed",
-                                                upload_to_s3=False)
-
-            retfiles.extend(rfiles)
-
-        # Add the resulting files to the database.
-        updated_at_least_one_file = False
-        for i, rfile in enumerate(retfiles):
-            # Add the resulting file to the list of output files in the database. It will be uploaded later.
-            if not self.jobs_db.file_exists(rfile, self.username, self.job_id, return_row=False):
-                self.jobs_db.create_new_file_record(rfile,
-                                                    self.job_id,
-                                                    self.username,
-                                                    import_or_export=1, # mark for export.
-                                                    status="processed",
-                                                    upload_to_s3=False)
-                updated_at_least_one_file = True
-
-        if updated_at_least_one_file:
-            self.jobs_db.upload_to_s3(only_if_newer=False)
+        This takes more logic, so it's in its own module rather than completely defined here."""
+        # Run the validation command from its own module.
+        server_job_validate.run_validate_command(ivert_job_obj=self)
 
         return
 
@@ -1337,67 +1224,84 @@ class IvertJob:
         time_started = time.time()
         bytes_copied = 0
 
+        if len(files_to_transfer) > 0:
+            self.write_to_logfile(
+                f"Importing {len(files_to_transfer)} files to "
+                f"s3://{self.s3m.get_bucketname(bucket_type='database')}/{dest_prefix}.")
+
         while len(files_to_transfer) > 0 and ((time.time() - time_started) < self.download_timeout_s):
             for fname in files_to_transfer.copy():
+
                 fkey_src = str(os.path.join(os.path.dirname(self.job_config_s3_key), fname))
                 fname_local = str(os.path.join(self.output_dir, fname))
                 fkey_dst = str(os.path.join(dest_prefix, fname))
 
-                if self.s3m.exists(fkey_src, bucket_type="trusted"):
-                    # NOTE: Right now transfers are not working (it's giving "Access Denied" errors for some reason.)
-                    # Transfer the file to the database bucket from the trusted bucket.
-                    # self.s3m.transfer(fkey_src,
-                    #                   fkey_dst,
-                    #                   src_bucket_type="trusted",
-                    #                   dst_bucket_type="database",
-                    #                   include_metadata=True,
-                    #                   delete_original=False,
-                    #                   fail_quietly=False)
+                try:
+                    if self.s3m.exists(fkey_src, bucket_type="trusted"):
+                        # NOTE: Right now transfers are not working (it's giving "Access Denied" errors for some reason.)
+                        # Transfer the file to the database bucket from the trusted bucket.
+                        # self.s3m.transfer(fkey_src,
+                        #                   fkey_dst,
+                        #                   src_bucket_type="trusted",
+                        #                   dst_bucket_type="database",
+                        #                   include_metadata=True,
+                        #                   delete_original=False,
+                        #                   fail_quietly=False)
 
-                    # Download the file from the trusted bucket.
-                    self.s3m.download(fkey_src,
-                                      fname_local,
-                                      bucket_type="trusted",
-                                      delete_original=False,
-                                      recursive=False,
-                                      fail_quietly=False)
+                        # Download the file from the trusted bucket.
+                        self.s3m.download(fkey_src,
+                                          fname_local,
+                                          bucket_type="trusted",
+                                          delete_original=False,
+                                          recursive=False,
+                                          fail_quietly=False)
 
-                    # Assert it exists locally.
-                    assert os.path.exists(fname_local)
+                        # If the file doesn't exist locally, then something happened during the download. Skip and try again.
+                        if not os.path.exists(fname_local):
+                            continue
 
-                    # Upload the file to the database bucket, overwriting it if it exists, and deleting the local copy.
-                    self.s3m.upload(fname_local,
-                                    fkey_dst,
-                                    bucket_type="database",
-                                    delete_original=True,
-                                    recursive=False,
-                                    fail_quietly=False,
-                                    include_md5=True)
-
-
-                    # Make sure the file uploaded successfully.
-                    if self.s3m.exists(fkey_dst, bucket_type="database"):
-
-                        if self.verbose:
-                            print(fname, "transferred to", dest_prefix)
-
-                        fsize = self.s3m.size(fkey_dst, bucket_type="database")
-
-                        # If the file exists locally, mark it as 'processed'.
-                        self.jobs_db.update_file_status(self.username, self.job_id, fname, "processed",
-                                                        new_size=fsize, upload_to_s3=False)
-
-                        bytes_copied += fsize
+                        # Upload the file to the database bucket, overwriting it if it exists, and deleting the local copy.
+                        self.s3m.upload(fname_local,
+                                        fkey_dst,
+                                        bucket_type="database",
+                                        delete_original=True,
+                                        recursive=False,
+                                        fail_quietly=False,
+                                        include_md5=True)
 
                     else:
-                        if self.verbose:
-                            print("Error with file", fname)
+                        continue
 
-                        # If we can't find the file and its status is not some type of error, mark it as 'error'.
-                        self.jobs_db.update_file_status(self.username, self.job_id, fname, "error", upload_to_s3=False)
+                except Exception as e:
+                    self.write_to_logfile(traceback.format_exc())
 
-                    files_to_transfer.remove(fname)
-                    numfiles_processed += 1
+                # Make sure the file uploaded successfully.
+                if self.s3m.exists(fkey_dst, bucket_type="database"):
+
+                    if self.verbose:
+                        print(fname, "transferred to", dest_prefix)
+
+                    fsize = self.s3m.size(fkey_dst, bucket_type="database")
+
+                    # If the file exists locally, mark it as 'processed'.
+                    self.jobs_db.update_file_status(self.username, self.job_id, fname, "processed",
+                                                    new_size=fsize, upload_to_s3=False)
+
+                    self.write_to_logfile(f"{fname}: imported {sizeof.sizeof_fmt(fsize)}")
+
+                    bytes_copied += fsize
+
+                else:
+                    if self.verbose:
+                        print("Error with file", fname)
+
+                    # If we can't find the file and its status is not some type of error, mark it as 'error'.
+                    self.jobs_db.update_file_status(self.username, self.job_id, fname, "error", upload_to_s3=False)
+
+                    self.write_to_logfile(f"{fname}: Error, did not import successfully.")
+
+                files_to_transfer.remove(fname)
+                numfiles_processed += 1
 
             # Sleep for a few seconds and then try again.
             time.sleep(3)
@@ -1406,18 +1310,16 @@ class IvertJob:
             # If we still have files to transfer, mark them as 'timeout'.
             for fname in files_to_transfer:
                 self.jobs_db.update_file_status(self.username, self.job_id, fname, "timeout", upload_to_s3=False)
+                self.write_to_logfile(f"{fname}: Timed out after {self.download_timeout_s} seconds, did not import.")
 
         # Get the total size of the files from this job. Write it to the logfile.
         self.write_to_logfile(
             f"Imported {numfiles_processed} of {len(jco.files)} files totaling {sizeof.sizeof_fmt(bytes_copied)} to directory {dest_prefix}.")
         if len(files_to_transfer) > 0:
-            self.write_to_logfile(f"Timed out after {self.download_timeout_s} seconds. {len(files_to_transfer)} files were not processed.")
+            self.write_to_logfile(f"{len(files_to_transfer)} files timed out after {self.download_timeout_s} seconds and were not imported.")
 
         return
 
-    def run_update_command(self):
-        # TODO: Implement this
-        raise NotImplementedError("Command 'update' not yet implemented.")
 
 def kill_other_ivert_job_managers():
     "Kill any other running instances of the ivert_job_manager process."
@@ -1494,6 +1396,10 @@ if __name__ == "__main__":
             print(
                 f"Process {other_manager.pid}: '{' '.join(other_manager.cmdline())}' is already running.")
             exit(0)
+
+        # Set up multiprocessing. 'spawn' is the slowest but the most reliable. Otherwise, file handlers are fucking us up.
+        # This is primarily used by "validate" commands.
+        mp.set_start_method('spawn')
 
         # Start the job manager
         JM = IvertJobManager(input_bucket_type=args.bucket,

@@ -4,14 +4,14 @@
 Code for validating and summarizing an entire list or directory of DEMs.
 """
 
+import argparse
 import ast
+import multiprocessing as mp
+import numpy
 import os
 import pandas
-import numpy
-# from osgeo import gdal, osr
-import typing
-import argparse
 import re
+import typing
 
 ####################################
 # # Include the base /src/ directory of thie project, to add all the other modules.
@@ -75,11 +75,12 @@ def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFra
 
     return output_df
 
+
 def validate_list_of_dems(dem_list_or_dir,
                           output_dir=None,
                           fname_filter=r"\.tif\Z",
                           fname_omit=None,
-                          ivert_job_name=None,
+                          ivert_job_obj=None,
                           band_num: int=1,
                           input_vdatum="wgs84",
                           output_vdatum="wgs84",
@@ -213,38 +214,50 @@ def validate_list_of_dems(dem_list_or_dir,
 
         results_h5_file = os.path.join(this_output_dir, os.path.splitext(os.path.split(dem_path)[1])[0] + "_results.h5")
 
+        if ivert_job_obj:
+            ivert_job_obj.update_file_status(os.path.basename(dem_path), "processing", upload_to_s3=False)
+
+        shared_ret_values = {}
         # Do the validation.
         # Note: We automatically skip the icesat-2 download here because we already downloaded it above for the whole directory.
-        retfiles = validate_dem.validate_dem_parallel(dem_path,
-                                                      output_dir,
-                                                      band_num=band_num,
-                                                      icesat2_photon_database_obj=photon_db_obj,
-                                                      ivert_job_name=ivert_job_name,
-                                                      dem_vertical_datum=input_vdatum,
-                                                      output_vertical_datum=output_vdatum,
-                                                      interim_data_dir=this_output_dir,
-                                                      overwrite=overwrite,
-                                                      delete_datafiles=delete_datafiles,
-                                                      write_result_tifs=write_result_tifs,
-                                                      mask_out_buildings=mask_buildings,
-                                                      mask_out_urban=use_urban_mask,
-                                                      write_summary_stats=create_individual_results,
-                                                      include_photon_level_validation=include_photon_validation,
-                                                      plot_results=create_individual_results,
-                                                      outliers_sd_threshold=outliers_sd_threshold,
-                                                      mark_empty_results=True,
-                                                      omit_bad_granules=omit_bad_granules,
-                                                      measure_coverage=measure_coverage,
-                                                      verbose=verbose)
+        validate_dem.validate_dem(dem_path,
+                                  output_dir,
+                                  band_num=band_num,
+                                  shared_ret_values=shared_ret_values,
+                                  icesat2_photon_database_obj=photon_db_obj,
+                                  ivert_job_obj=ivert_job_obj,
+                                  dem_vertical_datum=input_vdatum,
+                                  output_vertical_datum=output_vdatum,
+                                  interim_data_dir=this_output_dir,
+                                  overwrite=overwrite,
+                                  delete_datafiles=delete_datafiles,
+                                  write_result_tifs=write_result_tifs,
+                                  mask_out_buildings=mask_buildings,
+                                  mask_out_urban=use_urban_mask,
+                                  write_summary_stats=create_individual_results,
+                                  include_photon_level_validation=include_photon_validation,
+                                  plot_results=create_individual_results,
+                                  outliers_sd_threshold=outliers_sd_threshold,
+                                  mark_empty_results=True,
+                                  omit_bad_granules=omit_bad_granules,
+                                  measure_coverage=measure_coverage,
+                                  verbose=verbose)
 
-        files_to_export.extend(retfiles)
+        files_to_export.extend(list(shared_ret_values.values()))
 
         if os.path.exists(results_h5_file):
             # Append the filename as a column
             list_of_results_dfs.append(results_h5_file)
+            if ivert_job_obj:
+                ivert_job_obj.upload_file_to_export_bucket(results_h5_file)
+                # Update the DEM file status
+                ivert_job_obj.update_file_status(os.path.basename(dem_path), "processed", upload_to_s3=True)
+        elif ivert_job_obj:
+            ivert_job_obj.update_file_status(os.path.basename(dem_path), "error", upload_to_s3=True)
 
     # An extra newline is appreciated here just for readability's sake.
-    print()
+    if verbose:
+        print()
 
     if len(list_of_results_dfs) == 0:
         if verbose:
@@ -258,11 +271,13 @@ def validate_list_of_dems(dem_list_or_dir,
                                                                         verbose=verbose)
 
     if write_summary_csv:
-        summary_csv_name = os.path.join(stats_and_plots_dir, stats_and_plots_base + ".csv")
+        summary_csv_name = str(os.path.join(stats_and_plots_dir, stats_and_plots_base + ".csv"))
         write_summary_csv_file(total_results_df, summary_csv_name,
                                verbose=verbose)
 
         files_to_export.append(summary_csv_name)
+        if ivert_job_obj is not None:
+            ivert_job_obj.upload_file_to_export_bucket(summary_csv_name)
 
     # Output the statistics summary file.
     validate_dem.write_summary_stats_file(total_results_df,
@@ -270,6 +285,8 @@ def validate_list_of_dems(dem_list_or_dir,
                                           verbose=verbose)
 
     files_to_export.append(statsfile_name)
+    if ivert_job_obj is not None:
+        ivert_job_obj.upload_file_to_export_bucket(statsfile_name)
 
     # Output the validation results plot.
     plot_validation_results.plot_histogram_and_error_stats_4_panels(total_results_df,
@@ -278,6 +295,8 @@ def validate_list_of_dems(dem_list_or_dir,
                                                                     verbose=verbose)
 
     files_to_export.append(plot_file_name)
+    if ivert_job_obj is not None:
+        ivert_job_obj.upload_file_to_export_bucket(plot_file_name)
 
     if results_h5 is not None:
         total_results_df.to_hdf(results_h5, key="results", complib="zlib", complevel=3)
@@ -285,6 +304,8 @@ def validate_list_of_dems(dem_list_or_dir,
             print(results_h5, "written.")
 
     files_to_export.append(results_h5)
+    if ivert_job_obj is not None:
+        ivert_job_obj.upload_file_to_export_bucket(results_h5)
 
     return files_to_export
 
@@ -378,6 +399,9 @@ def main():
     # like a generally safe assumption, and behavior is okay if another process
     # or the user manually deletes directories during execusion, it will cause
     # the program to crash when it tries to write files there. That's a user error.
+
+    # Set up multiprocessing. 'spawn' is the slowest but the most reliable. Otherwise, file handlers are fucking us up.
+    mp.set_start_method('spawn')
 
     validate_list_of_dems(args.directory_or_files,
                           fname_filter=args.fname_filter,
