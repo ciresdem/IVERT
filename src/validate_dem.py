@@ -481,11 +481,11 @@ def validate_dem(dem_name: str,
         verbose (bool): Be verbose.
     """
     if ivert_job_obj:
-        # Make the object pickleable by deleting any database connections.
-        ivert_job_obj.make_pickleable()
-
         if subdivision_number == 0:
             ivert_job_obj.update_file_status(os.path.basename(dem_name), "processing", upload_to_s3=False)
+
+        # Make the object pickleable by deleting any database connections.
+        ivert_job_obj.make_pickleable()
 
     if shared_ret_values is None:
         shared_ret_values = {}

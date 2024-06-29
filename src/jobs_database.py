@@ -158,6 +158,8 @@ class JobsDatabaseClient:
         """
         if self.conn:
             self.conn.close()
+
+        del self.conn
         self.conn = None
 
     def exists(self,
