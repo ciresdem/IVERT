@@ -150,6 +150,16 @@ class JobsDatabaseClient:
         # Return the connection
         return self.conn
 
+    def make_pickleable(self):
+        """Makes the database connection pickleable.
+
+        Returns:
+            None
+        """
+        if self.conn:
+            self.conn.close()
+        self.conn = None
+
     def exists(self,
                local_or_s3: str = 'local') -> bool:
         """Checks if the database exists.

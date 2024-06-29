@@ -480,8 +480,12 @@ def validate_dem(dem_name: str,
         orig_dem_name (str): Name of the original DEM file. Only used for error messages.
         verbose (bool): Be verbose.
     """
-    if ivert_job_obj and subdivision_number == 0:
-        ivert_job_obj.update_file_status(os.path.basename(dem_name), "processing", upload_to_s3=False)
+    if ivert_job_obj:
+        # Make the object pickleable by deleting any database connections.
+        ivert_job_obj.make_pickleable()
+
+        if subdivision_number == 0:
+            ivert_job_obj.update_file_status(os.path.basename(dem_name), "processing", upload_to_s3=False)
 
     if shared_ret_values is None:
         shared_ret_values = {}

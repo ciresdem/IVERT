@@ -787,6 +787,12 @@ class IvertJob:
 
         return
 
+    def make_pickleable(self):
+        """Make the object pickleable.
+
+        This primarily means getting rid of any sqlite objects that can't be pickled in the database."""
+        self.jobs_db.make_pickleable()
+
     def push_sns_notification(self, start_or_finish: str, upload_to_s3: bool = True):
         """Push a SNS notification for a started or finished job.
 
