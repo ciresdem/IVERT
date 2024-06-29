@@ -156,7 +156,7 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     update_help_msg = "Update photon data in the IVERT photon database. [NOT YET IMPLEMENTED]"
     parser_update = subparsers.add_parser("update", help=update_help_msg, description=update_help_msg)
-    parser_update.add_argument("polygon_file", type=str, default="", required=False,
+    parser_update.add_argument("polygon_file", type=str,
                                help="Enter a polygon file (.shp, .json, .geojson, or .gpkg).")
     parser_update.add_argument( "-s", "--start_date", dest="start_date", type=str, default="1 year ago",
                                help="Any date string readable by python dateparser."
