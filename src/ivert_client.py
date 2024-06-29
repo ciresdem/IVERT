@@ -179,7 +179,7 @@ def define_and_parse_args(return_parser: bool = False):
                                     " Default: False (delete old data after writing new data.")
     parser_update.add_argument("-w", "--wait", default=False, action="store_true",
                                help="Wait for the job to finish before exiting. Default: False")
-    parser_validate.add_argument("-sns", "--sns_notifications", dest="sns_notifications", type=yes_no.interpret_yes_no,
+    parser_update.add_argument("-sns", "--sns_notifications", dest="sns_notifications", type=yes_no.interpret_yes_no,
                                  default=True,
                                  help="Whether to send SNS notifications. Must be followed by 'True', 'False'. Default 'True'")
 
