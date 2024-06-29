@@ -180,8 +180,8 @@ def define_and_parse_args(return_parser: bool = False):
     parser_update.add_argument("-w", "--wait", default=False, action="store_true",
                                help="Wait for the job to finish before exiting. Default: False")
     parser_update.add_argument("-sns", "--sns_notifications", dest="sns_notifications", type=yes_no.interpret_yes_no,
-                                 default=True,
-                                 help="Whether to send SNS notifications. Must be followed by 'True', 'False'. Default 'True'")
+                               default=True,
+                               help="Whether to send SNS notifications. Must be followed by 'True', 'False'. Default 'True'")
 
     ###############################################################
     # Create the "import" subparser
@@ -206,9 +206,9 @@ def define_and_parse_args(return_parser: bool = False):
     parser_import.add_argument("-mf", "--max_files_per_chunk", dest="max_files_per_chunk", type=int, default=100,
                                help="The maximum number of files to import in a single chunk. Default: 100. If the import is larger,"
                                     "this will be performed in more than one chunk. Negative values will be treated as 'no limit.'")
-    parser_validate.add_argument("-sns", "--sns_notifications", dest="sns_notifications", type=yes_no.interpret_yes_no,
-                                 default=True,
-                                 help="Whether to send SNS notifications. Must be followed by 'True', 'False'. Default 'True'")
+    parser_import.add_argument("-sns", "--sns_notifications", dest="sns_notifications", type=yes_no.interpret_yes_no,
+                               default=True,
+                               help="Whether to send SNS notifications. Must be followed by 'True', 'False'. Default 'True'")
 
     ###############################################################
     # Create the "subscribe" subparser
@@ -222,9 +222,9 @@ def define_and_parse_args(return_parser: bool = False):
                                   help="Subscribe to all IVERT email notifications. Default: Only get notified for jobs coming from your username.")
     parser_subscribe.add_argument("-u", "--username", dest="username", type=str, default=None,
                                   help="The username of the IVERT user upon which to filter the sns notificaions, if different from the default. Default: Username is derived from your email (before the '@' symbol). You usually shouldn't need this option. Ignored if --all is set.")
-    parser_validate.add_argument("-sns", "--sns_notifications", dest="sns_notifications", type=yes_no.interpret_yes_no,
-                                 default=True,
-                                 help="Whether to send SNS notifications. Must be followed by 'True', 'False'. Default 'True'")
+    parser_subscribe.add_argument("-sns", "--sns_notifications", dest="sns_notifications", type=yes_no.interpret_yes_no,
+                                  default=True,
+                                  help="Whether to send SNS notifications. Must be followed by 'True', 'False'. Default 'True'")
 
     ###############################################################
     # Create the "unsubscribe" subparser
