@@ -5,7 +5,8 @@ import coastline_mask
 import validate_dem
 import validate_dem_collection
 
-def run_validation_command(ivert_job_obj=None):
+
+def run_validate_command(ivert_job_obj=None):
     ivj = ivert_job_obj
     job_row = ivj.jobs_db.job_exists(ivj.username, ivj.job_id, return_row=True)
     assert job_row
