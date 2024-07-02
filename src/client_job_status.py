@@ -127,7 +127,7 @@ def run_job_status_command(args: argparse.Namespace) -> None:
             for i, frow in export_files.iterrows():
                 status = frow["status"]
                 if status == "uploaded":
-                    status = f"{bcolors.bcolors.ITALIC}(not yet processed){bcolors.bcolors.ENDC}"
+                    status = f"{bcolors.bcolors.BOLD}{status}{bcolors.bcolors.ENDC}"
                 print(f"    {frow['filename']}: {status}")
 
             print(f"\n'{bcolors.bcolors.BOLD}ivert download {args.job_name}{bcolors.bcolors.ENDC}' will download the results.")
