@@ -417,6 +417,32 @@ def subdivide_dem(dem_name: str,
 
     return sub_dems
 
+def reset_results_indexes_after_merge(sub_results_df: pandas.DataFrame,
+                                      sub_dem_fname: str,
+                                      parent_dem_fname: str) -> pandas.DataFrame:
+    """DEM results dataframes are indexed by (i, j).  Reset the index after merging."""
+
+    sub_geotransform = gdal.Open(sub_dem_fname).GetGeoTransform()
+    parent_geotransform = gdal.Open(parent_dem_fname).GetGeoTransform()
+
+    x_step = sub_geotransform[1]
+    y_step = sub_geotransform[5]
+    assert x_step == parent_geotransform[1]
+    assert y_step == parent_geotransform[5]
+
+    x_offset = int((sub_geotransform[0] - parent_geotransform[0]) / x_step)
+    y_offset = int((sub_geotransform[3] - parent_geotransform[3]) / y_step)
+
+    # Assign a dem (i,j) index location for each photon. We use this for computing.
+    sub_results_df["i"] = sub_results_df.index.get_level_values("i") + y_offset
+    sub_results_df["j"] = sub_results_df.index.get_level_values("j") + x_offset
+
+    # Re-create an (i,j) multi-index into the array.
+    sub_results_df.set_index(["i", "j"], drop=True, inplace=True)
+
+    return sub_results_df
+
+
 
 def validate_dem(dem_name: str,
                  output_dir: typing.Union[str, None] = None,
@@ -608,8 +634,8 @@ def validate_dem(dem_name: str,
                          use_osm_planet=use_osm_planet,
                          mask_out_urban=mask_out_urban,
                          include_gmrt_mask=include_gmrt_mask,
-                         write_result_tifs=write_result_tifs,
-                         write_summary_stats=write_summary_stats,
+                         write_result_tifs=False, # No need to write the results tifs for subsets.
+                         write_summary_stats=False, # Not need to write the summary stats file for subsets.
                          export_coastline_mask=export_coastline_mask,
                          outliers_sd_threshold=None, # Don't filter outliers until we get all the results back.
                          include_photon_level_validation=include_photon_level_validation,
@@ -637,7 +663,16 @@ def validate_dem(dem_name: str,
             all_fnames = [sub_shared_ret_values[i][common_key] for i in range(len(sub_shared_ret_values)) if
                           common_key in sub_shared_ret_values[i]]
             # Concatenate the results dataframes.
-            shared_results_df = pandas.concat([pandas.read_hdf(fname) for fname in all_fnames], ignore_index=True, axis=0)
+            output_dfs = []
+            for fname in all_fnames:
+                dem_results_df = pandas.read_hdf(fname)
+                # Now I gotta reset the i,j indexes.
+                sub_dem_name = fname.replace("_results.h5", ".tif")
+                parent_dem_name = dem_name
+                dem_results_df = reset_results_indexes_after_merge(dem_results_df, sub_dem_name, parent_dem_name)
+                output_dfs.append(dem_results_df)
+
+            shared_results_df = pandas.concat(output_dfs, ignore_index=False, axis=0)
             # After we've combined all the resutls, *then* filter out outliers if they exist.
             if outliers_sd_threshold is not None:
                 assert type(outliers_sd_threshold) in (int, float)
@@ -660,7 +695,7 @@ def validate_dem(dem_name: str,
             if verbose:
                 print(os.path.basename(output_fname), "written and exported.")
 
-        if "result_tif_filename" in common_keys:
+        if write_result_tifs:
             common_key = "result_tif_filename"
             output_fname = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_ICESat2_error_map.tif")
             generate_result_geotiff(shared_results_df, gdal.Open(dem_name, gdal.GA_ReadOnly),
@@ -696,7 +731,7 @@ def validate_dem(dem_name: str,
             if ivert_job_name is not None and subdivision_number == 0:
                 ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_coastline_fname, upload_to_s3=False)
 
-        if "empty_results_filename" in common_keys:
+        if mark_empty_results:
             # If any of the results existed, we don't need to do this just because one sub-result doesn't exist.
             if "results_dataframe_file" not in common_keys:
                 empty_fname = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_EMPTY.txt")
@@ -706,7 +741,7 @@ def validate_dem(dem_name: str,
                 if ivert_job_name is not None and subdivision_number == 0:
                     ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_fname, upload_to_s3=False)
 
-        if "summary_stats_filename" in common_keys:
+        if write_summary_stats:
             # Generate a new summary stats file only if we have results and if the recursion depth is zero.
             if shared_results_df is not None and subdivision_number == 0:
                 output_fname = os.path.join(output_dir,
