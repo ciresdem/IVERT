@@ -17,12 +17,11 @@ import typing
 # # Include the base /src/ directory of thie project, to add all the other modules.
 # import import_parent_dir; import_parent_dir.import_src_dir_via_pythonpath()
 ####################################
-import validate_dem as validate_dem
-# import nsidc_download as nsidc_download
 import icesat2_photon_database as icesat2_photon_database
-# import classify_icesat2_photons as classify_icesat2_photons
+import jobs_database
+import server_file_export
 import plot_validation_results as plot_validation_results
-# import coastline_mask as coastline_mask
+import validate_dem as validate_dem
 
 
 def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFrame, str],
@@ -76,33 +75,31 @@ def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFra
     return output_df
 
 
-def validate_list_of_dems(dem_list_or_dir,
-                          output_dir=None,
-                          fname_filter=r"\.tif\Z",
-                          fname_omit=None,
-                          ivert_job_obj=None,
-                          band_num: int=1,
-                          input_vdatum="wgs84",
-                          output_vdatum="wgs84",
-                          overwrite=False,
-                          place_name=None,
-                          mask_buildings=True,
-                          use_urban_mask=False,
-                          create_individual_results = False,
-                          delete_datafiles=False,
-                          include_photon_validation=True,
-                          write_result_tifs=False,
-                          omit_bad_granules = True,
-                          write_summary_csv = True,
-                          measure_coverage = False,
-                          outliers_sd_threshold=2.5,
-                          verbose=True):
+def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
+                          output_dir: typing.Union[str, None] = None,
+                          fname_filter: typing.Union[str, None] = r"\.tif\Z",
+                          fname_omit: typing.Union[str, None] = None,
+                          ivert_job_name: typing.Union[str, None] = None,
+                          band_num: int = 1,
+                          input_vdatum: str = "egm2008",
+                          output_vdatum: str = "egm2008",
+                          overwrite: bool = False,
+                          place_name: typing.Union[str, None] = None,
+                          mask_buildings: bool = True,
+                          use_urban_mask: bool = False,
+                          create_individual_results: bool = False,
+                          delete_datafiles: bool = False,
+                          include_photon_validation: bool = True,
+                          write_result_tifs: bool = False,
+                          omit_bad_granules: bool = True,
+                          write_summary_csv: bool = True,
+                          measure_coverage: bool = False,
+                          outliers_sd_threshold: float = 2.5,
+                          verbose: bool = True):
     """Take a list of DEMs, presumably in a single area, and output validation files for those DEMs.
 
     DEMs should encompass a contiguous area so as to use the same set of ICESat-2 granules for
     validation."""
-    # TODO: If ivert_job_name is defined, then use it to update the database with file statuses as the job goes on.
-
     if output_dir is None:
         if os.path.isdir(dem_list_or_dir):
             stats_and_plots_dir = dem_list_or_dir
@@ -132,6 +129,17 @@ def validate_list_of_dems(dem_list_or_dir,
     else:
         stats_and_plots_base = place_name.replace(" ", "_") + "_results"
 
+    if ivert_job_name is None:
+        ivert_jobs_db = None
+        ivert_exporter = None
+        ivert_username = None
+        ivert_job_id = None
+    else:
+        ivert_jobs_db = jobs_database.JobsDatabaseServer()
+        ivert_exporter = server_file_export.IvertExporter(s3_manager=None, jobs_db=ivert_jobs_db)
+        ivert_username = server_file_export.get_username(ivert_job_name)
+        ivert_job_id = server_file_export.get_job_id(ivert_job_name)
+
     statsfile_name = os.path.join(stats_and_plots_dir, stats_and_plots_base + ".txt")
     plot_file_name = os.path.join(stats_and_plots_dir, stats_and_plots_base + ".png")
     results_h5 = os.path.join(stats_and_plots_dir, stats_and_plots_base + ".h5")
@@ -148,6 +156,8 @@ def validate_list_of_dems(dem_list_or_dir,
             validate_dem.write_summary_stats_file(results_df,
                                                   statsfile_name,
                                                   verbose=verbose)
+            if ivert_job_name is not None:
+                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, statsfile_name)
 
         if not os.path.exists(plot_file_name):
             if results_df is None:
@@ -158,6 +168,9 @@ def validate_list_of_dems(dem_list_or_dir,
                                                                             plot_file_name,
                                                                             place_name=place_name,
                                                                             verbose=verbose)
+            if ivert_job_name is not None:
+                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, plot_file_name)
+
         if (results_df is None) and verbose:
             print("Files '" + results_h5 + "',",
                   "'" + statsfile_name + "', and '",
@@ -214,8 +227,9 @@ def validate_list_of_dems(dem_list_or_dir,
 
         results_h5_file = os.path.join(this_output_dir, os.path.splitext(os.path.split(dem_path)[1])[0] + "_results.h5")
 
-        if ivert_job_obj:
-            ivert_job_obj.update_file_status(os.path.basename(dem_path), "processing", upload_to_s3=False)
+        if ivert_job_name:
+            ivert_jobs_db.update_file_status(ivert_username, ivert_job_id, os.path.basename(dem_path),
+                                             "processing", upload_to_s3=False)
 
         shared_ret_values = {}
         # Do the validation.
@@ -225,7 +239,7 @@ def validate_list_of_dems(dem_list_or_dir,
                                   band_num=band_num,
                                   shared_ret_values=shared_ret_values,
                                   icesat2_photon_database_obj=photon_db_obj,
-                                  ivert_job_obj=ivert_job_obj,
+                                  ivert_job_name=ivert_job_name,
                                   dem_vertical_datum=input_vdatum,
                                   output_vertical_datum=output_vdatum,
                                   interim_data_dir=this_output_dir,
@@ -248,12 +262,14 @@ def validate_list_of_dems(dem_list_or_dir,
         if os.path.exists(results_h5_file):
             # Append the filename as a column
             list_of_results_dfs.append(results_h5_file)
-            if ivert_job_obj:
-                ivert_job_obj.upload_file_to_export_bucket(results_h5_file)
+            if ivert_job_name:
+                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, results_h5_file)
                 # Update the DEM file status
-                ivert_job_obj.update_file_status(os.path.basename(dem_path), "processed", upload_to_s3=True)
-        elif ivert_job_obj:
-            ivert_job_obj.update_file_status(os.path.basename(dem_path), "error", upload_to_s3=True)
+                ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
+                                                 os.path.basename(dem_path), "processed", upload_to_s3=True)
+        elif ivert_job_name:
+            ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
+                                             os.path.basename(dem_path), "error", upload_to_s3=True)
 
     # An extra newline is appreciated here just for readability's sake.
     if verbose:
@@ -276,8 +292,8 @@ def validate_list_of_dems(dem_list_or_dir,
                                verbose=verbose)
 
         files_to_export.append(summary_csv_name)
-        if ivert_job_obj is not None:
-            ivert_job_obj.upload_file_to_export_bucket(summary_csv_name)
+        if ivert_job_name is not None:
+            ivert_exporter.upload_file_to_export_bucket(ivert_job_name, summary_csv_name)
 
     # Output the statistics summary file.
     validate_dem.write_summary_stats_file(total_results_df,
@@ -285,8 +301,8 @@ def validate_list_of_dems(dem_list_or_dir,
                                           verbose=verbose)
 
     files_to_export.append(statsfile_name)
-    if ivert_job_obj is not None:
-        ivert_job_obj.upload_file_to_export_bucket(statsfile_name)
+    if ivert_job_name is not None:
+        ivert_exporter.upload_file_to_export_bucket(ivert_job_name, statsfile_name)
 
     # Output the validation results plot.
     plot_validation_results.plot_histogram_and_error_stats_4_panels(total_results_df,
@@ -295,8 +311,8 @@ def validate_list_of_dems(dem_list_or_dir,
                                                                     verbose=verbose)
 
     files_to_export.append(plot_file_name)
-    if ivert_job_obj is not None:
-        ivert_job_obj.upload_file_to_export_bucket(plot_file_name)
+    if ivert_job_name is not None:
+        ivert_exporter.upload_file_to_export_bucket(ivert_job_name, plot_file_name)
 
     if results_h5 is not None:
         total_results_df.to_hdf(results_h5, key="results", complib="zlib", complevel=3)
@@ -304,8 +320,8 @@ def validate_list_of_dems(dem_list_or_dir,
             print(results_h5, "written.")
 
     files_to_export.append(results_h5)
-    if ivert_job_obj is not None:
-        ivert_job_obj.upload_file_to_export_bucket(results_h5)
+    if ivert_job_name is not None:
+        ivert_exporter.upload_file_to_export_bucket(ivert_job_name, results_h5)
 
     return files_to_export
 

@@ -24,12 +24,10 @@ import jobs_database
 import quarantine_manager
 import s3
 import server_job_validate
+import server_file_export
 import sns
 import utils.configfile
 import utils.sizeof_format as sizeof
-import validate_dem
-import validate_dem_collection
-import coastline_mask
 
 
 def is_another_manager_running() -> typing.Union[bool, psutil.Process]:
@@ -406,6 +404,7 @@ class IvertJobManager:
         return
 
 
+# noinspection PyTypeChecker
 class IvertJob:
     """Class for managing and running IVERT individual jobs on an EC2 instance.
 
@@ -464,10 +463,12 @@ class IvertJob:
         # The logfile to write output text and status messages.
         self.logfile = os.path.join(self.output_dir,
                                     self.job_config_s3_key.split("/")[-1].replace(".ini", "_log.txt"))
-        self.export_bucket_type = "export"
 
         # A copy of the S3Manager used to upload and download files from the S3 bucket.
         self.s3m = s3.S3Manager()
+
+        # The export file exporter
+        self.exporter = server_file_export.IvertExporter(self.s3m, self.jobs_db)
 
         # Kinda self-explanatory. Whether to produce verbose output of job status updates.
         self.verbose = verbose
@@ -551,7 +552,6 @@ class IvertJob:
             self.update_job_status("error")
             self.export_logfile_if_exists(upload_db_to_s3=False)
             return
-
 
     def get_email_templates(self) -> utils.configfile.config:
         """Get the email templates."""
@@ -1054,27 +1054,11 @@ class IvertJob:
         """When exporting a file, upload it here and update the file's status in the database.
 
         If the file doesn't yet exist in the databse, add an entry to the jobs_database for this exported file."""
-        if not os.path.exists(fname):
-            return
-
-        export_prefix = self.jobs_db.populate_export_prefix_if_not_set(self.username,
-                                                                       self.job_id,
-                                                                       increment_vnum=False,
-                                                                       upload_to_s3=False)
-
-        f_key = export_prefix + ("" if export_prefix.endswith("/") else "/") + os.path.basename(fname)
-
-        # Upload the file, only if it doesn't already exist in the export bucket.
-        if not self.s3m.exists(f_key, bucket_type=self.export_bucket_type, return_head=False):
-            self.s3m.upload(fname, f_key, bucket_type=self.export_bucket_type)
-
-        # Add an export file entry into the database for this job.
-        if self.jobs_db.file_exists(self.username, self.job_id, fname):
-            self.jobs_db.update_file_status(self.username, self.job_id, fname, "uploaded",
-                                            upload_to_s3=upload_to_s3)
-        else:
-            self.jobs_db.create_new_file_record(fname, self.job_id, self.username, 1, status="uploaded",
-                                                upload_to_s3=upload_to_s3)
+        self.exporter.upload_file_to_export_bucket(self.job_id,
+                                                   fname,
+                                                   self.username,
+                                                   overwrite=False,
+                                                   upload_to_s3=upload_to_s3)
 
         return
 

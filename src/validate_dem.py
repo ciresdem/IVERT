@@ -40,7 +40,8 @@ import utils.split_dem
 import convert_vdatum
 import coastline_mask
 import plot_validation_results
-# import classify_icesat2_photons
+import jobs_database
+import server_file_export
 import icesat2_photon_database
 import find_bad_icesat2_granules
 import ivert_server_job_manager
@@ -416,7 +417,7 @@ def validate_dem(dem_name: str,
                  band_num: int = 1,
                  dem_vertical_datum: typing.Union[str, int] = "egm2008",
                  output_vertical_datum: typing.Union[str, int] = "egm2008",
-                 ivert_job_obj: typing.Union[ivert_server_job_manager.IvertJob, None] = None,
+                 ivert_job_name: typing.Union[str, None] = None,
                  interim_data_dir: typing.Union[str, None] = None,
                  overwrite: bool = False,
                  delete_datafiles: bool = False,
@@ -453,7 +454,7 @@ def validate_dem(dem_name: str,
         shared_ret_values (dict): Shared return values from validate_dem_parallel.
         icesat2_photon_database_obj (icesat2_photon_database.ICESat2_Database): icesat-2 photon database object. Only
             used if we've already created one, such as in validate_dem_collection. Typically ignored for a single DEM.
-        ivert_job_obj (ivert_server_job_manager.IvertJob): Ivert job object. Used to upload results files for export.
+        ivert_job_name (str): The name of an ivert_server job to update file status and export results.
         interim_data_dir (str): Output directory for intermediate data. Defaults to the same as the output_dir.
         overwrite (bool): Overwrite existing files.
         delete_datafiles (bool): Delete intermediate data files after validation is complete.
@@ -480,12 +481,19 @@ def validate_dem(dem_name: str,
         orig_dem_name (str): Name of the original DEM file. Only used for error messages.
         verbose (bool): Be verbose.
     """
-    if ivert_job_obj:
-        if subdivision_number == 0:
-            ivert_job_obj.update_file_status(os.path.basename(dem_name), "processing", upload_to_s3=False)
+    if ivert_job_name:
+        ivert_jobs_db = jobs_database.JobsDatabaseServer() # Jobs database object.
+        ivert_exporter = server_file_export.IvertExporter(s3_manager=None, jobs_db=ivert_jobs_db)  # Exporter object
+        ivert_username = server_file_export.get_username(ivert_job_name)
+        ivert_job_id = server_file_export.get_job_id(ivert_job_name)
 
-        # Make the object pickleable by deleting any database connections.
-        ivert_job_obj.make_pickleable()
+        ivert_jobs_db.update_file_status(ivert_username, ivert_job_id, os.path.basename(dem_name), "processing",
+                                         upload_to_s3=True)
+    else:
+        ivert_jobs_db = None
+        ivert_exporter = None
+        ivert_username = None
+        ivert_job_id = None
 
     if shared_ret_values is None:
         shared_ret_values = {}
@@ -501,7 +509,7 @@ def validate_dem(dem_name: str,
                                  'band_num': band_num,
                                  'dem_vertical_datum': dem_vertical_datum,
                                  'output_vertical_datum': output_vertical_datum,
-                                 'ivert_job_obj': ivert_job_obj,
+                                 'ivert_job_name': ivert_job_name,
                                  'interim_data_dir': interim_data_dir,
                                  'overwrite': overwrite,
                                  'delete_datafiles': delete_datafiles,
@@ -538,8 +546,9 @@ def validate_dem(dem_name: str,
     if exitcode == 0:
         shared_ret_values.update(sub_shared_ret_values)
 
-        if ivert_job_obj and subdivision_number == 0:
-            ivert_job_obj.update_file_status(os.path.basename(dem_name), "processed", upload_to_s3=False)
+        if ivert_job_name is not None and subdivision_number == 0:
+            ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
+                                             os.path.basename(dem_name), "processed", upload_to_s3=False)
 
         return list(shared_ret_values.values())
 
@@ -548,15 +557,17 @@ def validate_dem(dem_name: str,
 
         # Unless we've already hit max recursion. In that case, error-out.
         if subdivision_number == max_subdivides:
-            if ivert_job_obj and subdivision_number == 0:
-                ivert_job_obj.update_file_status(os.path.basename(orig_dem_name), "error", upload_to_s3=False)
+            if ivert_job_name is not None and subdivision_number == 0:
+                ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
+                                                 os.path.basename(orig_dem_name), "error", upload_to_s3=False)
 
             raise MemoryError(f"validate_dem.validate_dem_parallell({orig_dem_name},...) was terminated, likely due to a memory error.")
 
         # Make sure the DEM exists that we're trying to sub-divide
         if not os.path.exists(dem_name):
-            if ivert_job_obj and subdivision_number == 0:
-                ivert_job_obj.update_file_status(os.path.basename(orig_dem_name), "error", upload_to_s3=False)
+            if ivert_job_name is not None and subdivision_number == 0:
+                ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
+                                                 os.path.basename(orig_dem_name), "error", upload_to_s3=False)
 
             raise FileNotFoundError(f"validate_dem.validate_dem_parallell({orig_dem_name},...) could not find {dem_name}.")
 
@@ -578,7 +589,7 @@ def validate_dem(dem_name: str,
                          band_num=band_num,
                          dem_vertical_datum=dem_vertical_datum,
                          output_vertical_datum=output_vertical_datum,
-                         ivert_job_obj=None, # Don't use an ivert_job_obj to export sub-results.
+                         ivert_job_name=None, # Don't use an ivert_job_name to export sub-results.
                          interim_data_dir=interim_data_dir,
                          overwrite=overwrite,
                          delete_datafiles=delete_datafiles,
@@ -620,8 +631,8 @@ def validate_dem(dem_name: str,
             output_fname = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_results.h5")
             shared_results_df.to_hdf(output_fname, key="icesat2", complib="zlib", mode='w')
             shared_ret_values[common_key] = output_fname
-            if ivert_job_obj and subdivision_number == 0:
-                ivert_job_obj.upload_file_to_export_bucket(output_fname, upload_to_s3=False)
+            if ivert_job_name is not None and subdivision_number == 0:
+                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_fname, upload_to_s3=False)
 
         if "result_tif_filename" in common_keys:
             # Merge the results tifs.
@@ -638,8 +649,8 @@ def validate_dem(dem_name: str,
 
             subprocess.run(gdal_cmd, capture_output=not verbose, check=True)
             shared_ret_values[common_key] = output_fname
-            if ivert_job_obj and subdivision_number == 0:
-                ivert_job_obj.upload_file_to_export_bucket(output_fname, upload_to_s3=False)
+            if ivert_job_name is not None and subdivision_number == 0:
+                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_fname, upload_to_s3=False)
 
         # Merge the coastline masks, only if it needs to be exported and the parent coastline mask hasn't already been created.
         output_coastline_fname = os.path.join(output_dir,
@@ -661,18 +672,18 @@ def validate_dem(dem_name: str,
 
         if export_coastline_mask:
             shared_ret_values["coastline_mask_filename"] = output_coastline_fname
-            if ivert_job_obj and subdivision_number == 0:
-                ivert_job_obj.upload_file_to_export_bucket(output_coastline_fname, upload_to_s3=False)
+            if ivert_job_name is not None and subdivision_number == 0:
+                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_coastline_fname, upload_to_s3=False)
 
         if "empty_results_filename" in common_keys:
             # If any of the results existed, we don't need to do this just because one sub-result doesn't exist.
             if "results_dataframe_file" not in common_keys:
                 empty_fname = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_EMPTY.txt")
                 with open(empty_fname, "w") as f:
-                    pass
+                    f.write(os.path.basename(dem_name) + f" had no IVERT results.")
                 shared_ret_values["empty_results_filename"] = empty_fname
-                if ivert_job_obj and subdivision_number == 0:
-                    ivert_job_obj.upload_file_to_export_bucket(empty_fname, upload_to_s3=False)
+                if ivert_job_name is not None and subdivision_number == 0:
+                    ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_fname, upload_to_s3=False)
 
         if "summary_stats_filename" in common_keys:
             # Generate a new summary stats file only if we have results and if the recursion depth is zero.
@@ -681,8 +692,8 @@ def validate_dem(dem_name: str,
                                             os.path.splitext(os.path.basename(dem_name))[0] + "_summary_stats.txt")
                 write_summary_stats_file(shared_results_df, output_fname, verbose=verbose)
                 shared_ret_values["summary_stats_filename"] = output_fname
-                if ivert_job_obj and subdivision_number == 0:
-                    ivert_job_obj.upload_file_to_export_bucket(output_fname, upload_to_s3=False)
+                if ivert_job_name is not None and subdivision_number == 0:
+                    ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_fname, upload_to_s3=False)
 
         if "photon_results_dataframe_file" in common_keys:
             common_key = "photon_results_dataframe_file"
@@ -692,8 +703,8 @@ def validate_dem(dem_name: str,
             output_fname = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_photons.h5")
             results_df.to_hdf(output_fname, key="icesat2", complib="zlib", mode='w')
             shared_ret_values[common_key] = output_fname
-            if ivert_job_obj and subdivision_number == 0:
-                ivert_job_obj.upload_file_to_export_bucket(output_fname, upload_to_s3=False)
+            if ivert_job_name is not None and subdivision_number == 0:
+                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_fname, upload_to_s3=False)
 
         if plot_results and (shared_results_df is not None) and (subdivision_number == 0):
             output_fname = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_plot.png")
@@ -702,11 +713,12 @@ def validate_dem(dem_name: str,
                                                                             place_name=location_name,
                                                                             verbose=verbose)
             shared_ret_values["plot_filename"] = output_fname
-            if ivert_job_obj:
-                ivert_job_obj.upload_file_to_export_bucket(output_fname, upload_to_s3=False)
+            if ivert_job_name is not None and subdivision_number == 0:
+                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_fname, upload_to_s3=False)
 
-        if ivert_job_obj and subdivision_number == 0:
-            ivert_job_obj.update_file_status(os.path.basename(orig_dem_name), "processed", upload_to_s3=True)
+        if ivert_job_name is not None and subdivision_number == 0:
+            ivert_jobs_db.update_file_status(ivert_username, ivert_job_id, os.path.basename(orig_dem_name),
+                                             "processed", upload_to_s3=True)
 
         return list(shared_ret_values.values())
 
@@ -722,7 +734,7 @@ def validate_dem_parallel(dem_name: str,
                           band_num: int = 1,
                           dem_vertical_datum: typing.Union[str, int] = "egm2008",
                           output_vertical_datum: typing.Union[str, int] = "egm2008",
-                          ivert_job_obj: typing.Union[ivert_server_job_manager.IvertJob, None] = None,
+                          ivert_job_name: typing.Union[str, None] = None,
                           interim_data_dir: typing.Union[str, None] = None,
                           overwrite: bool = False,
                           delete_datafiles: bool = False,
@@ -747,10 +759,15 @@ def validate_dem_parallel(dem_name: str,
     """Validate a single DEM.
 
     Parameters are described above in the vdalite_dem() docstring."""
-    # If we still don't have the input dem, raise an error.
+    # If we don't have the input dem, raise an error.
     if not os.path.exists(dem_name):
         file_not_found_msg = f"Could not find file {dem_name}."
         raise FileNotFoundError(file_not_found_msg)
+
+    if ivert_job_name:
+        ivert_exporter = server_file_export.IvertExporter()
+    else:
+        ivert_exporter = None
 
     if shared_ret_values is None:
         shared_ret_values = {}
@@ -816,8 +833,8 @@ def validate_dem_parallel(dem_name: str,
 
     elif os.path.exists(results_dataframe_file):
         results_dataframe = None
-        if ivert_job_obj is not None:
-            ivert_job_obj.upload_file_to_export_bucket(results_dataframe_file)
+        if ivert_job_name is not None:
+            ivert_exporter.upload_file_to_export_bucket(ivert_job_name, results_dataframe_file)
         files_to_export.append(results_dataframe_file)
         shared_ret_values["results_dataframe_file"] = results_dataframe_file
 
@@ -832,8 +849,8 @@ def validate_dem_parallel(dem_name: str,
 
                 write_summary_stats_file(results_dataframe, summary_stats_filename, verbose=verbose)
 
-            if ivert_job_obj is not None:
-                ivert_job_obj.upload_file_to_export_bucket(summary_stats_filename)
+            if ivert_job_name is not None:
+                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, summary_stats_filename)
             files_to_export.append(summary_stats_filename)
             shared_ret_values["summary_stats_filename"] = summary_stats_filename
 
@@ -851,8 +868,8 @@ def validate_dem_parallel(dem_name: str,
 
                 generate_result_geotiff(results_dataframe, dem_ds, result_tif_filename, verbose=verbose)
 
-            if ivert_job_obj is not None:
-                ivert_job_obj.upload_file_to_export_bucket(result_tif_filename)
+            if ivert_job_name is not None:
+                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, result_tif_filename)
             files_to_export.append(result_tif_filename)
             shared_ret_values["result_tif_filename"] = result_tif_filename
 
@@ -873,8 +890,8 @@ def validate_dem_parallel(dem_name: str,
                                                                                 place_name=location_name,
                                                                                 verbose=verbose)
 
-            if ivert_job_obj is not None:
-                ivert_job_obj.upload_file_to_export_bucket(plot_filename)
+            if ivert_job_name is not None:
+                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, plot_filename)
             files_to_export.append(plot_filename)
             shared_ret_values["plot_filename"] = plot_filename
 
@@ -896,8 +913,8 @@ def validate_dem_parallel(dem_name: str,
                                                      output_file = coastline_mask_filename,
                                                      verbose=verbose)
 
-            if ivert_job_obj is not None:
-                ivert_job_obj.upload_file_to_export_bucket(coastline_mask_filename)
+            if ivert_job_name is not None:
+                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, coastline_mask_filename)
             files_to_export.append(coastline_mask_filename)
             shared_ret_values["coastline_mask_filename"] = coastline_mask_filename
 
@@ -981,12 +998,12 @@ def validate_dem_parallel(dem_name: str,
     if photon_df is None:
         if mark_empty_results:
             with open(empty_results_filename, 'w') as f:
-                f.close()
+                f.write(os.path.basename(dem_name) + " had no ICESat-2 results.")
             if verbose:
                 print("Created", empty_results_filename, "to indicate no valid ICESat-2 data was returned here.")
 
-            if ivert_job_obj is not None:
-                ivert_job_obj.upload_file_to_export_bucket(empty_results_filename)
+            if ivert_job_name is not None:
+                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_results_filename)
             shared_ret_values["empty_results_filename"] = empty_results_filename
             files_to_export.append(empty_results_filename)
             return files_to_export
@@ -1031,8 +1048,8 @@ def validate_dem_parallel(dem_name: str,
             if verbose:
                 print("Created", empty_results_filename, "to indicate no data was returned here.")
 
-            if ivert_job_obj is not None:
-                ivert_job_obj.upload_file_to_export_bucket(empty_results_filename)
+            if ivert_job_name is not None:
+                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_results_filename)
             shared_ret_values["empty_results_filename"] = empty_results_filename
             return [empty_results_filename]
         else:
@@ -1184,12 +1201,12 @@ def validate_dem_parallel(dem_name: str,
         if mark_empty_results:
             # Just create an empty file to makre this dataset as done.
             with open(empty_results_filename, 'w') as f:
-                f.close()
+                f.write(os.path.basename(dem_name) + " did not have any ICESat-2 results.")
             if verbose:
                 print("Created", empty_results_filename, "to indicate no data was returned here.")
 
-            if ivert_job_obj is not None:
-                ivert_job_obj.upload_file_to_export_bucket(empty_results_filename)
+            if ivert_job_name is not None:
+                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_results_filename)
             shared_ret_values["empty_results_filename"] = empty_results_filename
             files_to_export.append(empty_results_filename)
             return files_to_export
@@ -1261,8 +1278,8 @@ def validate_dem_parallel(dem_name: str,
             # Add an extra newline at the end to visually separate it from the next set of steps.
             print("Done.\n")
 
-        if ivert_job_obj is not None:
-            ivert_job_obj.upload_file_to_export_bucket(photon_results_dataframe_file)
+        if ivert_job_name is not None:
+            ivert_exporter.upload_file_to_export_bucket(ivert_job_name, photon_results_dataframe_file)
         files_to_export.append(photon_results_dataframe_file)
         shared_ret_values["photon_results_dataframe_file"] = photon_results_dataframe_file
 
@@ -1557,8 +1574,8 @@ def validate_dem_parallel(dem_name: str,
             print("{0:,} DEM cells after removing outliers.".format(len(results_dataframe)))
 
     if export_coastline_mask:
-        if ivert_job_obj is not None:
-            ivert_job_obj.upload_file_to_export_bucket(coastline_mask_filename)
+        if ivert_job_name is not None:
+            ivert_exporter.upload_file_to_export_bucket(ivert_job_name, coastline_mask_filename)
         files_to_export.append(coastline_mask_filename)
         shared_ret_values["coastline_mask_filename"] = coastline_mask_filename
 
@@ -1573,8 +1590,8 @@ def validate_dem_parallel(dem_name: str,
             if verbose:
                 print("Created", empty_results_filename, "to indicate no data was returned here.")
 
-            if ivert_job_obj is not None:
-                ivert_job_obj.upload_file_to_export_bucket(empty_results_filename)
+            if ivert_job_name is not None:
+                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_results_filename)
             files_to_export.append(empty_results_filename)
             shared_ret_values["empty_results_filename"] = empty_results_filename
 
@@ -1593,8 +1610,8 @@ def validate_dem_parallel(dem_name: str,
         if verbose:
             print(results_dataframe_file, "written.")
 
-        if ivert_job_obj is not None:
-            ivert_job_obj.upload_file_to_export_bucket(results_dataframe_file)
+        if ivert_job_name is not None:
+            ivert_exporter.upload_file_to_export_bucket(ivert_job_name, results_dataframe_file)
         files_to_export.append(results_dataframe_file)
         shared_ret_values["results_dataframe_file"] = results_dataframe_file
 
@@ -1603,8 +1620,8 @@ def validate_dem_parallel(dem_name: str,
                                  summary_stats_filename,
                                  verbose=verbose)
 
-        if ivert_job_obj is not None:
-            ivert_job_obj.upload_file_to_export_bucket(summary_stats_filename)
+        if ivert_job_name is not None:
+            ivert_exporter.upload_file_to_export_bucket(ivert_job_name, summary_stats_filename)
         files_to_export.append(summary_stats_filename)
         shared_ret_values["summary_stats_filename"] = summary_stats_filename
 
@@ -1616,8 +1633,8 @@ def validate_dem_parallel(dem_name: str,
                                 result_tif_filename,
                                 verbose=verbose)
 
-        if ivert_job_obj is not None:
-            ivert_job_obj.upload_file_to_export_bucket(result_tif_filename)
+        if ivert_job_name is not None:
+            ivert_exporter.upload_file_to_export_bucket(ivert_job_name, result_tif_filename)
         files_to_export.append(result_tif_filename)
         shared_ret_values["result_tif_filename"] = result_tif_filename
 
@@ -1630,8 +1647,8 @@ def validate_dem_parallel(dem_name: str,
                                                                         place_name=location_name,
                                                                         verbose=verbose)
 
-        if ivert_job_obj is not None:
-            ivert_job_obj.upload_file_to_export_bucket(plot_filename)
+        if ivert_job_name is not None:
+            ivert_exporter.upload_file_to_export_bucket(ivert_job_name, plot_filename)
 
         files_to_export.append(plot_filename)
         shared_ret_values["plot_filename"] = plot_filename
