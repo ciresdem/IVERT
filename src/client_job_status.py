@@ -102,7 +102,7 @@ def run_job_status_command(args: argparse.Namespace) -> None:
             for i, frow in input_files.iterrows():
                 status = frow["status"]
                 if status == "downloaded":
-                    status = f"saved {bcolors.bcolors.ITALIC}(not yet processed){bcolors.bcolors.ENDC}"
+                    status = f"standing by {bcolors.bcolors.ITALIC}(not yet processed){bcolors.bcolors.ENDC}"
                 elif status == "processing":
                     status = f"{bcolors.bcolors.ITALIC}{bcolors.bcolors.BOLD}processing{bcolors.bcolors.ENDC}{bcolors.bcolors.ENDC}"
                 elif status == "processed":
@@ -128,7 +128,7 @@ def run_job_status_command(args: argparse.Namespace) -> None:
                 status = frow["status"]
                 if status == "uploaded":
                     status = f"{bcolors.bcolors.ITALIC}(not yet processed){bcolors.bcolors.ENDC}"
-                print(f"    {frow['filename']}: {frow['status']}")
+                print(f"    {frow['filename']}: {status}")
 
             print(f"\n'{bcolors.bcolors.BOLD}ivert download {args.job_name}{bcolors.bcolors.ENDC}' will download the results.")
 
