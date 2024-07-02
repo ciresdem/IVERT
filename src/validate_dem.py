@@ -611,7 +611,7 @@ def validate_dem(dem_name: str,
                          write_result_tifs=write_result_tifs,
                          write_summary_stats=write_summary_stats,
                          export_coastline_mask=export_coastline_mask,
-                         outliers_sd_threshold=None, # Don't pre-filter outliers until we get all the results back.
+                         outliers_sd_threshold=None, # Don't filter outliers until we get all the results back.
                          include_photon_level_validation=include_photon_level_validation,
                          plot_results=False, # Don't bother plotting the sub-results.
                          location_name=location_name,
@@ -648,7 +648,7 @@ def validate_dem(dem_name: str,
                 valid_mask = (diff_mean >= low_cutoff) & (diff_mean <= hi_cutoff)
                 shared_results_df = shared_results_df[valid_mask].copy()
                 if verbose:
-                    print("{0:,} DEM cells after removing outliers.".format(len(results_dataframe)))
+                    print("{0:,} DEM cells after removing outliers.".format(len(shared_results_df)))
 
             output_fname = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_results.h5")
             shared_results_df.to_hdf(output_fname, key="icesat2", complib="zlib", mode='w')
