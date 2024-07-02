@@ -398,6 +398,11 @@ def subdivide_dem(dem_name: str,
     # Don't need to keep track of the coastline files, it'll be automatically detected as existing by validate_dem_parallel.
     dem_base, ext = os.path.splitext(dem_name)
     cmask_name = dem_base + "_coastline_mask" + ext
+
+    if not os.path.exists(cmask_name):
+        if os.path.exists(os.path.join(output_dir, cmask_name)):
+            cmask_name = os.path.join(output_dir, cmask_name)
+
     if os.path.exists(cmask_name):
         cmask_names = utils.split_dem.split(cmask_name, factor=factor, verbose=verbose)
         # Gotta change the filenames though. "_coastline_mask" should be at the end.
@@ -406,6 +411,8 @@ def subdivide_dem(dem_name: str,
             cbase, cext = os.path.splitext(cbase)
             new_cbase = cbase.replace("_coastline_mask", "") + "_coastline_mask" + cext
             new_cname = os.path.join(cdir, new_cbase)
+            if verbose:
+                print(os.path.basename(cname), "->", os.path.basename(new_cname))
             os.rename(cname, new_cname)
 
     return sub_dems
