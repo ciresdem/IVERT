@@ -124,14 +124,16 @@ class IvertJobManager:
                 # If no jobs are running, sleep and try again.
                 time.sleep(self.time_interval_s)
 
+            except KeyboardInterrupt:
+                raise
+
             except Exception as e:
                 # If something crashes for any reason, sleep a bit and try again.
                 # TODO: Implement logging if errors pop up.
-                if isinstance(e, KeyboardInterrupt):
-                    raise e
-
                 if self.verbose:
-                    print(traceback.format_exc(), file=sys.stderr)
+                    traceback_txt = traceback.format_exc()
+                    print(traceback_txt, file=sys.stderr)
+
                     print(f"Continuing to iterate. Will try again in {self.time_interval_s} seconds.", file=sys.stderr)
 
                 time.sleep(self.time_interval_s)
