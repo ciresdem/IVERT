@@ -406,9 +406,11 @@ class ICESat2_Database:
         else:
             return gdf_subset["filename"].tolist()
 
-    def get_photon_database(self, polygon_or_bbox=None,
-                                  build_tiles_if_nonexistent=False,
-                                  verbose=True):
+    def get_photon_database(self,
+                            polygon_or_bbox=None,
+                            build_tiles_if_nonexistent=False,
+                            good_photons_only=True,
+                            verbose=True):
         """Given a polygon or bounding box, return the combined database of all
         the photons within the polygon or bounding box.
 
@@ -426,6 +428,7 @@ class ICESat2_Database:
 
         dataframes_list = [None] * len(df_tiles_subset.index)
 
+        # For each tile, read the data into a dataframe.
         for i, (idx, df_row) in enumerate(df_tiles_subset.iterrows()):
             fname = df_row['filename']
             if verbose:
@@ -434,6 +437,17 @@ class ICESat2_Database:
                                                  os.path.splitext(os.path.basename(fname))[0],
                                                  "...", end="")
             tile_df = self.read_photon_tile(fname)
+
+            if good_photons_only:
+                # Filter out to keep only the highest-quality photons.
+                # quality_ph == 0 ("nominal") and "conf_land" == 4 ("high") and/or "conf_land_ice" == 4 ("high")
+                # Using photon_df.eval() is far more efficient for complex expressions than a boolean python expression.
+                good_photon_mask = tile_df.eval("(quality_ph == 0) & ((conf_land == 4) | (conf_land_ice == 4))")
+                new_tile_df = tile_df[good_photon_mask].copy()
+                # Try to complete de-reference the previous dataframe to free up memory.
+                del tile_df
+                tile_df = new_tile_df
+
             dataframes_list[i] = tile_df
             if verbose:
                 print("Done.")
@@ -453,6 +467,10 @@ class ICESat2_Database:
         # Concatenate the dataframes together.
         if len(dataframes_list) > 0:
             combined_df = pandas.concat(dataframes_list, ignore_index=True)
+
+            # DEBUG STATEMENT: TODO: Remove later.
+            print("GOT HERE 1")
+
             return combined_df
         else:
             return None

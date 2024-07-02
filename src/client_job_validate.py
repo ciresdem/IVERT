@@ -118,4 +118,4 @@ def run_validate_command(args: argparse.Namespace) -> None:
         client_job_download.download_job(job_name, dest=".")
 
     else:
-        print(f"Job submitted. Run '{bcolors.BOLD}ivert status{bcolors.ENDC}' to check the status of the job.")
+        print(f"Job submitted. Run '{bcolors.BOLD}ivert status{bcolors.ENDC}' to check the status of the job. (Add {bcolors.BOLD}-d{bcolors.ENDC} for more detail.)")

@@ -570,7 +570,7 @@ def validate_dem(dem_name: str,
                 ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
                                                  os.path.basename(orig_dem_name), "error", upload_to_s3=False)
 
-            raise MemoryError(f"validate_dem.validate_dem_parallell({orig_dem_name},...) was terminated, likely due to a memory error.")
+            raise MemoryError(f"validate_dem.validate_dem('{orig_dem_name}', ...) was terminated, likely due to a memory error.")
 
         # Make sure the DEM exists that we're trying to sub-divide
         if not os.path.exists(dem_name):
@@ -1003,6 +1003,7 @@ def validate_dem_parallel(dem_name: str,
 
     photon_df = icesat2_photon_database_obj.get_photon_database(dem_bbox,
                                                                 build_tiles_if_nonexistent=False,
+                                                                good_photons_only=True,
                                                                 verbose=verbose)
 
     if photon_df is None:
@@ -1043,12 +1044,6 @@ def validate_dem_parallel(dem_name: str,
 
     if verbose:
         print("{0:,}".format(len(photon_df)), "ICESat-2 photons present in photon dataframe.")
-
-    # Filter out to keep only the highest-quality photons.
-    # quality_ph == 0 ("nominal") and "conf_land" == 4 ("high") and/or "conf_land_ice" == 4 ("high")
-    # Using photon_df.eval() is far more efficient for complex expressions than a boolean python expression.
-    good_photon_mask = photon_df.eval("(quality_ph == 0) & ((conf_land == 4) | (conf_land_ice == 4))")
-    photon_df = photon_df[good_photon_mask].copy()
 
     if len(photon_df) == 0:
         if mark_empty_results:
