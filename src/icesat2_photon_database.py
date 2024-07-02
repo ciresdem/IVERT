@@ -468,10 +468,6 @@ class ICESat2_Database:
         # Concatenate the dataframes together.
         if len(dataframes_list) > 0:
             combined_df = pandas.concat(dataframes_list, ignore_index=True)
-
-            # DEBUG STATEMENT: TODO: Remove later.
-            print("GOT HERE 1")
-
             return combined_df
         else:
             return None

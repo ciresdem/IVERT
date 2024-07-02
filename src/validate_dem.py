@@ -611,7 +611,7 @@ def validate_dem(dem_name: str,
                          write_result_tifs=write_result_tifs,
                          write_summary_stats=write_summary_stats,
                          export_coastline_mask=export_coastline_mask,
-                         outliers_sd_threshold=outliers_sd_threshold,
+                         outliers_sd_threshold=None, # Don't pre-filter outliers until we get all the results back.
                          include_photon_level_validation=include_photon_level_validation,
                          plot_results=False, # Don't bother plotting the sub-results.
                          location_name=location_name,
@@ -638,26 +638,34 @@ def validate_dem(dem_name: str,
                           common_key in sub_shared_ret_values[i]]
             # Concatenate the results dataframes.
             shared_results_df = pandas.concat([pandas.read_hdf(fname) for fname in all_fnames], ignore_index=True, axis=0)
+            # After we've combined all the resutls, *then* filter out outliers if they exist.
+            if outliers_sd_threshold is not None:
+                assert type(outliers_sd_threshold) in (int, float)
+                diff_mean = shared_results_df["diff_mean"]
+                meanval, stdval = diff_mean.mean(), diff_mean.std()
+                low_cutoff = meanval - (stdval * outliers_sd_threshold)
+                hi_cutoff = meanval + (stdval * outliers_sd_threshold)
+                valid_mask = (diff_mean >= low_cutoff) & (diff_mean <= hi_cutoff)
+                shared_results_df = shared_results_df[valid_mask].copy()
+                if verbose:
+                    print("{0:,} DEM cells after removing outliers.".format(len(results_dataframe)))
+
             output_fname = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_results.h5")
             shared_results_df.to_hdf(output_fname, key="icesat2", complib="zlib", mode='w')
+
             shared_ret_values[common_key] = output_fname
             if ivert_job_name is not None and subdivision_number == 0:
                 ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_fname, upload_to_s3=False)
 
-        if "result_tif_filename" in common_keys:
-            # Merge the results tifs.
-            common_key = "result_tif_filename"
-            all_fnames = [sub_shared_ret_values[i][common_key] for i in range(len(sub_shared_ret_values)) if
-                          common_key in sub_shared_ret_values[i]]
-            output_fname = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_ICESat2_error_map.tif")
-            gdal_cmd = ["gdal_merge.py",
-                        "-of", "GTiff",
-                        "-o", output_fname,
-                        "-co", "COMPRESS=DEFLATE",
-                        "-co", "PREDICTOR=2",
-                        "-co", "TILED=YES"] + all_fnames
+            if verbose:
+                print(os.path.basename(output_fname), "written and exported.")
 
-            subprocess.run(gdal_cmd, capture_output=not verbose, check=True)
+        if "result_tif_filename" in common_keys:
+            common_key = "result_tif_filename"
+            output_fname = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_ICESat2_error_map.tif")
+            generate_result_geotiff(shared_results_df, gdal.Open(dem_name, gdal.GA_ReadOnly),
+                                    output_fname, verbose=verbose)
+
             shared_ret_values[common_key] = output_fname
             if ivert_job_name is not None and subdivision_number == 0:
                 ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_fname, upload_to_s3=False)
@@ -677,6 +685,9 @@ def validate_dem(dem_name: str,
                         "-co", "COMPRESS=DEFLATE",
                         "-co", "PREDICTOR=2",
                         "-co", "TILED=YES"] + all_fnames
+
+            if verbose:
+                print(" ".join(gdal_cmd))
 
             subprocess.run(gdal_cmd, capture_output=not verbose, check=True)
 
