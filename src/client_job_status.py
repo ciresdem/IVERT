@@ -86,7 +86,7 @@ def run_job_status_command(args: argparse.Namespace) -> None:
     if args.detailed:
         job_df, files_df = detailed_job_info(args.job_name, jobs_db)
         if len(job_df) == 0:
-            print(f"Job {args.job_name} does not exist on the IVERT server yet.")
+            print(f"Job {args.job_name} has not been started on the IVERT server yet.")
             return
 
         print(f"Job {args.job_name} is {repr(job_df['status'].values[0])}.")
