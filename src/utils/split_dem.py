@@ -36,7 +36,7 @@ def split(dem_name: typing.Union[str, list[str]],
         list[str]: The names of the new DEM files.
         """
     if isinstance(dem_name, str):
-        dem_name = [dem_name]
+        dem_name = [dem_name,]
 
     if output_dir is None:
         output_dir = os.path.dirname(dem_name[0])
@@ -44,6 +44,7 @@ def split(dem_name: typing.Union[str, list[str]],
     outfiles = []
     infiles = []
 
+    # Expand the number of files if there are glob flags.
     for dname in dem_name:
         if contains_glob_flags(dname):
             infiles.extend(glob.glob(dname))

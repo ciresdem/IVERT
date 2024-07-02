@@ -381,6 +381,8 @@ def kick_off_new_child_process(height_array_name,
 
 
 def subdivide_dem(dem_name: str,
+                  factor: int = 2,
+                  output_dir: typing.Union[str, None] = None,
                   verbose: bool = False) -> list[str]:
     """Split a DEM into 4 smaller parts.
 
@@ -390,14 +392,14 @@ def subdivide_dem(dem_name: str,
     if not os.path.exists(dem_name):
         raise FileNotFoundError(f"DEM {dem_name} does not exist.")
 
-    sub_dems = utils.split_dem.split(dem_name, factor=2, verbose=verbose)
+    sub_dems = utils.split_dem.split(dem_name, factor=factor, output_dir=output_dir, verbose=verbose)
 
     # If the coastline mask exists, sub-divide that into 4 parts too.
     # Don't need to keep track of the coastline files, it'll be automatically detected as existing by validate_dem_parallel.
     dem_base, ext = os.path.splitext(dem_name)
     cmask_name = dem_base + "_coastline_mask" + ext
     if os.path.exists(cmask_name):
-        cmask_names = utils.split_dem.split(cmask_name, factor=2, verbose=verbose)
+        cmask_names = utils.split_dem.split(cmask_name, factor=factor, verbose=verbose)
         # Gotta change the filenames though. "_coastline_mask" should be at the end.
         for cname in cmask_names:
             cdir, cbase = os.path.split(cname)
@@ -572,9 +574,10 @@ def validate_dem(dem_name: str,
             raise FileNotFoundError(f"validate_dem.validate_dem_parallell({orig_dem_name},...) could not find {dem_name}.")
 
         # Split up the DEM into 4 parts.
-        sub_dem_names = subdivide_dem(dem_name)
+        sub_dem_names = subdivide_dem(dem_name, factor=2, output_dir=output_dir, verbose=verbose)
 
-        sub_shared_ret_values = [manager.dict() for _ in range(len(sub_dem_names))]
+        sub_shared_ret_values = [manager.dict() for i in range(len(sub_dem_names))]
+        assert len(sub_shared_ret_values) == len(sub_dem_names) == 4
 
         # Pre-read the photon database. This is easier than reading it in 4 separate times.
         if icesat2_photon_database_obj is None:
