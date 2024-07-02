@@ -447,7 +447,7 @@ def validate_dem(dem_name: str,
                  measure_coverage: bool = False,
                  max_photons_per_cell: typing.Union[int, None] = None,
                  numprocs: int = parallel_funcs.physical_cpu_count(),
-                 max_subdivides: int = 3,
+                 max_subdivides: int = 4,
                  subdivision_number: int = 0,
                  orig_dem_name: typing.Union[str, None] = None,
                  verbose: bool = True):
