@@ -100,7 +100,22 @@ def run_job_status_command(args: argparse.Namespace) -> None:
 
             print("Input file statuses:")
             for i, frow in input_files.iterrows():
-                print(f"    {frow['filename']}: {frow['status']}", end="")
+                status = frow["status"]
+                if status == "downloaded":
+                    status = f"saved {bcolors.bcolors.ITALIC}(not yet processed){bcolors.bcolors.ENDC}"
+                elif status == "processing":
+                    status = f"{bcolors.bcolors.ITALIC}{bcolors.bcolors.BOLD}processing{bcolors.bcolors.ENDC}{bcolors.bcolors.ENDC}"
+                elif status == "processed":
+                    status = f"{bcolors.bcolors.BOLD}processed{bcolors.bcolors.ENDC}"
+                elif status == "timeout":
+                    status = f"{bcolors.bcolors.FAIL}timeout{bcolors.bcolors.ENDC}"
+                elif status == "error":
+                    status = f"{bcolors.bcolors.FAIL}error{bcolors.bcolors.ENDC}"
+                elif status == "quarantined":
+                    status = f"{bcolors.bcolors.FAIL}quarantined{bcolors.bcolors.ENDC}"
+                elif status == "unknown":
+                    status = f"{bcolors.bcolors.WARNING}unknown{bcolors.bcolors.ENDC}"
+                print(f"    {frow['filename']}: {status}", end="")
                 if frow['filename'].endswith(".ini"):
                     print(f" (<-{bcolors.bcolors.ITALIC}job config file{bcolors.bcolors.ENDC})")
                 else:
@@ -110,6 +125,9 @@ def run_job_status_command(args: argparse.Namespace) -> None:
             print(f"There are currently {len(export_files)} export files processed for this job:")
 
             for i, frow in export_files.iterrows():
+                status = frow["status"]
+                if status == "uploaded":
+                    status = f"{bcolors.bcolors.ITALIC}(not yet processed){bcolors.bcolors.ENDC}"
                 print(f"    {frow['filename']}: {frow['status']}")
 
             print(f"\n'{bcolors.bcolors.BOLD}ivert download {args.job_name}{bcolors.bcolors.ENDC}' will download the results.")

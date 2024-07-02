@@ -229,7 +229,7 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
 
         if ivert_job_name:
             ivert_jobs_db.update_file_status(ivert_username, ivert_job_id, os.path.basename(dem_path),
-                                             "processing", upload_to_s3=False)
+                                             "processing", upload_to_s3=True)
 
         shared_ret_values = {}
         # Do the validation.

@@ -583,10 +583,6 @@ class IvertJob:
 
     def delete_local_job_folders(self):
         """Remove all the job files and delete any otherwise-unused directories."""
-        # FOR DEBUGGING: KEEP THIS FOLDER HERE
-        # TODO: REmove later
-        return
-
         rm_cmd = f"rm -rf {self.job_dir}"
         subprocess.run(rm_cmd, shell=True)
 
