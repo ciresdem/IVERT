@@ -1045,6 +1045,12 @@ def validate_dem_parallel(dem_name: str,
     if verbose:
         print("{0:,}".format(len(photon_df)), "ICESat-2 photons present in photon dataframe.")
 
+    # Filter out to keep only the highest-quality photons.
+    # quality_ph == 0 ("nominal") and "conf_land" == 4 ("high") and/or "conf_land_ice" == 4 ("high")
+    # Using photon_df.eval() is far more efficient for complex expressions than a boolean python expression.
+    # good_photon_mask = photon_df.eval("(quality_ph == 0) & ((conf_land == 4) | (conf_land_ice == 4))")
+    # photon_df = photon_df[good_photon_mask].copy()
+
     if len(photon_df) == 0:
         if mark_empty_results:
             # Just create an empty file to mark this dataset as done.

@@ -436,9 +436,10 @@ class ICESat2_Database:
                                                  len(df_tiles_subset)),
                                                  os.path.splitext(os.path.basename(fname))[0],
                                                  "...", end="")
+
             tile_df = self.read_photon_tile(fname)
 
-            if good_photons_only:
+            if tile_df is not None and good_photons_only:
                 # Filter out to keep only the highest-quality photons.
                 # quality_ph == 0 ("nominal") and "conf_land" == 4 ("high") and/or "conf_land_ice" == 4 ("high")
                 # Using photon_df.eval() is far more efficient for complex expressions than a boolean python expression.
@@ -1090,30 +1091,10 @@ class ICESat2_Database:
 
         # external_drive = self.ivert_config._abspath(self.ivert_config.icesat2_granules_directory_alternate)
 
-        for i,gfn in enumerate(granule_fnames):
-            # TODO: REMOVE THIS LATER. JUST SKIPPING ALREADY_DONE PORTIONS.
-            # if i<1744 or i>3000: # Forward, proc 1 (0-3000)
-            # if i<=3000 or i>4200: # Forward, proc 2 (3000-4200)
-            # if i<=4200: # Forward, proc 3 DONE! (4200 thru end, finished)
-            # if i<552 or i>1700:
-            # if i<3223 or i>4300: # proc 3-4, doing westward pole-bit work (at the bottom of W Antarctica)
-            # if i<4300:
-            # if i>3430: # For moving granules over to the external directory.
-            #     continue
-
-            ################
-            # TODO: Comment this out. I'm just putting this in here temoprarily to move remaining granules to the external drive.
-            # shutil.move(gfn, external_drive)
-            # print("{0}/{1} {2} moved.".format(i+1, len(granule_fnames), os.path.basename(gfn)))
-            # continue
-            ################
+        for i, gfn in enumerate(granule_fnames):
 
             n_written = self.subset_individual_granule(gfn, bin_boundaries, lat_min=lat_min, lat_max=lat_max, lon_deg_chunksize=lon_deg_chunksize)
-
             print("{0}/{1}".format(i+1, len(granule_fnames)), os.path.basename(gfn), "->", n_written, "subset files.")
-            # subset_names = self.list_of_granule_subset_names(gfn, bins_left, lon_deg_chunksize)
-            # for s_name in subset_names:
-            #     print("   " + os.path.basename(s_name))
 
     def subset_individual_granule(self, granule_name, bin_boundaries, lat_min=-90, lat_max=-86, lon_deg_chunksize=2):
         """Take an individual icesat-2 granule, divide it up into all its counterparts, save them to subset files."""
