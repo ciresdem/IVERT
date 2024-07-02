@@ -6,16 +6,22 @@ import s3
 import jobs_database
 import typing
 
-username_regex = re.compile(r"(?<=^)[a-zA-Z0-9\.]+(?=_\d)")
+username_regex = re.compile(r"(?<=^)[a-zA-Z0-9\.]+(?=_\d{12}$)")
 job_id_regex = re.compile(r"(?<=_)\d{12}(?=$)")
 
 
 def get_username(job_name: str) -> str:
-    return username_regex.search(job_name).group(0)
+    try:
+        return username_regex.search(job_name).group(0)
+    except AttributeError:
+        raise ValueError(f"{job_name} is not a valid IVERT job name.")
 
 
 def get_job_id(job_name: str) -> int:
-    return int(job_id_regex.search(job_name).group(0))
+    try:
+        return int(job_id_regex.search(job_name).group(0))
+    except AttributeError:
+        raise ValueError(f"{job_name} is not a valid IVERT job name.")
 
 
 class IvertExporter:
@@ -57,11 +63,11 @@ class IvertExporter:
         if not os.path.exists(fname):
             return
 
-        if type(job_name_or_id) is int:
+        if type(job_name_or_id) is int or str.isnumeric(job_name_or_id):
             username = username
             if username is None:
                 raise ValueError("username must be specified if job_name_or_id is an integer.")
-            job_id = job_name_or_id
+            job_id = int(job_name_or_id)
         else:
             job_id = get_job_id(job_name_or_id)
             username = get_username(job_name_or_id)
