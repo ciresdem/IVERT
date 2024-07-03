@@ -11,12 +11,12 @@ if vars(sys.modules[__name__])['__package__'] == 'ivert':
     # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
     import ivert.jobs_database as jobs_database
     import ivert_utils.configfile as configfile
-    import ivert_utils.bcolors as bcolors
+    from ivert_utils.bcolors import bcolors
 else:
     # If running as a script, import this way.
     import utils.configfile as configfile
     import jobs_database
-    import utils.bcolors as bcolors
+    from utils.bcolors import bcolors
 
 ivert_config = configfile.config()
 
@@ -86,10 +86,10 @@ def run_job_status_command(args: argparse.Namespace) -> None:
     if args.detailed:
         job_df, files_df = detailed_job_info(args.job_name, jobs_db)
         if len(job_df) == 0:
-            print(f"Job {args.job_name} has not been started on the IVERT server yet.")
+            print(f"Job {bcolors.OKBLUE}{args.job_name}{bcolors.ENDC} has not been started on the IVERT server yet.")
             return
 
-        print(f"Job {bcolors.bcolors.UNDERLINE}{args.job_name}{bcolors.bcolors.ENDC} is {bcolors.bcolors.BOLD}{repr(job_df['status'].values[0])}{bcolors.bcolors.ENDC}.")
+        print(f"Job {bcolors.OKBLUE}{bcolors.BOLD}{args.job_name}{bcolors.ENDC}{bcolors.ENDC} is {bcolors.BOLD}{repr(job_df['status'].values[0])}{bcolors.ENDC}.")
         input_files = files_df[files_df["import_or_export"].isin((0, 2))]
         export_files = files_df[files_df["import_or_export"].isin((1, 2))]
 
@@ -102,22 +102,22 @@ def run_job_status_command(args: argparse.Namespace) -> None:
             for i, frow in input_files.iterrows():
                 status = frow["status"]
                 if status == "downloaded":
-                    status = f"standing by {bcolors.bcolors.ITALIC}(not yet processed){bcolors.bcolors.ENDC}"
+                    status = f"standing by {bcolors.ITALIC}(not yet processed){bcolors.ENDC}"
                 elif status == "processing":
-                    status = f"{bcolors.bcolors.ITALIC}{bcolors.bcolors.BOLD}processing{bcolors.bcolors.ENDC}{bcolors.bcolors.ENDC}"
+                    status = f"{bcolors.ITALIC}{bcolors.BOLD}processing{bcolors.ENDC}{bcolors.ENDC}"
                 elif status == "processed":
-                    status = f"{bcolors.bcolors.BOLD}processed{bcolors.bcolors.ENDC}"
+                    status = f"{bcolors.BOLD}processed{bcolors.ENDC}"
                 elif status == "timeout":
-                    status = f"{bcolors.bcolors.FAIL}timeout{bcolors.bcolors.ENDC}"
+                    status = f"{bcolors.FAIL}timeout{bcolors.ENDC}"
                 elif status == "error":
-                    status = f"{bcolors.bcolors.FAIL}error{bcolors.bcolors.ENDC}"
+                    status = f"{bcolors.FAIL}error{bcolors.ENDC}"
                 elif status == "quarantined":
-                    status = f"{bcolors.bcolors.FAIL}quarantined{bcolors.bcolors.ENDC}"
+                    status = f"{bcolors.FAIL}quarantined{bcolors.ENDC}"
                 elif status == "unknown":
-                    status = f"{bcolors.bcolors.WARNING}unknown{bcolors.bcolors.ENDC}"
+                    status = f"{bcolors.WARNING}unknown{bcolors.ENDC}"
                 print(f"    {frow['filename']}: {status}", end="")
                 if frow['filename'].endswith(".ini"):
-                    print(f" (<-{bcolors.bcolors.ITALIC}job config file{bcolors.bcolors.ENDC})")
+                    print(f" (<-{bcolors.ITALIC}job config file{bcolors.ENDC})")
                 else:
                     print()
 
@@ -127,20 +127,20 @@ def run_job_status_command(args: argparse.Namespace) -> None:
             for i, frow in export_files.iterrows():
                 status = frow["status"]
                 if status == "uploaded":
-                    status = f"{bcolors.bcolors.BOLD}{status}{bcolors.bcolors.ENDC}"
+                    status = f"{bcolors.BOLD}{status}{bcolors.ENDC}"
                 elif status == "error":
-                    status = f"{bcolors.bcolors.FAIL}{status}{bcolors.bcolors.ENDC}"
+                    status = f"{bcolors.FAIL}{status}{bcolors.ENDC}"
                 elif status == "unknown":
-                    status = f"{bcolors.bcolors.WARNING}{status}{bcolors.bcolors.ENDC}"
+                    status = f"{bcolors.WARNING}{status}{bcolors.ENDC}"
 
                 print(f"    {frow['filename']}: {status}")
 
-            print(f"\n'{bcolors.bcolors.BOLD}ivert download {args.job_name}{bcolors.bcolors.ENDC}' will download the results.")
+            print(f"\n'{bcolors.BOLD}ivert download {args.job_name}{bcolors.ENDC}' will download the results.")
 
     else:
         status = get_simple_job_status(args.job_name, jobs_db)
         if status is None:
-            print(f"Job {bcolors.bcolors.BOLD}{args.job_name}{bcolors.bcolors.ENDC} does not exist on the IVERT server yet.")
+            print(f"Job {bcolors.BOLD}{args.job_name}{bcolors.ENDC} does not exist on the IVERT server yet.")
             # \n"
             #       "Give it a bit. If it never shows up, contact your IVERT administrator and check whether the server process is running.")
         else:

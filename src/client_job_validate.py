@@ -119,5 +119,4 @@ def run_validate_command(args: argparse.Namespace) -> None:
 
     else:
         print(f"Job submitted.\n"
-              f"Run '{bcolors.BOLD}ivert status{bcolors.ENDC}' to check the status of the job.\n"
-              f"({bcolors.BOLD}ivert status -d{bcolors.ENDC} for more detail.)")
+              f"Run '{bcolors.BOLD}ivert status{bcolors.ENDC}' to check the status of the job, and '{bcolors.BOLD}ivert status -d{bcolors.ENDC}' to provde more detail.)")
