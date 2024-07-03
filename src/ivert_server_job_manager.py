@@ -456,6 +456,12 @@ class IvertJob:
         self.job_config_object: typing.Union[utils.configfile.config, None] = None
         self.output_dir = os.path.join(self.job_dir, "outputs")
         # Define the export prefix.
+        self.import_prefix = self.ivert_config.s3_import_prefix_base + \
+                             ("" if self.ivert_config.s3_import_prefix_base[-1] == "/" else "") + \
+                             self.ivert_config.s3_ivert_job_subdirs_template \
+                                              .replace('[command]', self.command) \
+                                              .replace('[username]', self.username) \
+                                              .replace('[job_id]', self.job_id)
         self.export_prefix = self.ivert_config.s3_export_prefix_base + \
                              ("" if self.ivert_config.s3_export_prefix_base[-1] == "/" else "") + \
                              (self.ivert_config.s3_ivert_job_subdirs_template \
@@ -669,7 +675,8 @@ class IvertJob:
                                     self.logfile,
                                     self.job_dir,
                                     self.output_dir,
-                                    job_export_prefix=self.export_prefix,
+                                    self.import_prefix,
+                                    self.export_prefix,
                                     job_status="started",
                                     upload_to_s3=upload_to_s3)
 
