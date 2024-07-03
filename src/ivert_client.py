@@ -49,11 +49,11 @@ def define_and_parse_args(return_parser: bool = False):
                                  help="Enter a file, list of files, or a directory. "
                                       "May use bash-style wildcards such as 'dirname/ncei*.tif'. If a directory is "
                                       "given, all *.tif files in that directory (non-recursive) will be sent for validation.")
-    parser_validate.add_argument("-ivd", "--input_vdatum", dest="input_vdatum", type=str, default="egm2008",
-                                 help="Input DEM vertical datum. (Default: 'egm2008')"
+    parser_validate.add_argument("-v", "--input_vdatum", dest="input_vdatum", type=str, default="egm2008",
+                                 help="DEM vertical datum by EPSG number or short-name. (Default: 'egm2008')"
                                       " Type 'vdatums --list-epsg' to see a list of available options.")
-    parser_validate.add_argument("-ovd", "--output_vdatum", dest="output_vdatum", type=str, default="egm2008",
-                                 help="Output DEM vertical datum. Only 'egm2008' and 'wgs84' available (the datumes that ICESat-2 uses). (Default: 'egm2008')")
+    # parser_validate.add_argument("-ovd", "--output_vdatum", dest="output_vdatum", type=str, default="egm2008",
+    #                              help="Output DEM vertical datum. Only 'egm2008' and 'wgs84' available (the datumes that ICESat-2 uses). (Default: 'egm2008')")
     parser_validate.add_argument("-n", "--name", "--region_name", dest="region_name", type=str, default="DEMs",
                                  help="The name of the region being validated. Will appear in the validation summary "
                                       "plot if more than one file is being validated. (Default: 'DEMs')")

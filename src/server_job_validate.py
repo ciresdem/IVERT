@@ -16,7 +16,10 @@ def run_validate_command(ivert_job_obj):
     assert hasattr(jco, "files") and isinstance(jco.files, list) and len(jco.files) > 0
     cargs = jco.cmd_args
     assert "input_vdatum" in cargs
-    assert "output_vdatum" in cargs
+    # For now, default to egm2008 for the output vdatum. Later, will switch to modifying the photons to meet the input vdatum.
+    # assert "output_vdatum" in cargs
+    # TODO: Remove this line after modifhying the photons to meet the input vdatum.
+    cargs["output_vdatum"] = 'egm2008'
     assert "region_name" in cargs
     assert "measure_coverage" in cargs
     assert "include_photons" in cargs
@@ -102,3 +105,5 @@ def run_validate_command(ivert_job_obj):
                                                       measure_coverage=cargs["measure_coverage"],
                                                       outliers_sd_threshold=cargs["outlier_sd_threshold"],
                                                       verbose=ivj.verbose)
+
+    return
