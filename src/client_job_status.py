@@ -104,7 +104,7 @@ def run_job_status_command(args: argparse.Namespace) -> None:
                 if status == "downloaded":
                     status = f"standing by {bcolors.ITALIC}(not yet processed){bcolors.ENDC}"
                 elif status == "processing":
-                    status = f"{bcolors.ITALIC}{bcolors.BOLD}processing{bcolors.ENDC}{bcolors.ENDC}"
+                    status = f"{bcolors.ITALIC}{bcolors.BOLD}{bcolors.OKGREEN}processing{bcolors.ENDC}{bcolors.ENDC}{bcolors.ENDC}"
                 elif status == "processed":
                     status = f"{bcolors.BOLD}processed{bcolors.ENDC}"
                 elif status == "timeout":
