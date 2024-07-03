@@ -49,23 +49,23 @@ def define_and_parse_args(return_parser: bool = False):
                                  help="Enter a file, list of files, or a directory. "
                                       "May use bash-style wildcards such as 'dirname/ncei*.tif'. If a directory is "
                                       "given, all *.tif files in that directory (non-recursive) will be sent for validation.")
-    parser_validate.add_argument("-v", "--input_vdatum", dest="input_vdatum", type=str, default="egm2008",
+    parser_validate.add_argument("-vd", "--vdatum", dest="input_vdatum", type=str, default="egm2008",
                                  help="DEM vertical datum by EPSG number or short-name. (Default: 'egm2008')"
-                                      " Type 'vdatums --list-epsg' to see a list of available options.")
+                                      " Type 'vdatums --list-epsg' to see a list of available options. (Note: Not all names are fully supported yet, we'll get there. Unless you're using a common datum, probably best to stick with the numbers.)"
     # parser_validate.add_argument("-ovd", "--output_vdatum", dest="output_vdatum", type=str, default="egm2008",
     #                              help="Output DEM vertical datum. Only 'egm2008' and 'wgs84' available (the datumes that ICESat-2 uses). (Default: 'egm2008')")
     parser_validate.add_argument("-n", "--name", "--region_name", dest="region_name", type=str, default="DEMs",
                                  help="The name of the region being validated. Will appear in the validation summary "
                                       "plot if more than one file is being validated. (Default: 'DEMs')")
+    parser_validate.add_argument("-ph", "--include_photons", dest="include_photons", default=False, action="store_true",
+                                 help="In additional to returning .h5 and .tif files of ICESat-2 cell results, also "
+                                      "return a .h5 point database of individual ICESat-2 photons used to validate each DEM. Use if you want to 'see the photons'. Default: False")
     parser_validate.add_argument("-mc", "--measure_coverage", dest="measure_coverage",
                                  default=False, action="store_true",
                                  help="Measure the relative 'coverage' of each grid-cell as a field in the h5 results. "
                                       "(Measures how may of the 15x15 (225 total) sub-regions within each grid cell contain ICESat-2 photons, "
                                       "allowing to post-process filter only higher-coverage grid cells in "
                                       "course-resolution DEMs where sampling bias might be an issue. This is typically only used for lower-resoultion DEMs. Default: False")
-    parser_validate.add_argument("-ph", "--include_photons", dest="include_photons", default=False, action="store_true",
-                                 help="In additional to returning .h5 and .tif files of ICESat-2 cell results, also "
-                                      "return a .h5 point database of individual ICESat-2 photons used to validate each DEM. Use if you want to 'see the photons'. Default: False")
     parser_validate.add_argument("-bn", "--band_num", dest="band_num", type=int, default=1,
                                  help="The raster band number to validate in each DEM, if using multi-band datasets. 1-indexed (1 is the first band, not 0). Other bands are ignored. (Default: 1)")
     parser_validate.add_argument("-co", "--coastlines_only", dest="coastlines_only", default=False,
