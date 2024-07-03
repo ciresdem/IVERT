@@ -658,6 +658,7 @@ def validate_dem(dem_name: str,
 
         shared_results_df = None
 
+        # First, merge the results dataframes.
         if "results_dataframe_file" in common_keys:
             common_key = "results_dataframe_file"
             all_fnames = [sub_shared_ret_values[i][common_key] for i in range(len(sub_shared_ret_values)) if
@@ -695,7 +696,8 @@ def validate_dem(dem_name: str,
             if verbose:
                 print(os.path.basename(output_fname), "written and exported.")
 
-        if write_result_tifs and shared_results_df is not None and subdivision_number == 0:
+        # Second, create the results geotiff from the dataframe.
+        if write_result_tifs and (shared_results_df is not None) and subdivision_number == 0:
             common_key = "result_tif_filename"
             output_fname = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_ICESat2_error_map.tif")
             generate_result_geotiff(shared_results_df, gdal.Open(dem_name, gdal.GA_ReadOnly),
@@ -708,6 +710,10 @@ def validate_dem(dem_name: str,
         # Merge the coastline masks, only if it needs to be exported and the parent coastline mask hasn't already been created.
         output_coastline_fname = os.path.join(output_dir,
                                               os.path.splitext(os.path.basename(dem_name))[0] + "_coastline_mask.tif")
+
+        # Third, merge the coastline masks if they were called to be returned.
+        # This first block probably won't be entered because the coastline mask was already created, but in case not,
+        # re-create it.
         if (("coastline_mask_filename" in common_keys)
                 and export_coastline_mask
                 and not os.path.exists(output_coastline_fname)):
@@ -726,11 +732,13 @@ def validate_dem(dem_name: str,
 
             subprocess.run(gdal_cmd, capture_output=not verbose, check=True)
 
+        # Export the coastline mask if it was called to be returned.
         if export_coastline_mask:
             shared_ret_values["coastline_mask_filename"] = output_coastline_fname
             if ivert_job_name is not None and subdivision_number == 0:
                 ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_coastline_fname, upload_to_s3=False)
 
+        # If we're doing an empty results file, create one in the output directory.
         if mark_empty_results:
             # If any of the results existed, we don't need to do this just because one sub-result doesn't exist.
             if "results_dataframe_file" not in common_keys:
@@ -741,6 +749,7 @@ def validate_dem(dem_name: str,
                 if ivert_job_name is not None and subdivision_number == 0:
                     ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_fname, upload_to_s3=False)
 
+        # Create the overall summary stats text file.
         if write_summary_stats and shared_results_df is not None and subdivision_number == 0:
             # Generate a new summary stats file only if we have results and if the recursion depth is zero.
             output_fname = os.path.join(output_dir,
@@ -750,6 +759,7 @@ def validate_dem(dem_name: str,
             if ivert_job_name is not None and subdivision_number == 0:
                 ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_fname, upload_to_s3=False)
 
+        # Export the photon dataframe if it was called to be returned.
         if "photon_results_dataframe_file" in common_keys:
             common_key = "photon_results_dataframe_file"
             all_fnames = [sub_shared_ret_values[i][common_key] for i in range(len(sub_shared_ret_values)) if
@@ -761,6 +771,7 @@ def validate_dem(dem_name: str,
             if ivert_job_name is not None and subdivision_number == 0:
                 ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_fname, upload_to_s3=False)
 
+        # Plot the results.
         if plot_results and (shared_results_df is not None) and (subdivision_number == 0):
             output_fname = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_plot.png")
             plot_validation_results.plot_histogram_and_error_stats_4_panels(shared_results_df,
@@ -771,6 +782,7 @@ def validate_dem(dem_name: str,
             if ivert_job_name is not None and subdivision_number == 0:
                 ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_fname, upload_to_s3=False)
 
+        # Update the job status.
         if ivert_job_name is not None and subdivision_number == 0:
             ivert_jobs_db.update_file_status(ivert_username, ivert_job_id, os.path.basename(orig_dem_name),
                                              "processed", upload_to_s3=True)
@@ -1068,35 +1080,8 @@ def validate_dem_parallel(dem_name: str,
         else:
             return files_to_export
 
-    # # If the DEM is not in WGS84 coordinates, create a conversion funtion to pass to sub-functions.
-    # if dem_epsg != 4326:
-    #     dem_proj_wkt = dem_ds.GetProjection()
-    #     # Right now we're having a bug where occasionally the WKT is None in datasets converted to WGS84 vertical coordinates.
-    #     # JUST ON THE IVERT EC2 we're having this bug (not sure why). It's fine on other machines.
-    #     # If this is the case, if no projection is written to the converted DEM, we'll try to pull the WKT from the
-    #     # original DEM. All we need is the horizontal projection here so it should be fine. Not sure what's going on there.
-    #     # TODO: FIX THE BUG DESCRIBED ABOVE and remove this if-clause.
-    #     if dem_proj_wkt is None or len(dem_proj_wkt) == 0:
-    #         dem_proj_wkt = gdal.Open(dem_name, gdal.GA_ReadOnly).GetProjection()
-    #
-    #     assert dem_proj_wkt is not None and len(dem_proj_wkt) > 0
-    #
-    #     icesat2_srs = osr.SpatialReference()
-    #     icesat2_srs.SetWellKnownGeogCS("EPSG:4326")
-    #     dem_srs = osr.SpatialReference(wkt=dem_proj_wkt)
-    #
-    #     is2_to_dem = osr.CoordinateTransformation(icesat2_srs, dem_srs)
-    # else:
-    #     is2_to_dem = None
-
     if verbose:
         print("{0:,}".format(len(photon_df)), "ICESat-2 photons present in photon dataframe.")
-
-    # Filter out to keep only the highest-quality photons.
-    # quality_ph == 0 ("nominal") and "conf_land" == 4 ("high") and/or "conf_land_ice" == 4 ("high")
-    # Using photon_df.eval() is far more efficient for complex expressions than a boolean python expression.
-    # good_photon_mask = photon_df.eval("(quality_ph == 0) & ((conf_land == 4) | (conf_land_ice == 4))")
-    # photon_df = photon_df[good_photon_mask].copy()
 
     if len(photon_df) == 0:
         if mark_empty_results:
@@ -1112,60 +1097,6 @@ def validate_dem_parallel(dem_name: str,
             return [empty_results_filename]
         else:
             return []
-
-    # # If the DEM horizontal coordinate system isn't WGS84 lat/lon, convert the icesat-2
-    # # lat/lon data coordinates into the same horizontal CRS as the DEM
-    # if dem_epsg != 4326:
-    #     lon_x = photon_df["longitude"]
-    #     lat_y = photon_df["latitude"]
-    #     latlon_array = numpy.array([lon_x, lat_y]).transpose()
-    #
-    #     points = numpy.array(is2_to_dem.TransformPoints(latlon_array))
-    #
-    #     p_x = points[:, 0]
-    #     p_y = points[:, 1]
-    #     photon_df["dem_x"] = p_x
-    #     photon_df["dem_y"] = p_y
-    #
-    #     ph_xcoords = p_x
-    #     ph_ycoords = p_y
-    #
-    # # Subset the dataframe to photons within the DEM bounding box.
-    # # Also, filter out all noise photons.
-    # else:
-    #     ph_xcoords = photon_df["longitude"]
-    #     ph_ycoords = photon_df["latitude"]
-    #     # If we're measuring the coverage, we'll just use the "dem_x" and "dem_y" values.
-    #     # We don't need this extra field if we're not measuring the coverage, since the photons are just taken
-    #     # from the ph_xcoords and ph_ycoords variables assigned above.
-    #     if measure_coverage:
-    #         photon_df["dem_x"] = ph_xcoords
-    #         photon_df["dem_y"] = ph_ycoords
-    #
-    # # Compute the (i,j) indices into the array of all the photons collected.
-    # # Transform photon lat/lons into DEM indices.
-    # xstart, xstep, _, ystart, _, ystep = dem_ds.GetGeoTransform()
-    # xend = xstart + (xstep * dem_array.shape[1])
-    # yend = ystart + (ystep * dem_array.shape[0])
-    #
-    # # Clip to the bounding box.
-    # minx = min(xstart, xend)
-    # maxx = max(xstart, xend)
-    # miny = min(ystart, yend)
-    # maxy = max(ystart, yend)
-    # df_class_code = photon_df["class_code"].to_numpy()
-    # # Again, using a numexpr expression here is far more time-and-memory efficient than doing all these compound boolean
-    # # operations on the numpy arrays in a Python expression.
-    # ph_bbox_mask = numexpr.evaluate("(ph_xcoords >= minx) & " + \
-    #                                 "(ph_xcoords < maxx) & " + \
-    #                                 "(ph_ycoords > miny) & " + \
-    #                                 "(ph_ycoords <= maxy) & " + \
-    #                                 "(df_class_code >= 1)")
-    #
-    # # Subset the dataframe to only provide pixels in-bounds for our DEM
-    # # Create a copy() so as not to be assinging to a slice of the full dataframe.
-    # # The original photon_df gets dereferenced and destroyed.
-    # photon_df = photon_df[ph_bbox_mask].copy()
 
     ph_xcoords = photon_df["dem_x"]
     ph_ycoords = photon_df["dem_y"]
@@ -1232,7 +1163,7 @@ def validate_dem_parallel(dem_name: str,
 
     if verbose:
         num_goodpixels = numpy.count_nonzero(dem_goodpixel_mask)
-        print("{:,}".format(num_goodpixels), "nonzero land cells exist in the DEM.")
+        print("{:,}".format(num_goodpixels), "land cells exist in the DEM.")
         if num_goodpixels == 0:
             print("No land cells found in DEM with overlapping ICESat-2 data. Stopping and moving on.")
 
