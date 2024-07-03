@@ -738,16 +738,15 @@ def validate_dem(dem_name: str,
             if ivert_job_name is not None and subdivision_number == 0:
                 ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_coastline_fname, upload_to_s3=False)
 
-        # If we're doing an empty results file, create one in the output directory.
-        if mark_empty_results:
+        # If we're doing an empty results file, create one in the output directory if no results were returned.
+        if mark_empty_results and (shared_results_df is None) and subdivision_number == 0:
             # If any of the results existed, we don't need to do this just because one sub-result doesn't exist.
-            if "results_dataframe_file" not in common_keys:
-                empty_fname = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_EMPTY.txt")
-                with open(empty_fname, "w") as f:
-                    f.write(os.path.basename(dem_name) + f" had no IVERT results.")
-                shared_ret_values["empty_results_filename"] = empty_fname
-                if ivert_job_name is not None and subdivision_number == 0:
-                    ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_fname, upload_to_s3=False)
+            empty_fname = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_EMPTY.txt")
+            with open(empty_fname, "w") as f:
+                f.write(os.path.basename(dem_name) + f" had no IVERT results.")
+            shared_ret_values["empty_results_filename"] = empty_fname
+            if ivert_job_name is not None and subdivision_number == 0:
+                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_fname, upload_to_s3=False)
 
         # Create the overall summary stats text file.
         if write_summary_stats and shared_results_df is not None and subdivision_number == 0:
