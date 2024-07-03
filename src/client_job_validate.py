@@ -33,7 +33,6 @@ def run_validate_command(args: argparse.Namespace) -> None:
     assert hasattr(args, "command") and args.command == "validate"
     assert hasattr(args, "files_or_directory")
     assert hasattr(args, "input_vdatum")
-    assert hasattr(args, "output_vdatum")
     assert hasattr(args, "region_name")
     assert hasattr(args, "wait")
     assert hasattr(args, "prompt")
