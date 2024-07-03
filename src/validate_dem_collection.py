@@ -39,7 +39,7 @@ def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFra
     if 'filename' not in total_df.columns:
         raise ValueError("total_df must have a 'filename' column.")
 
-    unique_files = total_df['filename'].unique()
+    unique_files = total_df['filename'].unique().tolist()
     N = len(unique_files) + len(list_of_empty_files)
     means = numpy.empty((N,), dtype=float)
     stds = numpy.empty((N,), dtype=float)
@@ -49,7 +49,7 @@ def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFra
     canopy_mean = numpy.empty((N,), dtype=float)
     canopy_mean_gt0 = numpy.empty((N,), dtype=float)
 
-    for i, fname in enumerate(unique_files + list_of_empty_files):
+    for i, fname in enumerate(list(unique_files) + list(list_of_empty_files)):
         if fname in unique_files:
             temp_df = total_df[total_df['filename'] == fname]
             means[i] = temp_df['diff_mean'].mean()
