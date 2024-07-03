@@ -57,15 +57,6 @@ def define_and_parse_args(return_parser: bool = False):
     parser_validate.add_argument("-n", "--name", "--region_name", dest="region_name", type=str, default="DEMs",
                                  help="The name of the region being validated. Will appear in the validation summary "
                                       "plot if more than one file is being validated. (Default: 'DEMs')")
-    parser_validate.add_argument("-w", "--wait", dest="wait", default=False, action="store_true",
-                                 help="Wait to exit until the results are finished and downloaded. If False, just "
-                                      "upload the job, exit, and wait for a response notification from IVERT. You can "
-                                      "then use the 'ivert status' and 'ivert download' commands to monitor the job. "
-                                      "Default: False")
-    parser_validate.add_argument("-p", "--prompt", dest="prompt", default=False, action="store_true",
-                                 help="Print the command options and prompt the user to verify settings before uploading"
-                                      " files to IVERT. Useful if you want to manually double-check the settings"
-                                      " before sending it off. Default: False")
     parser_validate.add_argument("-mc", "--measure_coverage", dest="measure_coverage",
                                  default=False, action="store_true",
                                  help="Measure the relative 'coverage' of each grid-cell as a field in the h5 results. "
@@ -97,6 +88,15 @@ def define_and_parse_args(return_parser: bool = False):
                                       "outside this threshold of the mean-of-errors will be removed as noise. "
                                       "-1 (or any negative number) will disable outlier filtering. Don't use 0 here, "
                                       "that'd filter everything out. (Default: 2.5 s.d.)")
+    parser_validate.add_argument("-w", "--wait", dest="wait", default=False, action="store_true",
+                                 help="Wait to exit until the results are finished and downloaded. If False, just "
+                                      "upload the job, exit, and wait for a response notification from IVERT. You can "
+                                      "then use the 'ivert status' and 'ivert download' commands to monitor the job. "
+                                      "Default: False")
+    parser_validate.add_argument("-p", "--prompt", dest="prompt", default=False, action="store_true",
+                                 help="Print the command options and prompt the user to verify settings before uploading"
+                                      " files to IVERT. Useful if you want to manually double-check the settings"
+                                      " before sending it off. Default: False")
     parser_validate.add_argument("-sns", "--sns_notifications", dest="sns_notifications",
                                  type=yes_no.interpret_yes_no, default=True,
                                  help="Whether to send SNS notifications. Must be followed by 'True' or 'False'. Default 'True'")

@@ -26,6 +26,7 @@ import validate_dem as validate_dem
 
 
 def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFrame, str],
+                           list_of_empty_files: typing.List[str],
                            csv_name: str,
                            verbose: bool = True) -> pandas.DataFrame:
     """Write a summary csv of all the results in a collection, after they've been run."""
@@ -39,7 +40,7 @@ def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFra
         raise ValueError("total_df must have a 'filename' column.")
 
     unique_files = total_df['filename'].unique()
-    N = len(unique_files)
+    N = len(unique_files) + len(list_of_empty_files)
     means = numpy.empty((N,), dtype=float)
     stds = numpy.empty((N,), dtype=float)
     rmses = numpy.empty((N,), dtype=float)
@@ -48,15 +49,25 @@ def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFra
     canopy_mean = numpy.empty((N,), dtype=float)
     canopy_mean_gt0 = numpy.empty((N,), dtype=float)
 
-    for i, fname in enumerate(unique_files):
-        temp_df = total_df[total_df['filename'] == fname]
-        means[i] = temp_df['diff_mean'].mean()
-        stds[i] = temp_df['diff_mean'].std()
-        rmses[i] = (sum((temp_df['diff_mean'] ** 2)) / (len(temp_df) - 1)) ** 0.5
-        n_cells[i] = len(temp_df)
-        photons_per_cell[i] = temp_df['numphotons_intd'].mean()
-        canopy_mean[i] = temp_df['canopy_fraction'].mean()
-        canopy_mean_gt0[i] = temp_df[temp_df['canopy_fraction'] > 0]['canopy_fraction'].mean()
+    for i, fname in enumerate(unique_files + list_of_empty_files):
+        if fname in unique_files:
+            temp_df = total_df[total_df['filename'] == fname]
+            means[i] = temp_df['diff_mean'].mean()
+            stds[i] = temp_df['diff_mean'].std()
+            rmses[i] = (sum((temp_df['diff_mean'] ** 2)) / (len(temp_df) - 1)) ** 0.5
+            n_cells[i] = len(temp_df)
+            photons_per_cell[i] = temp_df['numphotons_intd'].mean()
+            canopy_mean[i] = temp_df['canopy_fraction'].mean()
+            canopy_mean_gt0[i] = temp_df[temp_df['canopy_fraction'] > 0]['canopy_fraction'].mean()
+        else:
+            assert fname in list_of_empty_files
+            means[i] = numpy.nan
+            stds[i] = numpy.nan
+            rmses[i] = numpy.nan
+            n_cells[i] = 0
+            photons_per_cell[i] = numpy.nan
+            canopy_mean[i] = numpy.nan
+            canopy_mean_gt0[i] = numpy.nan
 
     output_df = pandas.DataFrame(data={'filename': unique_files,
                                        "rmse": rmses,
@@ -210,6 +221,7 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
 
     files_to_export = []
     list_of_results_dfs = []
+    list_of_empty_files = []
 
     # For each DEM, validate it.
     for i, dem_path in enumerate(dem_list):
@@ -227,6 +239,7 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
                 os.mkdir(this_output_dir)
 
         results_h5_file = os.path.join(this_output_dir, os.path.splitext(os.path.split(dem_path)[1])[0] + "_results.h5")
+        empty_fname = results_h5_file.replace("_results.h5", "_results_EMPTY.txt")
 
         if ivert_job_name:
             ivert_jobs_db.update_file_status(ivert_username, ivert_job_id, os.path.basename(dem_path),
@@ -293,10 +306,12 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
                 ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
                                                  os.path.basename(dem_path), "processed", upload_to_s3=True)
 
-        elif os.path.exists(results_h5_file.replace("_results.h5", "_results_EMPTY.txt")):
+        elif os.path.exists(empty_fname):
             if ivert_job_name:
+                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_fname)
                 ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
                                                  os.path.basename(dem_path), "processed", upload_to_s3=True)
+                list_of_empty_files.append(empty_fname)
 
         elif ivert_job_name:
             ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
@@ -319,7 +334,7 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
 
     if write_summary_csv:
         summary_csv_name = str(os.path.join(stats_and_plots_dir, stats_and_plots_base + ".csv"))
-        write_summary_csv_file(total_results_df, summary_csv_name,
+        write_summary_csv_file(total_results_df, list_of_empty_files, summary_csv_name,
                                verbose=verbose)
 
         files_to_export.append(summary_csv_name)
