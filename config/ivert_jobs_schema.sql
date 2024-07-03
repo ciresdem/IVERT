@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS ivert_files (
     -- Status of the individual file.
     status              VARCHAR(16)     NOT NULL    DEFAULT 'unknown'
                             CHECK (status in ('downloaded', 'timeout', 'processing', 'processed',
-                                              'uploaded', 'error', 'quarantined', 'unknown')),
+                                              'uploaded', 'error', 'quarantined', 'unknown', 'unprocessed')),
 
     -- The job_id, username, filename tuple should be unique.
     PRIMARY KEY (job_id, username, filename)

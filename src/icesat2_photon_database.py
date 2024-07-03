@@ -8,7 +8,9 @@ import pyproj
 import geopandas
 import pandas
 import re
+import numexpr
 import numpy
+from osgeo import osr, gdal
 import shapely.geometry
 import shutil
 import tables
@@ -410,6 +412,8 @@ class ICESat2_Database:
                             polygon_or_bbox=None,
                             build_tiles_if_nonexistent=False,
                             good_photons_only=True,
+                            dem_fname=None,
+                            dem_epsg=None,
                             verbose=True):
         """Given a polygon or bounding box, return the combined database of all
         the photons within the polygon or bounding box.
@@ -428,6 +432,11 @@ class ICESat2_Database:
 
         dataframes_list = [None] * len(df_tiles_subset.index)
 
+        if dem_fname is not None:
+            dem_ds = gdal.Open(dem_fname, gdal.GA_ReadOnly)
+        else:
+            dem_ds = None
+
         # For each tile, read the data into a dataframe.
         for i, (idx, df_row) in enumerate(df_tiles_subset.iterrows()):
             fname = df_row['filename']
@@ -443,24 +452,76 @@ class ICESat2_Database:
                 # Filter out to keep only the highest-quality photons.
                 # quality_ph == 0 ("nominal") and "conf_land" == 4 ("high") and/or "conf_land_ice" == 4 ("high")
                 # Using photon_df.eval() is far more efficient for complex expressions than a boolean python expression.
-                good_photon_mask = tile_df.eval("(quality_ph == 0) & ((conf_land == 4) | (conf_land_ice == 4))")
+                good_photon_mask = tile_df.eval(
+                    "(quality_ph == 0) & ((conf_land == 4) | (conf_land_ice == 4)) & (class_code >= 1)")
                 new_tile_df = tile_df[good_photon_mask].copy()
                 # Try to complete de-reference the previous dataframe to free up memory.
                 del tile_df
                 tile_df = new_tile_df
 
-            dataframes_list[i] = tile_df
             if verbose:
                 print("Done.")
+
             # If the file doesn't exist, create it and get the data.
             if tile_df is None and build_tiles_if_nonexistent:
                 if verbose:
                     print("\t{0}/{1} Creating".format(i+1, len(df_tiles_subset)), os.path.split(fname)[1], "...")
-                dataframes_list[i] = self.create_photon_tile(df_row['geometry'],
-                                                             fname,
-                                                             overwrite=False,
-                                                             write_stats = True,
-                                                             verbose=verbose)
+                tile_df = self.create_photon_tile(df_row['geometry'],
+                                                  fname,
+                                                  overwrite=False,
+                                                  write_stats = True,
+                                                  verbose=verbose)
+
+            # If the DEM is not in WGS84, project the points into the DEM coordinate system.
+            if tile_df is not None:
+                if dem_epsg is not None and dem_epsg != 4326:
+                    dem_proj_wkt = dem_ds.GetProjection()
+                    assert dem_proj_wkt is not None and len(dem_proj_wkt) > 0
+
+                    icesat2_srs = osr.SpatialReference()
+                    icesat2_srs.SetWellKnownGeogCS("EPSG:4326")
+                    dem_srs = osr.SpatialReference(wkt=dem_proj_wkt)
+
+                    is2_to_dem = osr.CoordinateTransformation(icesat2_srs, dem_srs)
+
+                    lon_x = tile_df["longitude"]
+                    lat_y = tile_df["latitude"]
+                    latlon_array = numpy.array([lon_x, lat_y]).transpose()
+
+                    points = numpy.array(is2_to_dem.TransformPoints(latlon_array))
+                    tile_df["dem_x"] = points[:, 0]
+                    tile_df["dem_y"] = points[:, 1]
+                else:
+                    tile_df["dem_x"] = tile_df["longitude"]
+                    tile_df["dem_y"] = tile_df["latitude"]
+
+                if dem_ds is not None:
+                    # Now subset only photons that are within the bounding box of the DEM.
+                    xstart, xstep, _, ystart, _, ystep = dem_ds.GetGeoTransform()
+                    dem_xsize = dem_ds.RasterXSize
+                    dem_ysize = dem_ds.RasterYSize
+                    xend = xstart + (xstep * dem_xsize)
+                    yend = ystart + (ystep * dem_ysize)
+                    ph_xcoords = tile_df["dem_x"]
+                    ph_ycoords = tile_df["dem_y"]
+
+                    # Clip to the bounding box.
+                    minx = min(xstart, xend)
+                    maxx = max(xstart, xend)
+                    miny = min(ystart, yend)
+                    maxy = max(ystart, yend)
+                    # Again, using a numexpr expression here is far more time-and-memory efficient than doing all these compound boolean
+                    # operations on the numpy arrays in a Python expression.
+                    ph_bbox_mask = numexpr.evaluate("(ph_xcoords >= minx) & "
+                                                    "(ph_xcoords < maxx) & "
+                                                    "(ph_ycoords > miny) & "
+                                                    "(ph_ycoords <= maxy)"
+                                                    )
+
+                    # By creating a copy of the subset, it ensures the original is dereferenced and deleted from memory.
+                    tile_df = tile_df[ph_bbox_mask].copy()
+
+            dataframes_list[i] = tile_df
 
         # Get rid of any dataframes where data wasn't read.
         dataframes_list = [df for df in dataframes_list if (df is not None)]

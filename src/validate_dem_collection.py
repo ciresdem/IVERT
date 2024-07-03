@@ -11,6 +11,7 @@ import numpy
 import os
 import pandas
 import re
+import traceback
 import typing
 
 ####################################
@@ -231,31 +232,55 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
             ivert_jobs_db.update_file_status(ivert_username, ivert_job_id, os.path.basename(dem_path),
                                              "processing", upload_to_s3=True)
 
-        shared_ret_values = {}
-        # Do the validation.
-        # Note: We automatically skip the icesat-2 download here because we already downloaded it above for the whole directory.
-        validate_dem.validate_dem(dem_path,
-                                  output_dir,
-                                  band_num=band_num,
-                                  shared_ret_values=shared_ret_values,
-                                  icesat2_photon_database_obj=photon_db_obj,
-                                  ivert_job_name=ivert_job_name,
-                                  dem_vertical_datum=input_vdatum,
-                                  output_vertical_datum=output_vdatum,
-                                  interim_data_dir=this_output_dir,
-                                  overwrite=overwrite,
-                                  delete_datafiles=delete_datafiles,
-                                  write_result_tifs=write_result_tifs,
-                                  mask_out_buildings=mask_buildings,
-                                  mask_out_urban=use_urban_mask,
-                                  write_summary_stats=create_individual_results,
-                                  include_photon_level_validation=include_photon_validation,
-                                  plot_results=create_individual_results,
-                                  outliers_sd_threshold=outliers_sd_threshold,
-                                  mark_empty_results=True,
-                                  omit_bad_granules=omit_bad_granules,
-                                  measure_coverage=measure_coverage,
-                                  verbose=verbose)
+        try:
+            shared_ret_values = {}
+            # Do the validation.
+            # Note: We automatically skip the icesat-2 download here because we already downloaded it above for the whole directory.
+            validate_dem.validate_dem(dem_path,
+                                      output_dir,
+                                      band_num=band_num,
+                                      shared_ret_values=shared_ret_values,
+                                      icesat2_photon_database_obj=photon_db_obj,
+                                      ivert_job_name=ivert_job_name,
+                                      dem_vertical_datum=input_vdatum,
+                                      output_vertical_datum=output_vdatum,
+                                      interim_data_dir=this_output_dir,
+                                      overwrite=overwrite,
+                                      delete_datafiles=delete_datafiles,
+                                      write_result_tifs=write_result_tifs,
+                                      mask_out_buildings=mask_buildings,
+                                      mask_out_urban=use_urban_mask,
+                                      write_summary_stats=create_individual_results,
+                                      include_photon_level_validation=include_photon_validation,
+                                      plot_results=create_individual_results,
+                                      outliers_sd_threshold=outliers_sd_threshold,
+                                      mark_empty_results=True,
+                                      omit_bad_granules=omit_bad_granules,
+                                      measure_coverage=measure_coverage,
+                                      verbose=verbose)
+        except MemoryError:
+            if ivert_job_name:
+                ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
+                                                 os.path.basename(dem_path), "error", upload_to_s3=True)
+                if verbose:
+                    print(f"Skipping {os.path.basename(dem_path)} due to memory error.")
+            continue
+
+        except KeyboardInterrupt as e:
+            if ivert_job_name:
+                ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
+                                                 os.path.basename(dem_path), "killed", upload_to_s3=True)
+
+            raise e
+
+        except Exception:
+            if ivert_job_name:
+                ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
+                                                 os.path.basename(dem_path), "error", upload_to_s3=True)
+                if verbose:
+                    print(f"Skipping {os.path.basename(dem_path)}: {traceback.format_exc()}")
+
+            continue
 
         files_to_export.extend(list(shared_ret_values.values()))
 
@@ -265,6 +290,10 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
             if ivert_job_name:
                 ivert_exporter.upload_file_to_export_bucket(ivert_job_name, results_h5_file)
                 # Update the DEM file status
+                ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
+                                                 os.path.basename(dem_path), "processed", upload_to_s3=True)
+        elif os.path.exists(results_h5_file.replace("_results.h5", "_EMPTY.txt")):
+            if ivert_job_name:
                 ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
                                                  os.path.basename(dem_path), "processed", upload_to_s3=True)
         elif ivert_job_name:

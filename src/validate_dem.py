@@ -1049,6 +1049,8 @@ def validate_dem_parallel(dem_name: str,
     photon_df = icesat2_photon_database_obj.get_photon_database(dem_bbox,
                                                                 build_tiles_if_nonexistent=False,
                                                                 good_photons_only=True,
+                                                                dem_fname=converted_dem_name,
+                                                                dem_epsg=dem_epsg,
                                                                 verbose=verbose)
 
     if photon_df is None:
@@ -1066,26 +1068,26 @@ def validate_dem_parallel(dem_name: str,
         else:
             return files_to_export
 
-    # If the DEM is not in WGS84 coordinates, create a conversion funtion to pass to sub-functions.
-    if dem_epsg != 4326:
-        dem_proj_wkt = dem_ds.GetProjection()
-        # Right now we're having a bug where occasionally the WKT is None in datasets converted to WGS84 vertical coordinates.
-        # JUST ON THE IVERT EC2 we're having this bug (not sure why). It's fine on other machines.
-        # If this is the case, if no projection is written to the converted DEM, we'll try to pull the WKT from the
-        # original DEM. All we need is the horizontal projection here so it should be fine. Not sure what's going on there.
-        # TODO: FIX THE BUG DESCRIBED ABOVE and remove this if-clause.
-        if dem_proj_wkt is None or len(dem_proj_wkt) == 0:
-            dem_proj_wkt = gdal.Open(dem_name, gdal.GA_ReadOnly).GetProjection()
-
-        assert dem_proj_wkt is not None and len(dem_proj_wkt) > 0
-
-        icesat2_srs = osr.SpatialReference()
-        icesat2_srs.SetWellKnownGeogCS("EPSG:4326")
-        dem_srs = osr.SpatialReference(wkt=dem_proj_wkt)
-
-        is2_to_dem = osr.CoordinateTransformation(icesat2_srs, dem_srs)
-    else:
-        is2_to_dem = None
+    # # If the DEM is not in WGS84 coordinates, create a conversion funtion to pass to sub-functions.
+    # if dem_epsg != 4326:
+    #     dem_proj_wkt = dem_ds.GetProjection()
+    #     # Right now we're having a bug where occasionally the WKT is None in datasets converted to WGS84 vertical coordinates.
+    #     # JUST ON THE IVERT EC2 we're having this bug (not sure why). It's fine on other machines.
+    #     # If this is the case, if no projection is written to the converted DEM, we'll try to pull the WKT from the
+    #     # original DEM. All we need is the horizontal projection here so it should be fine. Not sure what's going on there.
+    #     # TODO: FIX THE BUG DESCRIBED ABOVE and remove this if-clause.
+    #     if dem_proj_wkt is None or len(dem_proj_wkt) == 0:
+    #         dem_proj_wkt = gdal.Open(dem_name, gdal.GA_ReadOnly).GetProjection()
+    #
+    #     assert dem_proj_wkt is not None and len(dem_proj_wkt) > 0
+    #
+    #     icesat2_srs = osr.SpatialReference()
+    #     icesat2_srs.SetWellKnownGeogCS("EPSG:4326")
+    #     dem_srs = osr.SpatialReference(wkt=dem_proj_wkt)
+    #
+    #     is2_to_dem = osr.CoordinateTransformation(icesat2_srs, dem_srs)
+    # else:
+    #     is2_to_dem = None
 
     if verbose:
         print("{0:,}".format(len(photon_df)), "ICESat-2 photons present in photon dataframe.")
@@ -1111,61 +1113,62 @@ def validate_dem_parallel(dem_name: str,
         else:
             return []
 
-    # If the DEM horizontal coordinate system isn't WGS84 lat/lon, convert the icesat-2
-    # lat/lon data coordinates into the same horizontal CRS as the DEM
-    if dem_epsg != 4326:
-        lon_x = photon_df["longitude"]
-        lat_y = photon_df["latitude"]
-        latlon_array = numpy.array([lon_x, lat_y]).transpose()
+    # # If the DEM horizontal coordinate system isn't WGS84 lat/lon, convert the icesat-2
+    # # lat/lon data coordinates into the same horizontal CRS as the DEM
+    # if dem_epsg != 4326:
+    #     lon_x = photon_df["longitude"]
+    #     lat_y = photon_df["latitude"]
+    #     latlon_array = numpy.array([lon_x, lat_y]).transpose()
+    #
+    #     points = numpy.array(is2_to_dem.TransformPoints(latlon_array))
+    #
+    #     p_x = points[:, 0]
+    #     p_y = points[:, 1]
+    #     photon_df["dem_x"] = p_x
+    #     photon_df["dem_y"] = p_y
+    #
+    #     ph_xcoords = p_x
+    #     ph_ycoords = p_y
+    #
+    # # Subset the dataframe to photons within the DEM bounding box.
+    # # Also, filter out all noise photons.
+    # else:
+    #     ph_xcoords = photon_df["longitude"]
+    #     ph_ycoords = photon_df["latitude"]
+    #     # If we're measuring the coverage, we'll just use the "dem_x" and "dem_y" values.
+    #     # We don't need this extra field if we're not measuring the coverage, since the photons are just taken
+    #     # from the ph_xcoords and ph_ycoords variables assigned above.
+    #     if measure_coverage:
+    #         photon_df["dem_x"] = ph_xcoords
+    #         photon_df["dem_y"] = ph_ycoords
+    #
+    # # Compute the (i,j) indices into the array of all the photons collected.
+    # # Transform photon lat/lons into DEM indices.
+    # xstart, xstep, _, ystart, _, ystep = dem_ds.GetGeoTransform()
+    # xend = xstart + (xstep * dem_array.shape[1])
+    # yend = ystart + (ystep * dem_array.shape[0])
+    #
+    # # Clip to the bounding box.
+    # minx = min(xstart, xend)
+    # maxx = max(xstart, xend)
+    # miny = min(ystart, yend)
+    # maxy = max(ystart, yend)
+    # df_class_code = photon_df["class_code"].to_numpy()
+    # # Again, using a numexpr expression here is far more time-and-memory efficient than doing all these compound boolean
+    # # operations on the numpy arrays in a Python expression.
+    # ph_bbox_mask = numexpr.evaluate("(ph_xcoords >= minx) & " + \
+    #                                 "(ph_xcoords < maxx) & " + \
+    #                                 "(ph_ycoords > miny) & " + \
+    #                                 "(ph_ycoords <= maxy) & " + \
+    #                                 "(df_class_code >= 1)")
+    #
+    # # Subset the dataframe to only provide pixels in-bounds for our DEM
+    # # Create a copy() so as not to be assinging to a slice of the full dataframe.
+    # # The original photon_df gets dereferenced and destroyed.
+    # photon_df = photon_df[ph_bbox_mask].copy()
 
-        points = numpy.array(is2_to_dem.TransformPoints(latlon_array))
-
-        p_x = points[:, 0]
-        p_y = points[:, 1]
-        photon_df["dem_x"] = p_x
-        photon_df["dem_y"] = p_y
-
-        ph_xcoords = p_x
-        ph_ycoords = p_y
-
-    # Subset the dataframe to photons within the DEM bounding box.
-    # Also, filter out all noise photons.
-    else:
-        ph_xcoords = photon_df["longitude"]
-        ph_ycoords = photon_df["latitude"]
-        # If we're measuring the coverage, we'll just use the "dem_x" and "dem_y" values.
-        # We don't need this extra field if we're not measuring the coverage, since the photons are just taken
-        # from the ph_xcoords and ph_ycoords variables assigned above.
-        if measure_coverage:
-            photon_df["dem_x"] = ph_xcoords
-            photon_df["dem_y"] = ph_ycoords
-
-    # Compute the (i,j) indices into the array of all the photons collected.
-    # Transform photon lat/lons into DEM indices.
-    xstart, xstep, _, ystart, _, ystep = dem_ds.GetGeoTransform()
-    xend = xstart + (xstep * dem_array.shape[1])
-    yend = ystart + (ystep * dem_array.shape[0])
-
-    # Clip to the bounding box.
-    minx = min(xstart, xend)
-    maxx = max(xstart, xend)
-    miny = min(ystart, yend)
-    maxy = max(ystart, yend)
-    df_class_code = photon_df["class_code"].to_numpy()
-    # Again, using a numexpr expression here is far more time-and-memory efficient than doing all these compound boolean
-    # operations on the numpy arrays in a Python expression.
-    ph_bbox_mask = numexpr.evaluate("(ph_xcoords >= minx) & " + \
-                                    "(ph_xcoords < maxx) & " + \
-                                    "(ph_ycoords > miny) & " + \
-                                    "(ph_ycoords <= maxy) & " + \
-                                    "(df_class_code >= 1)")
-
-    # Subset the dataframe to only provide pixels in-bounds for our DEM
-    # Create a copy() so as not to be assinging to a slice of the full dataframe.
-    # The original photon_df gets dereferenced and destroyed.
-    photon_df = photon_df[ph_bbox_mask].copy()
-    ph_xcoords = ph_xcoords[ph_bbox_mask]
-    ph_ycoords = ph_ycoords[ph_bbox_mask]
+    ph_xcoords = photon_df["dem_x"]
+    ph_ycoords = photon_df["dem_y"]
 
     # Omit any photons from "bad granules" found from find_bad_icesat2_granules.py
     # NOTE: After we've filtered out bad granules from the ICESat-2 database, we can
@@ -1194,6 +1197,7 @@ def validate_dem_parallel(dem_name: str,
                 ph_ycoords = ph_ycoords[n_ph_bad_granules_mask]
 
     # Assign a dem (i,j) index location for each photon. We use this for computing.
+    xstart, xstep, _, ystart, _, ystep = dem_ds.GetGeoTransform()
     photon_df["i"] = numpy.floor((ph_ycoords - ystart) / ystep).astype(int)
     photon_df["j"] = numpy.floor((ph_xcoords - xstart) / xstep).astype(int)
 
@@ -1233,7 +1237,7 @@ def validate_dem_parallel(dem_name: str,
             print("No land cells found in DEM with overlapping ICESat-2 data. Stopping and moving on.")
 
             if mark_empty_results:
-                # Just create an empty file to makre this dataset as done.
+                # Just create an empty file to mark this dataset as done.
                 with open(empty_results_filename, 'w') as f:
                     f.close()
                 if verbose:
