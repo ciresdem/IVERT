@@ -82,7 +82,7 @@ def run_validate_command(args: argparse.Namespace) -> None:
         print("The following job will be sent to the IVERT server, along with files listed:")
         args_for_validation = vars(args_to_send)
         args_for_validation["command"] = "validate"
-        print(client_job_upload.convert_cmd_args_to_string(args_for_validation)
+        print(client_job_upload.convert_cmd_args_to_string(args_for_validation))
         answer = yes_no.query_yes_no("Proceed?", default="y")
         # If they don't want to proceed, just exit.
         if not answer:
