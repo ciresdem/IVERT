@@ -183,8 +183,9 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
         ivert_username = server_file_export.get_username(ivert_job_name)
         ivert_job_id = server_file_export.get_job_id(ivert_job_name)
 
-    statsfile_name = os.path.join(stats_and_plots_dir, stats_and_plots_base + ".txt")
-    plot_file_name = os.path.join(stats_and_plots_dir, stats_and_plots_base + ".png")
+    statsfile_name = os.path.join(stats_and_plots_dir, stats_and_plots_base.replace("_results", "_summary_stats") + ".txt")
+    plot_file_name = os.path.join(stats_and_plots_dir, stats_and_plots_base.replace("_results", "_plot") + ".png")
+    csv_name = os.path.join(stats_and_plots_dir, stats_and_plots_base.replace("_results", "_individual_results") + ".csv")
     results_h5 = os.path.join(stats_and_plots_dir, stats_and_plots_base + ".h5")
 
     # If the .h5 results file already exists but not the other files, just
@@ -364,22 +365,18 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
                                                                         verbose=verbose)
 
     if write_summary_csv:
-        summary_csv_name = str(os.path.join(stats_and_plots_dir, stats_and_plots_base + ".csv"))
-        write_summary_csv_file(total_results_df, list_of_empty_files, summary_csv_name,
-                               verbose=verbose)
+        write_summary_csv_file(total_results_df, list_of_empty_files, csv_name, verbose=verbose)
 
-        files_to_export.append(summary_csv_name)
+        files_to_export.append(csv_name)
         if ivert_job_name is not None:
-            ivert_exporter.upload_file_to_export_bucket(ivert_job_name, summary_csv_name)
+            ivert_exporter.upload_file_to_export_bucket(ivert_job_name, csv_name)
 
     # Output the statistics summary file.
-    validate_dem.write_summary_stats_file(total_results_df,
-                                          statsfile_name,
-                                          verbose=verbose)
+    validate_dem.write_summary_stats_file(total_results_df, statsfile_name, verbose=verbose)
 
-    files_to_export.append(statsfile_name)
     if ivert_job_name is not None:
         ivert_exporter.upload_file_to_export_bucket(ivert_job_name, statsfile_name)
+    files_to_export.append(statsfile_name)
 
     # Output the validation results plot.
     plot_validation_results.plot_histogram_and_error_stats_4_panels(total_results_df,
