@@ -86,7 +86,7 @@ def run_job_status_command(args: argparse.Namespace) -> None:
     if args.detailed:
         job_df, files_df = detailed_job_info(args.job_name, jobs_db)
         if len(job_df) == 0:
-            print(f"Job {bcolors.OKBLUE}{args.job_name}{bcolors.ENDC} has not been started on the IVERT server yet.")
+            print(f"Job {bcolors.OKBLUE}{bcolors.BOLD}{args.job_name}{bcolors.ENDC}{bcolors.ENDC} has not been started on the IVERT server yet.")
             return
 
         print(f"Job {bcolors.OKBLUE}{bcolors.BOLD}{args.job_name}{bcolors.ENDC}{bcolors.ENDC} is {bcolors.BOLD}{repr(job_df['status'].values[0])}{bcolors.ENDC}.")
@@ -140,11 +140,11 @@ def run_job_status_command(args: argparse.Namespace) -> None:
     else:
         status = get_simple_job_status(args.job_name, jobs_db)
         if status is None:
-            print(f"Job {bcolors.BOLD}{args.job_name}{bcolors.ENDC} does not exist on the IVERT server yet.")
+            print(f"Job {bcolors.OKBLUE}{bcolors.BOLD}{args.job_name}{bcolors.ENDC}{bcolors.ENDC} has not been started on the IVERT server yet.")
             # \n"
             #       "Give it a bit. If it never shows up, contact your IVERT administrator and check whether the server process is running.")
         else:
-            print(f"Job {args.job_name} is {repr(status)}.")
+            print(f"Job {bcolors.OKBLUE}{bcolors.BOLD}{args.job_name}{bcolors.ENDC}{bcolors.ENDC} is {bcolors.BOLD}{repr(status)}{bcolors.ENDC}.")
 
 
 def get_simple_job_status(job_name, jobs_db: typing.Union[jobs_database.JobsDatabaseClient, None] = None) -> typing.Union[str, None]:
