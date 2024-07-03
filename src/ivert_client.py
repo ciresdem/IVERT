@@ -150,7 +150,7 @@ def define_and_parse_args(return_parser: bool = False):
                                  help="Just download results to the same job_dir where the job configfile was submitted,"
                                       " in your ~/.ivert/jobs/ directory. Overrides '-o'. Default: False")
     parser_download.add_argument("-o", "--output_dir", dest="output_dir", type=str, default=".",
-                                 help="Specify the local directory to download results. Default: '.'")
+                                 help="Local directory in which to download results. Default: '.' (current local directory)")
 
     ###############################################################
     # Create the "update" subparser
