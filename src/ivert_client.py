@@ -51,7 +51,8 @@ def define_and_parse_args(return_parser: bool = False):
                                       "given, all *.tif files in that directory (non-recursive) will be sent for validation.")
     parser_validate.add_argument("-vd", "--vdatum", dest="input_vdatum", type=str, default="egm2008",
                                  help="DEM vertical datum by EPSG number or short-name. (Default: 'egm2008')"
-                                      " Type 'vdatums --list-epsg' to see a list of available options. (Note: Not all names are fully supported yet, we'll get there. Unless you're using a common datum, probably best to stick with the numbers.)"
+                                      " Type 'vdatums --list-epsg' to see a list of available options. "
+                                 "(Note: Not all names are fully supported yet, we'll get there. Unless you're using a common datum, probably best to stick with the numbers.)")
     # parser_validate.add_argument("-ovd", "--output_vdatum", dest="output_vdatum", type=str, default="egm2008",
     #                              help="Output DEM vertical datum. Only 'egm2008' and 'wgs84' available (the datumes that ICESat-2 uses). (Default: 'egm2008')")
     parser_validate.add_argument("-n", "--name", "--region_name", dest="region_name", type=str, default="DEMs",
