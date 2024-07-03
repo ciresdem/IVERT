@@ -292,10 +292,12 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
                 # Update the DEM file status
                 ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
                                                  os.path.basename(dem_path), "processed", upload_to_s3=True)
-        elif os.path.exists(results_h5_file.replace("_results.h5", "_EMPTY.txt")):
+
+        elif os.path.exists(results_h5_file.replace("_results.h5", "_results_EMPTY.txt")):
             if ivert_job_name:
                 ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
                                                  os.path.basename(dem_path), "processed", upload_to_s3=True)
+
         elif ivert_job_name:
             ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
                                              os.path.basename(dem_path), "error", upload_to_s3=True)
