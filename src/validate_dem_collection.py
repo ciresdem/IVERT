@@ -139,7 +139,38 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
     if place_name is None:
         stats_and_plots_base = "summary_results"
     else:
-        stats_and_plots_base = place_name.replace(" ", "_") + "_results"
+        # Remove any problematic characters from the place name to create a file name.
+        stats_and_plots_base = (place_name.replace(" ", "_")
+                                          .replace("/", "_")
+                                          .replace(":", "_")
+                                          .replace("|", "_")
+                                          .replace("\\", "_")
+                                          .replace("?", "_")
+                                          .replace("*", "_")
+                                          .replace("<", "_")
+                                          .replace(">", "_")
+                                          .replace("\"", "_")
+                                          .replace("'", "_")
+                                          .replace("`", "_")
+                                          .replace("!", "_")
+                                          .replace("@", "_")
+                                          .replace("#", "_")
+                                          .replace("$", "_")
+                                          .replace("%", "_")
+                                          .replace("^", "_")
+                                          .replace("&", "_")
+                                          .replace("(", "_")
+                                          .replace(")", "_")
+                                          .replace("+", "_")
+                                          .replace("=", "_")
+                                          .replace("{", "_")
+                                          .replace("}", "_")
+                                          .replace("[", "_")
+                                          .replace("]", "_")
+                                          .replace(";", "_")
+                                          .replace(",", "_")
+                                          .replace("/", "_")
+                                          .replace("__", "_") + "_results")
 
     if ivert_job_name is None:
         ivert_jobs_db = None
