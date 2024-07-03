@@ -1689,7 +1689,7 @@ def write_summary_stats_file(results_df: pandas.DataFrame,
     mean_diff = results_df["diff_mean"]
 
     lines.append("Mean bias error (ICESat-2 - DEM) (m): {0}".format(mean_diff.mean()))
-    lines.append("RMSE error (m): {0}".format(numpy.sqrt(numpy.mean(numpy.power(mean_diff, 2)))))
+    lines.append("RMSE (m): {0}".format(numpy.sqrt(numpy.mean(numpy.power(mean_diff, 2)))))
     lines.append("== Decile ranges of errors (ICESat-2 - DEM) (m) (Look for long-tails, indicating possible artifacts.) ===")
 
     percentile_levels = [0, 1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 99, 100]
@@ -1698,9 +1698,9 @@ def write_summary_stats_file(results_df: pandas.DataFrame,
         lines.append("    {0:>3d} percentile error level (m): {1}".format(l, v))
 
     lines.append("Mean canopy cover (% cover): {0:0.02f}".format(results_df["canopy_fraction"].mean()*100))
-    lines.append("% of cells with >0 measured canopy (%): {0}".format(len(results_df.canopy_fraction > 0.0) / len(results_df)))
-    lines.append("Mean canopy cover in cells containing >0 canopy (% cover among 'wooded' cells): {0}".format(results_df[results_df["canopy_fraction"] > 0]["canopy_fraction"].mean()))
-    lines.append("Mean roughness (std. dev. of photon elevations within each cell (m)): {0}".format(results_df["stddev"].mean()))
+    lines.append("% of cells with >0 measured canopy (%): {0}".format((numpy.count_nonzero(results_df.canopy_fraction > 0.0) / len(results_df))*100))
+    lines.append("Mean canopy cover in 'wooded' cells containing >0 canopy (% cover): {0}".format(results_df[results_df["canopy_fraction"] > 0]["canopy_fraction"].mean()*100))
+    lines.append("Mean roughness (stddev. of photon elevations within each cell (m)): {0}".format(results_df["stddev"].mean()))
 
     out_text = "\n".join(lines)
     with open(statsfile_name, 'w') as outf:
