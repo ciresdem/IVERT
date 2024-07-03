@@ -89,7 +89,7 @@ def run_job_status_command(args: argparse.Namespace) -> None:
             print(f"Job {args.job_name} has not been started on the IVERT server yet.")
             return
 
-        print(f"Job {args.job_name} is {repr(job_df['status'].values[0])}.")
+        print(f"Job {bcolors.bcolors.UNDERLINE}{args.job_name}{bcolors.bcolors.ENDC} is {bcolors.bcolors.BOLD}{repr(job_df['status'].values[0])}{bcolors.bcolors.ENDC}.")
         input_files = files_df[files_df["import_or_export"].isin((0, 2))]
         export_files = files_df[files_df["import_or_export"].isin((1, 2))]
 
@@ -128,6 +128,11 @@ def run_job_status_command(args: argparse.Namespace) -> None:
                 status = frow["status"]
                 if status == "uploaded":
                     status = f"{bcolors.bcolors.BOLD}{status}{bcolors.bcolors.ENDC}"
+                elif status == "error":
+                    status = f"{bcolors.bcolors.FAIL}{status}{bcolors.bcolors.ENDC}"
+                elif status == "unknown":
+                    status = f"{bcolors.bcolors.WARNING}{status}{bcolors.bcolors.ENDC}"
+
                 print(f"    {frow['filename']}: {status}")
 
             print(f"\n'{bcolors.bcolors.BOLD}ivert download {args.job_name}{bcolors.bcolors.ENDC}' will download the results.")

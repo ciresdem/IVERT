@@ -333,6 +333,7 @@ class IvertJobManager:
         # Clean up the local files.
         job_obj.delete_local_job_folders()
 
+        return
 
     def quietly_populate_database(self, new_vnum: int = 0):
         """Populate the database without executing anything.
@@ -1340,7 +1341,7 @@ def define_and_parse_arguments() -> argparse.Namespace:
     parser.add_argument("-p", "--populate", action="store_true", default=False,
                         help="Quietly enter all new jobs into the database without running anything. Useful if we've reset the database.")
     parser.add_argument("-r", "--reset_database", dest="reset_database", action="store_true", default=False,
-                        help="Reset and then quietly populate the database. Useful to rebuild we've reset the database schema.")
+                        help="Reset and then quietly populate the jobs database. Useful to rebuild if we've reset the database schema.")
     parser.add_argument("-v", "--verbose", dest="verbose", action="store_true", default=False,
                         help="Print verbose output while running.")
     parser.add_argument("-k", "--kill", dest="kill", action="store_true", default=False,

@@ -695,7 +695,7 @@ def validate_dem(dem_name: str,
             if verbose:
                 print(os.path.basename(output_fname), "written and exported.")
 
-        if write_result_tifs:
+        if write_result_tifs and shared_results_df is not None and subdivision_number == 0:
             common_key = "result_tif_filename"
             output_fname = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_ICESat2_error_map.tif")
             generate_result_geotiff(shared_results_df, gdal.Open(dem_name, gdal.GA_ReadOnly),
@@ -741,15 +741,14 @@ def validate_dem(dem_name: str,
                 if ivert_job_name is not None and subdivision_number == 0:
                     ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_fname, upload_to_s3=False)
 
-        if write_summary_stats:
+        if write_summary_stats and shared_results_df is not None and subdivision_number == 0:
             # Generate a new summary stats file only if we have results and if the recursion depth is zero.
-            if shared_results_df is not None and subdivision_number == 0:
-                output_fname = os.path.join(output_dir,
-                                            os.path.splitext(os.path.basename(dem_name))[0] + "_summary_stats.txt")
-                write_summary_stats_file(shared_results_df, output_fname, verbose=verbose)
-                shared_ret_values["summary_stats_filename"] = output_fname
-                if ivert_job_name is not None and subdivision_number == 0:
-                    ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_fname, upload_to_s3=False)
+            output_fname = os.path.join(output_dir,
+                                        os.path.splitext(os.path.basename(dem_name))[0] + "_summary_stats.txt")
+            write_summary_stats_file(shared_results_df, output_fname, verbose=verbose)
+            shared_ret_values["summary_stats_filename"] = output_fname
+            if ivert_job_name is not None and subdivision_number == 0:
+                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_fname, upload_to_s3=False)
 
         if "photon_results_dataframe_file" in common_keys:
             common_key = "photon_results_dataframe_file"
