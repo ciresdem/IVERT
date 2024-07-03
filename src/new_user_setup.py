@@ -576,9 +576,9 @@ def define_and_parse_args(just_return_parser: bool=False):
 
     bucket_group = parser.add_argument_group("IVERT S3 bucket settings",
                               description="Manually enter the IVERT S3 bucket settings and credentials. It is FAR EASIER "
-                              "to skip these options, copy the 'ivert_s3_credentials.ini' file from the "
-                              "team's GDrive, and place it in ~/.ivert/ivert_s3_credentials.ini. The script will "
-                              "automatically grab all these variables from there.")
+                                          "to copy the 'ivert_s3_credentials.ini' file from the team's GDrive and use the "
+                                          "--creds flag above. The script will automatically pull these variables from there. "
+                                          "But if you wanna do it manually, whatevs.")
     bucket_group.add_argument("-ub", "--untrusted_bucket_name", dest="untrusted_bucket_name",
                               default="", type=str, required=False,
                               help="The name of the bucket where untrusted data uploaded to IVERT.")
