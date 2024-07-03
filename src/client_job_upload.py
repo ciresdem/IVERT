@@ -40,8 +40,8 @@ def convert_cmd_args_to_string(args):
     assert hasattr(args, "command")
     assert hasattr(args, "files") and isinstance(args.files, list)
     command_str = args.command
-    for key, val in args.items():
-        if key == "command":
+    for key, val in vars(args).items():
+        if key in ("command", "files"):
             continue
         command_str = command_str + f" --{key} {repr(val)}"
     if len(args.files) > 0:
