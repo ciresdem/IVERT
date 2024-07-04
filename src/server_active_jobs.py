@@ -16,7 +16,7 @@ def get_active_ivert_jobs(update_inactive_job_statuses: bool = False) -> typing.
 
     database_updated = False
     active_ivert_jobs = []
-    for i, (job_pid, username, job_num) in df["job_pid", "username", "job_id"].iterrows():
+    for i, (job_pid, username, job_num) in df[["job_pid", "username", "job_id"]].iterrows():
         if job_pid in psutil.pids():
             try:
                 proc = psutil.Process(job_pid)
@@ -29,6 +29,11 @@ def get_active_ivert_jobs(update_inactive_job_statuses: bool = False) -> typing.
                         jobs_db.update_job_status(username, job_num, "unknown",
                                                   increment_vnum=False, upload_to_s3=False)
                         database_updated = True
+
+                elif update_inactive_job_statuses:
+                    jobs_db.update_job_status(username, job_num, "unknown",
+                                              increment_vnum=False, upload_to_s3=False)
+                    database_updated = True
 
             except psutil.NoSuchProcess:
                 continue
