@@ -1024,7 +1024,7 @@ def validate_dem_parallel(dem_name: str,
 
     # If the mask is empty (all 0's), there's nothing to validate. Just return an empty file. We're done here.
     if numpy.count_nonzero(coastline_mask_array) == 0:
-        error_msg = f"Coastline mask file {coastline_mask_filename} contains all 0's. No land data to validate."
+        error_msg = f"Coastline mask file '{os.path.basename(coastline_mask_filename)}' contains all 0's. No land data to validate."
         if verbose:
             print(error_msg)
         with open(empty_results_filename, "w") as f:
