@@ -417,38 +417,40 @@ def subdivide_dem(dem_name: str,
 
     return sub_dems
 
+
 def reset_results_indexes_after_merge(sub_results_df: pandas.DataFrame,
                                       sub_dem_fname: str,
                                       parent_dem_fname: str) -> pandas.DataFrame:
     """DEM results dataframes are indexed by (i, j).  Reset the index after merging."""
+    if "i" not in sub_results_df.columns or "j" not in sub_results_df.columns:
+        raise ValueError("sub_results_df must have columns 'i' and 'j'")
 
     sub_geotransform = gdal.Open(sub_dem_fname).GetGeoTransform()
     parent_geotransform = gdal.Open(parent_dem_fname).GetGeoTransform()
 
     x_step = sub_geotransform[1]
     y_step = sub_geotransform[5]
+    # The two DEMs should have the exact same x- and y-steps (resolutions).
     assert x_step == parent_geotransform[1]
     assert y_step == parent_geotransform[5]
 
     x_offset = int((sub_geotransform[0] - parent_geotransform[0]) / x_step)
     y_offset = int((sub_geotransform[3] - parent_geotransform[3]) / y_step)
 
-    # Assign a dem (i,j) index location for each photon. We use this for computing.
+    # Assign a dem (i,j) index location for each grid cell, as new columns.
     sub_results_df["i"] = sub_results_df.index.get_level_values("i") + y_offset
     sub_results_df["j"] = sub_results_df.index.get_level_values("j") + x_offset
 
-    # Re-create an (i,j) multi-index into the array.
+    # Re-create an (i,j) multi-index into the array, dropping the old index and the new columns.
     sub_results_df.set_index(["i", "j"], drop=True, inplace=True)
 
     return sub_results_df
 
 
-
 def validate_dem(dem_name: str,
                  output_dir: typing.Union[str, None] = None,
                  shared_ret_values: typing.Union[dict, None] = None,
-                 icesat2_photon_database_obj: typing.Union[icesat2_photon_database.ICESat2_Database, None] \
-                         = None,  # Used only if we've already created this, for efficiency.
+                 icesat2_photon_database_obj: typing.Union[icesat2_photon_database.ICESat2_Database, None] = None,
                  band_num: int = 1,
                  dem_vertical_datum: typing.Union[str, int] = "egm2008",
                  output_vertical_datum: typing.Union[str, int] = "egm2008",
@@ -486,9 +488,14 @@ def validate_dem(dem_name: str,
     Args:
         dem_name (str): Name of the DEM file to validate.
         output_dir (str): Output directory for results.
-        shared_ret_values (dict): Shared return values from validate_dem_parallel.
+        shared_ret_values (dict, None): Shared return values from validate_dem_parallel. This is an analagous way to get
+            the return values back from the calling function if this is called as a sub-process.
         icesat2_photon_database_obj (icesat2_photon_database.ICESat2_Database): icesat-2 photon database object. Only
-            used if we've already created one, such as in validate_dem_collection. Typically ignored for a single DEM.
+            used if we've already created one, such as in validate_dem_collection, for efficiency.
+            Typically ignored for a single DEM validation.
+        band_num (int): The raster band to use in the DEMs. 1-indexed. Defaults to 1 (first band).
+        dem_vertical_datum: (str, int): The vertical datum of the DEM. Defaults to "egm2008".
+        output_vertical_datum: (str, int): The vertical datum of the results. Defaults to "egm2008".
         ivert_job_name (str): The name of an ivert_server job to update file status and export results.
         interim_data_dir (str): Output directory for intermediate data. Defaults to the same as the output_dir.
         overwrite (bool): Overwrite existing files.
@@ -635,8 +642,8 @@ def validate_dem(dem_name: str,
                          mask_out_urban=mask_out_urban,
                          include_gmrt_mask=include_gmrt_mask,
                          write_result_tifs=False, # No need to write the results tifs for subsets.
-                         write_summary_stats=False, # Not need to write the summary stats file for subsets.
-                         export_coastline_mask=export_coastline_mask,
+                         write_summary_stats=False, # No need to write the summary stats file for subsets.
+                         export_coastline_mask=False, # No need to export the coastline mask for subsets.
                          outliers_sd_threshold=None, # Don't filter outliers until we get all the results back.
                          include_photon_level_validation=include_photon_level_validation,
                          plot_results=False, # Don't bother plotting the sub-results.
@@ -1007,6 +1014,11 @@ def validate_dem_parallel(dem_name: str,
                                                              target_fname_or_dir=coastline_mask_filename,
                                                              band_num=band_num,
                                                              verbose=verbose)
+
+    if ivert_job_name is not None:
+        ivert_exporter.upload_file_to_export_bucket(ivert_job_name, coastline_mask_filename)
+    files_to_export.append(coastline_mask_filename)
+    shared_ret_values["coastline_mask_filename"] = coastline_mask_filename
 
     # Test for compound CRSs. If it's that, just get the horizontal crs from it.
     dem_crs_obj = pyproj.CRS.from_epsg(dem_epsg)
