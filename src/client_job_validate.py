@@ -28,6 +28,7 @@ else:
 
 ivert_config = configfile.config()
 
+
 def run_validate_command(args: argparse.Namespace) -> None:
     """Run a validate command from the ivert_client to the ivert_server."""
     assert hasattr(args, "command") and args.command == "validate"
