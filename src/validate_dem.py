@@ -1086,7 +1086,7 @@ def validate_dem_parallel(dem_name: str,
         if mark_empty_results:
             # Just create an empty file to mark this dataset as done.
             with open(empty_results_filename, 'w') as f:
-                f.close()
+                f.write(os.path.basename(dem_name) + " had no ICESat-2 results.")
             if verbose:
                 print("Created", empty_results_filename, "to indicate no data was returned here.")
 
@@ -1169,7 +1169,7 @@ def validate_dem_parallel(dem_name: str,
             if mark_empty_results:
                 # Just create an empty file to mark this dataset as done.
                 with open(empty_results_filename, 'w') as f:
-                    f.close()
+                    f.write(os.path.basename(dem_name) + " had no ICESat-2 results.")
                 if verbose:
                     print("Created", empty_results_filename, "to indicate no data was returned here.")
 
@@ -1194,7 +1194,7 @@ def validate_dem_parallel(dem_name: str,
         if mark_empty_results:
             # Just create an empty file to makre this dataset as done.
             with open(empty_results_filename, 'w') as f:
-                f.write(os.path.basename(dem_name) + " did not have any ICESat-2 results.")
+                f.write(os.path.basename(dem_name) + " had no ICESat-2 results.")
             if verbose:
                 print("Created", empty_results_filename, "to indicate no data was returned here.")
 
