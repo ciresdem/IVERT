@@ -1172,8 +1172,11 @@ def validate_dem_parallel(dem_name: str,
                     f.close()
                 if verbose:
                     print("Created", empty_results_filename, "to indicate no data was returned here.")
+
+                if ivert_job_name is not None:
+                    ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_results_filename)
                 files_to_export.append(empty_results_filename)
-                return files_to_export
+                shared_ret_values["empty_results_filename"] = empty_results_filename
 
             return files_to_export
 
