@@ -40,7 +40,8 @@ class PersistentIvertServer:
                     self.sub_pid = self.subproc.pid
 
             # Handle if the process goes down.
-            if self.subproc.poll() is None:
+            if (isinstance(self.subproc, psutil.Process) and self.subproc.is_running()) \
+                    or (isinstance(self.subproc, subprocess.Popen) and self.subproc.poll() is None):
                 if self.sub_pid != self.subproc.pid:
                     if self.verbose:
                         print(f"Subprocess {self.sub_pid} has apparently restarted. Reassigning sub_pid.")
