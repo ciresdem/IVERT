@@ -434,6 +434,7 @@ class ICESat2_Database:
 
         if dem_fname is not None:
             dem_ds = gdal.Open(dem_fname, gdal.GA_ReadOnly)
+            assert dem_ds is not None
         else:
             dem_ds = None
 
@@ -473,7 +474,7 @@ class ICESat2_Database:
                                                   verbose=verbose)
 
             # If the DEM is not in WGS84, project the points into the DEM coordinate system.
-            if tile_df is not None:
+            if tile_df is not None and dem_fname is not None:
                 if dem_epsg is not None and dem_epsg != 4326:
                     dem_proj_wkt = dem_ds.GetProjection()
                     assert dem_proj_wkt is not None and len(dem_proj_wkt) > 0
@@ -495,31 +496,30 @@ class ICESat2_Database:
                     tile_df["dem_x"] = tile_df["longitude"]
                     tile_df["dem_y"] = tile_df["latitude"]
 
-                if dem_ds is not None:
-                    # Now subset only photons that are within the bounding box of the DEM.
-                    xstart, xstep, _, ystart, _, ystep = dem_ds.GetGeoTransform()
-                    dem_xsize = dem_ds.RasterXSize
-                    dem_ysize = dem_ds.RasterYSize
-                    xend = xstart + (xstep * dem_xsize)
-                    yend = ystart + (ystep * dem_ysize)
-                    ph_xcoords = tile_df["dem_x"]
-                    ph_ycoords = tile_df["dem_y"]
+                # Now subset only photons that are within the bounding box of the DEM.
+                xstart, xstep, _, ystart, _, ystep = dem_ds.GetGeoTransform()
+                dem_xsize = dem_ds.RasterXSize
+                dem_ysize = dem_ds.RasterYSize
+                xend = xstart + (xstep * dem_xsize)
+                yend = ystart + (ystep * dem_ysize)
+                ph_xcoords = tile_df["dem_x"]
+                ph_ycoords = tile_df["dem_y"]
 
-                    # Clip to the bounding box.
-                    minx = min(xstart, xend)
-                    maxx = max(xstart, xend)
-                    miny = min(ystart, yend)
-                    maxy = max(ystart, yend)
-                    # Again, using a numexpr expression here is far more time-and-memory efficient than doing all these compound boolean
-                    # operations on the numpy arrays in a Python expression.
-                    ph_bbox_mask = numexpr.evaluate("(ph_xcoords >= minx) & "
-                                                    "(ph_xcoords < maxx) & "
-                                                    "(ph_ycoords > miny) & "
-                                                    "(ph_ycoords <= maxy)"
-                                                    )
+                # Clip to the bounding box.
+                minx = min(xstart, xend)
+                maxx = max(xstart, xend)
+                miny = min(ystart, yend)
+                maxy = max(ystart, yend)
+                # Again, using a numexpr expression here is far more time-and-memory efficient than doing all these compound boolean
+                # operations on the numpy arrays in a Python expression.
+                ph_bbox_mask = numexpr.evaluate("(ph_xcoords >= minx) & "
+                                                "(ph_xcoords < maxx) & "
+                                                "(ph_ycoords > miny) & "
+                                                "(ph_ycoords <= maxy)"
+                                                )
 
-                    # By creating a copy of the subset, it ensures the original is dereferenced and deleted from memory.
-                    tile_df = tile_df[ph_bbox_mask].copy()
+                # By creating a copy of the subset, it ensures the original is dereferenced and deleted from memory.
+                tile_df = tile_df[ph_bbox_mask].copy()
 
             dataframes_list[i] = tile_df
 

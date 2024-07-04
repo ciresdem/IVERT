@@ -1058,12 +1058,12 @@ def validate_dem_parallel(dem_name: str,
                                                    verbose=verbose)
             if (retval != 0) or (not os.path.exists(converted_dem_name)):
                 raise FileNotFoundError(f"{dem_name} not converted correctly to {converted_dem_name}. Aborting.")
-
-        # Get the dem array from the new dataset.
-        dem_ds = gdal.Open(converted_dem_name, gdal.GA_ReadOnly)
-        dem_array = dem_ds.GetRasterBand(1).ReadAsArray()
     else:
-        converted_dem_name = None
+        converted_dem_name = dem_name
+
+    # Get the dem array from the new dataset.
+    dem_ds = gdal.Open(converted_dem_name, gdal.GA_ReadOnly)
+    dem_array = dem_ds.GetRasterBand(1).ReadAsArray()
 
     # elif use_icesat2_photon_database:
     if icesat2_photon_database_obj is None:
