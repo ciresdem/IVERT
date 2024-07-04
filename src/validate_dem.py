@@ -1015,10 +1015,25 @@ def validate_dem_parallel(dem_name: str,
                                                              band_num=band_num,
                                                              verbose=verbose)
 
-    if ivert_job_name is not None:
-        ivert_exporter.upload_file_to_export_bucket(ivert_job_name, coastline_mask_filename)
-    files_to_export.append(coastline_mask_filename)
-    shared_ret_values["coastline_mask_filename"] = coastline_mask_filename
+    # Export the coastline mask if we've been asked to.
+    if export_coastline_mask:
+        if ivert_job_name is not None:
+            ivert_exporter.upload_file_to_export_bucket(ivert_job_name, coastline_mask_filename)
+        files_to_export.append(coastline_mask_filename)
+        shared_ret_values["coastline_mask_filename"] = coastline_mask_filename
+
+    # If the mask is empty (all 0's), there's nothing to validate. Just return an empty file. We're done here.
+    if numpy.count_nonzero(coastline_mask_array) == 0:
+        error_msg = f"Coastline mask file {coastline_mask_filename} contains all 0's. No land data to validate."
+        if verbose:
+            print(error_msg)
+        with open(empty_results_filename, "w") as f:
+            f.write(error_msg)
+        if ivert_job_name is not None:
+            ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_results_filename)
+        shared_ret_values["empty_results_filename"] = empty_results_filename
+        files_to_export.append(empty_results_filename)
+        return files_to_export
 
     # Test for compound CRSs. If it's that, just get the horizontal crs from it.
     dem_crs_obj = pyproj.CRS.from_epsg(dem_epsg)
