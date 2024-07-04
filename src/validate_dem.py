@@ -789,7 +789,7 @@ def validate_dem(dem_name: str,
         return list(shared_ret_values.values())
 
     else:
-        raise RuntimeError(f"validate_dem.validate_dem_parallell({orig_dem_name},...) exited with exitcode {subproc.exitcode}.")
+        raise RuntimeError(f"validate_dem.validate_dem({orig_dem_name},...) exited with exitcode {exitcode}.")
 
 
 def validate_dem_parallel(dem_name: str,
