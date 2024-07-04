@@ -44,5 +44,6 @@ def get_active_ivert_jobs(update_inactive_job_statuses: bool = False) -> typing.
 
     return active_ivert_jobs
 
+
 if __name__ == "__main__":
-    print(get_active_jobs())
+    print(get_active_ivert_jobs())
