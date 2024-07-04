@@ -51,4 +51,5 @@ def get_active_ivert_jobs(update_inactive_job_statuses: bool = False) -> typing.
 
 
 if __name__ == "__main__":
-    print(get_active_ivert_jobs())
+    for proc in get_active_ivert_jobs(update_inactive_job_statuses=True):
+        print(proc, proc.cmdline())
