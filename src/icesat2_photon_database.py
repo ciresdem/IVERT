@@ -1024,6 +1024,7 @@ class ICESat2_Database:
         gdf['numphotons_bathy'] = 0
         gdf['start_date_YYYYMMDD'] = 20210101
         gdf['end_date_YYYYMMDD'] = 20211231
+        gdf['atl03_version'] = 5
 
         fnames = gdf['filename'].tolist()
         fnames = [os.path.basename(os.path.splitext(fname)[0] + ".feather") for fname in fnames]
@@ -1031,6 +1032,7 @@ class ICESat2_Database:
 
         new_column_order = ['filename', 'xmin', 'xmax', 'ymin', 'ymax', 'numphotons', 'numphotons_canopy',
                             'numphotons_ground', 'numphotons_bathy', 'start_date_YYYYMMDD', 'end_date_YYYYMMDD',
+                            'atl03_version'
                             'is_populated', 'geometry']
 
         # Do a bit of validation on the files we just hard-coded here.

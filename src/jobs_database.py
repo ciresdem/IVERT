@@ -4,6 +4,7 @@
 
 import argparse
 import botocore.exceptions
+import dateparser
 import os
 import pandas
 import re
@@ -102,7 +103,10 @@ class JobsDatabaseClient:
             if s3_vnum <= local_vnum:
                 return
             # If the s3 version number is greater than the local version number, delete the local version.
-            else:
+            elif os.path.exists(local_db):
+                if self.conn:
+                    self.conn.close()
+                    self.conn = None
                 os.remove(local_db)
 
         # Close any open connections to the existing database.
@@ -528,6 +532,8 @@ class JobsDatabaseClient:
             return result[0]
         else:
             return None
+
+
 class JobsDatabaseServer(JobsDatabaseClient):
     """Class for managing the IVERT jobs database on the EC2 (server).
 
@@ -1188,6 +1194,66 @@ class JobsDatabaseServer(JobsDatabaseClient):
 
         # Delete the database locally using the JobsDatabaseClient::delete_database() method.
         super().delete_database()
+
+    def truncate_database(self,
+                          files_cutoff_date: str = "midnight 7 days ago",
+                          verbose: bool = True) -> None:
+        """Truncate the database to only contain jobs that are currently present in the "trusted" bucket.
+
+        The trusted bucket has a life-cycle policy of 7 days, meaning files are deleted from there after 7 days.
+
+        Replaces the current database with only the files and jobs that are present in the trusted bucket,
+        and copies the old database to a file that is stored for backup, and tagged with the date of the last data
+        in the backup database.
+
+        Returns:
+            None
+        """
+        # First, make a copy of the database.
+        base, ext = os.path.splitext(self.db_fname)
+        cutoff_date = dateparser.parse(files_cutoff_date).date()
+        archive_fname = base + f"_archive_{cutoff_date.year:04}{cutoff_date.month:02}{cutoff_date.day:02}" + ext
+        job_id_cutoff = int(f"{cutoff_date.year:04}{cutoff_date.month:02}{cutoff_date.day:02}0000")
+
+        # If an old archive tempfile exists, delete it.
+        if os.path.exists(archive_fname):
+            os.remove(archive_fname)
+
+        # Create a full copy of the old database.
+        conn = self.get_connection()
+        conn.backup(archive_fname)
+        conn.commit()
+        conn.close()
+
+        assert os.path.exists(archive_fname)
+        if verbose:
+            print(os.path.basename(archive_fname), "written.")
+
+        # Get a list of all files in the trusted bucket.
+        trusted_files = self.s3m.listdir(self.ivert_config.s3_import_prefix_base, bucket_type="trusted", recursive=True)
+        trusted_ini_files = [fname for fname in trusted_files if fname.endswith(".ini")]
+
+        # Query the archive database.
+        archive_conn = sqlite3.connect(archive_fname)
+        archive_cursor = archive_conn.cursor()
+
+        ini_query = "SELECT job_id, filename FROM ivert_files WHERE filename LIKE '%.ini';"
+        non_ini_query = "SELECT job_id, filename FROM ivert_files WHERE filename NOT LIKE '%.ini';"
+
+        # Remove all .ini files from the archive database that are currently in the trusted bucket (only archive older ones).
+        ini_dicts = [dict(row) for row in archive_cursor.execute(ini_query).fetchall()]
+        ini_job_ids = [i["job_id"] for i in ini_dicts]
+        ini_fnames = [i["filename"] for i in ini_dicts]
+
+        # TODO: Finish and execute once the lifecycle rules are in place and some of the files are gone.
+
+        # Remove all jobs from the archive database whose .ini files are currently in the trusted bucket. Only keep older ones.
+        del_jobs_query = f"DELETE FROM ivert_jobs WHERE job_id IN ({', '.join([str(i) for i in ini_job_ids])});"
+        # Remove all other files from the archive database whose job_id is newer than the cutoff date.
+
+        # Remove all .ini files from the current database that are NOT currently in the trusted bucket (only keep current ones).
+        # Remove all jobs from the current database whose .ini are currently NOT in the trusted bucket.
+        # Remove all other files from the current database whose job_id is older than the cutoff date.
 
 
 def define_and_parse_args() -> argparse.Namespace:
