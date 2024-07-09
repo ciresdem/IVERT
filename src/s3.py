@@ -8,6 +8,7 @@ import glob
 import hashlib
 import os
 import re
+import shutil
 import sys
 import tempfile
 import types
@@ -241,6 +242,7 @@ class S3Manager:
                  recursive: bool = False,
                  fail_quietly: bool = True,
                  show_progress_bar: bool = False,
+                 use_tempfile: bool = False,
                  include_metadata: bool = False) -> list:
         """Download a file from the S3 to the local file system.
 
@@ -252,6 +254,7 @@ class S3Manager:
             recursive (bool): Whether to download recursively.
             fail_quietly (bool): Whether to fail quietly if the file doesn't exist.
             show_progress_bar (bool): Whether to show a progress bar.
+            use_tempfile (bool): Whether to use a temporary file and then copy over after the download is complete.
             include_metadata (bool): Whether to include the metadata in the downloaded file. In this case, the list of files will be a list of (filename, metadata_dict) tuples."""
         bucket_type = self.convert_btype(bucket_type)
 
@@ -279,7 +282,14 @@ class S3Manager:
             else:
                 raise ValueError(f"'{filename}' must be an existing directory if there are multiple keys to download.")
 
-            client.download_file(bucket_name, s3k, filename_to_download)
+            if use_tempfile:
+                with tempfile.NamedTemporaryFile(delete=False) as tf:
+                    tfname = tf.name
+                    client.download_file(bucket_name, s3k, tfname)
+                    shutil.copy(tfname, filename_to_download)
+                    os.remove(tfname)
+            else:
+                client.download_file(bucket_name, s3k, filename_to_download)
 
             if not self.verify_same_size(filename_to_download, s3k, bucket_type=bucket_type):
                 if fail_quietly:
@@ -691,12 +701,14 @@ def pretty_print_bucket_list(use_formatting=True):
     bname_dict = {"database" : ivert_config.s3_bucket_database,
                   "trusted"  : ivert_config.s3_bucket_import_trusted,
                   "untrusted": ivert_config.s3_bucket_import_untrusted,
-                  "export"   : ivert_config.s3_bucket_export}
+                  "export"   : ivert_config.s3_bucket_export,
+                  "quarantine": ivert_config.s3_bucket_quarantine}
 
     prefixes_dict = {"database" : "",
                      "trusted"  : ivert_config.s3_import_prefix_base if bname_dict["trusted"] else "",
                      "untrusted": ivert_config.s3_import_prefix_base if bname_dict["untrusted"] else "",
-                     "export"   : ivert_config.s3_export_prefix_base if bname_dict["export"] else ""}
+                     "export"   : ivert_config.s3_export_prefix_base if bname_dict["export"] else "",
+                     "quarantine": ivert_config.s3_quarantine_prefix_base if bname_dict["quarantine"] else ""}
 
     bc = bcolors.bcolors()
 

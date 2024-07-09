@@ -10,6 +10,7 @@ import pandas
 import re
 import sqlite3
 import sys
+import time
 import typing
 
 if vars(sys.modules[__name__])['__package__'] == 'ivert':
@@ -114,8 +115,9 @@ class JobsDatabaseClient:
             self.conn.close()
             self.conn = None
 
-        # Download the database from the S3 bucket
-        self.s3m.download(db_key, local_db, bucket_type=db_btype)
+        # Download the database from the S3 bucket. Use a tempfile to help minimize race conditions with different
+        # processes querying the database and deleting it while another is trying to read it.
+        self.s3m.download(db_key, local_db, bucket_type=db_btype, use_tempfile=True)
 
         return
 
@@ -128,6 +130,16 @@ class JobsDatabaseClient:
         # If the connection isn't open yet, open it.
         if self.conn is None:
             # Check if the database exists
+            # Sometimes if the database is being re-downloaded by another process, it might suddenly not exist. In
+            # that case, we'll pause juse a moment and then try again.
+            num_tries = 0
+            max_num_tries = 5
+            wait_time_s = 0.05
+
+            while not self.exists(local_or_s3='local') and num_tries < max_num_tries:
+                num_tries += 1
+                time.sleep(wait_time_s)
+
             if not self.exists(local_or_s3='local'):
                 raise FileNotFoundError(f"IVERT jobs database doesn't exist in '{self.db_fname}'.")
 

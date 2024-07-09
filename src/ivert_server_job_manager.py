@@ -516,7 +516,8 @@ class IvertJob:
             # 6. Download all other job files.
             # If it's specifically an "import" job, we don't need to download each file, just create records for them.
             # By default, update the database entries for each file, and re-upload to the s3 bucket once every 10 files.
-            self.download_job_files(only_create_database_entries=(self.command == "import"), upload_to_s3=True)
+            self.download_job_files(only_create_database_entries=(self.command == "import"),
+                                    upload_to_s3=20)
 
             # 7. Run the job!
             # -- Figure out how to monitor the status of the job as it goes along.
@@ -702,10 +703,15 @@ class IvertJob:
         if type(upload_to_s3) is bool:
             return upload_to_s3
 
-        else:
-            # Else, upload once every 'num_files' files, when the remainder is zero.
-            return (num_files % upload_to_s3) == 0
+        elif type(upload_to_s3) is int:
+            if upload_to_s3 <= 1:
+                return True
+            else:
+                # Else, upload once every 'num_files' files, when the remainder is zero.
+                return (num_files % upload_to_s3) == 0
 
+        else:
+            raise TypeError("upload_to_s3 must be a boolean or an integer.")
 
     def download_job_files(self,
                            only_create_database_entries: bool = False,
@@ -741,12 +747,19 @@ class IvertJob:
                     files_to_download.remove(fname)
                     files_downloaded.append(fname)
 
+                    if only_create_database_entries:
+                        file_status = "unknown"
+                    elif os.path.exists(local_fname):
+                        file_status = "downloaded"
+                    else:
+                        file_status = "error"
+
                     # Create a file record for it in the database.
                     self.jobs_db.create_new_file_record(local_fname,
                                                         self.job_id,
                                                         self.username,
                                                         import_or_export=0,
-                                                        status="unknown" if only_create_database_entries else "downloaded",
+                                                        status=file_status,
                                                         fake_file_stats=True if only_create_database_entries else False,
                                                         upload_to_s3=self.should_we_upload(upload_to_s3, len(files_downloaded)))
 

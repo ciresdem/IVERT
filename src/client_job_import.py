@@ -107,7 +107,7 @@ def run_import_command(args: argparse.Namespace) -> None:
                 print(".", end="", flush=True)
 
             total_files_processed += len(chunk_list)
-            print(f"\n{total_files_processed + start_n} of {len(files_to_send) + start_n} files processed.")
+            print(f"\n{(total_files_processed + start_n):,} of {(len(files_to_send) + start_n):,} files processed.")
 
         print(len(chunk_statuses),
               "jobs finished importing with statuses:",
