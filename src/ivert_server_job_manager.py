@@ -543,6 +543,9 @@ class IvertJob:
             # 12. After exporting output files, delete the local job files & folders.
             self.delete_local_job_folders()
 
+            # If needed, upload the jobs database to the s3
+            self.jobs_db.upload_to_s3(only_if_newer=True)
+
         except KeyboardInterrupt as e:
             if self.verbose:
                 print("Caught keyboard interrupt. Terminating job.")
