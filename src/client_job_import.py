@@ -58,9 +58,10 @@ def run_import_command(args: argparse.Namespace) -> None:
         print("No files identified to upload. Check your prompt.")
         return
 
-    if args.start_n > 0:
-        print(f"Skipping the first {args.start_n} files.")
-        files_to_send = files_to_send[args.start_n:]
+    start_n = args.start_n
+    if start_n > 0:
+        print(f"Skipping the first {start_n} files.")
+        files_to_send = files_to_send[start_n:]
 
     # Strip off client-only arguments
     del args_to_send.files_or_directory
@@ -106,9 +107,11 @@ def run_import_command(args: argparse.Namespace) -> None:
                 print(".", end="", flush=True)
 
             total_files_processed += len(chunk_list)
-            print(f"\n{total_files_processed} of {len(files_to_send)} files processed.")
+            print(f"\n{total_files_processed + start_n} of {len(files_to_send + start_n)} files processed.")
 
-        print(len(chunk_statuses), "jobs finished importing with statuses:", chunk_statuses)
+        print(len(chunk_statuses),
+              "jobs finished importing with statuses:",
+              str(chunk_statuses).lstrip("[").rstrip("]"))
 
     else:
         # Append the "files" argument to the args_to_send object

@@ -1287,11 +1287,11 @@ class IvertJob:
 
                     fsize = self.s3m.size(fkey_dst, bucket_type="database")
 
+                    self.write_to_logfile(f"{fname}: imported {sizeof.sizeof_fmt(fsize)}")
+
                     # If the file exists locally, mark it as 'processed'.
                     self.jobs_db.update_file_status(self.username, self.job_id, fname, "processed",
-                                                    new_size=fsize, upload_to_s3=False)
-
-                    self.write_to_logfile(f"{fname}: imported {sizeof.sizeof_fmt(fsize)}")
+                                                    new_size=fsize, upload_to_s3=True)
 
                     bytes_copied += fsize
 

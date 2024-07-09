@@ -94,7 +94,7 @@ def run_job_status_command(args: argparse.Namespace) -> None:
         export_files = files_df[files_df["import_or_export"].isin((1, 2))]
 
         if len(input_files) > 0:
-            input_files_finished = input_files["status"].isin(("processed", "timeout", "error", "quarantined", "unknown")).sum()
+            input_files_finished = input_files["status"].isin(("processed", "timeout", "error", "quarantined")).sum()
             print(f"{input_files_finished} of {len(input_files)} input files are finished.")
             print()
 
