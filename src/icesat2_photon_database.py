@@ -275,9 +275,37 @@ class ICESat2_Database:
                                        .replace(".", ""))
         gdf["atl03_version"] = default_version_num
 
+        self.gdf = gdf
+
         # Save both the compressed and uncompressed versions.
-        self.save_geopackage(gdf=gdf, use_tempfile=True, compress=False, verbose=verbose)
+        if verbose:
+            print("Writing", os.path.basename(self.gpkg_fname))
         self.save_geopackage(gdf=gdf, use_tempfile=True, compress=True, verbose=verbose)
+        if verbose:
+            print("Writing", os.path.basename(self.gpkg_fname_compressed))
+        self.save_geopackage(gdf=gdf, use_tempfile=True, compress=False, verbose=verbose)
+
+        if verbose:
+            print("Uploading", os.path.basename(self.gpkg_fname), "to s3 bucket.")
+        self.upload_to_s3()
+
+        print("Done.")
+        return
+
+    def upload_to_s3(self):
+        """Upload the geopackage to the s3 bucket from the EC2 instance.
+
+        If not in an AWS instance, do nothing."""
+        if self.ivert_config.is_aws:
+            self.get_s3_manager().upload(self.gpkg_fname,
+                                         self.ivert_config.s3_photon_geopackage_key,
+                                         bucket_type="database",
+                                         delete_original=False,
+                                         fail_quietly=False,
+                                         recursive=False,
+                                         include_md5=True,
+                                         other_metadata=None)
+        return
 
     def fill_in_missing_tile_entries(self, delete_csvs = True, save_to_disk = True, verbose = True):
         """Sometimes a photon_tile gets created and the _summary.csv file got deleted,
