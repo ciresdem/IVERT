@@ -279,10 +279,10 @@ class ICESat2_Database:
 
         # Save both the compressed and uncompressed versions.
         if verbose:
-            print("Writing", os.path.basename(self.gpkg_fname))
+            print("Writing", os.path.basename(self.gpkg_fname_compressed))
         self.save_geopackage(gdf=gdf, use_tempfile=True, compress=True, verbose=verbose)
         if verbose:
-            print("Writing", os.path.basename(self.gpkg_fname_compressed))
+            print("Writing", os.path.basename(self.gpkg_fname))
         self.save_geopackage(gdf=gdf, use_tempfile=True, compress=False, verbose=verbose)
 
         if verbose:
