@@ -256,6 +256,29 @@ class ICESat2_Database:
     #     # print(filename, bbox)
     #     return bbox
 
+    def add_datetime_fields_to_geopackage(self,
+                                          start_date: str = "2021-01-01",
+                                          end_date: str = "2021-12-31",
+                                          default_version_num: int = 5,
+                                          verbose: bool = True):
+        """Add start_date and end_date fields to every entry in the geopackage. Also ATL03 version number.
+
+        This allows us to add more data to the database later and search by date and/or ICESat-2 version.
+        The first version of the databaase was built entirely from 2021 calendar year data and used ICESat-2 ATL03 v5.
+        """
+        gdf = self.get_gdf()
+        gdf["start_date_YYYYMMDD"] = int(start_date.replace("-", "")
+                                         .replace("/", "")
+                                         .replace(".", ""))
+        gdf["end_date_YYYYMMDD"] = int(end_date.replace("-", "")
+                                       .replace("/", "")
+                                       .replace(".", ""))
+        gdf["atl03_version"] = default_version_num
+
+        # Save both the compressed and uncompressed versions.
+        self.save_geopackage(gdf=gdf, use_tempfile=True, compress=False, verbose=verbose)
+        self.save_geopackage(gdf=gdf, use_tempfile=True, compress=True, verbose=verbose)
+
     def fill_in_missing_tile_entries(self, delete_csvs = True, save_to_disk = True, verbose = True):
         """Sometimes a photon_tile gets created and the _summary.csv file got deleted,
         but the database update wasn't saved. Loop through the existing photon tiles, fill
