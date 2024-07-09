@@ -54,6 +54,14 @@ def run_import_command(args: argparse.Namespace) -> None:
         files_to_send = files_to_send_2
         del files_to_send_2
 
+    if len(files_to_send) == 0:
+        print("No files identified to upload. Check your prompt.")
+        return
+
+    if args.start_n > 0:
+        print(f"Skipping the first {args.start_n} files.")
+        files_to_send = files_to_send[args.start_n:]
+
     # Strip off client-only arguments
     del args_to_send.files_or_directory
     del args_to_send.prompt

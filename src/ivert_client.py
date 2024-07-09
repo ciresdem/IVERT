@@ -210,6 +210,10 @@ def define_and_parse_args(return_parser: bool = False):
     parser_import.add_argument("-sns", "--sns_notifications", dest="sns_notifications", type=yes_no.interpret_yes_no,
                                default=True,
                                help="Whether to send SNS notifications. Must be followed by 'True', 'False'. Default 'True'")
+    parser_import.add_argument("-s", "--start_n", dest="start_n", type=int, default=0,
+                               help="The starting index of the files to import. Default: 0. Handy with the -t flag if a"
+                                    " large import job was only partially completed and you want to restart it after:"
+                                    " the last successful file.")
 
     ###############################################################
     # Create the "subscribe" subparser
