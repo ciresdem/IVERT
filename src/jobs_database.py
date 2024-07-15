@@ -1303,6 +1303,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
         cursor_archive.execute("DELETE FROM ivert_files WHERE job_id >= ?;", (job_id_cutoff,))
         cursor_archive.execute("DELETE FROM ivert_jobs WHERE job_id >= ?;", (job_id_cutoff,))
         cursor_archive.execute("DELETE FROM sns_messages WHERE job_id >= ?;", (job_id_cutoff,))
+        conn_archive.commit()
         # The "vacuum" command is used to free up disk space.
         cursor_archive.execute("VACUUM;")
         conn_archive.commit()
@@ -1324,6 +1325,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
         cursor_new.execute("DELETE FROM ivert_files WHERE job_id < ?;", (job_id_cutoff,))
         cursor_new.execute("DELETE FROM ivert_jobs WHERE job_id < ?;", (job_id_cutoff,))
         cursor_new.execute("DELETE FROM sns_messages WHERE job_id < ?;", (job_id_cutoff,))
+        conn_new.commit()
         # The "vacuum" command is used to free up disk space.
         cursor_new.execute("VACUUM;")
         conn_new.commit()
