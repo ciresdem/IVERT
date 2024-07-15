@@ -1275,10 +1275,18 @@ class JobsDatabaseServer(JobsDatabaseClient):
         if os.path.exists(archive_fname):
             os.remove(archive_fname)
 
+        new_db_name = base + f"_new_{cutoff_date_p1.year:04}{cutoff_date_p1.month:02}{cutoff_date_p1.day:02}" + ext
+
         # Create a full copy of the old database.
         conn = self.get_connection()
-        conn.backup(archive_fname)
-        conn.commit()
+        conn_archive = sqlite3.connect(archive_fname)
+        conn.backup(conn_archive)
+        conn_new = sqlite3.connect(new_db_name)
+        conn.backup(conn_new)
+
+        # conn.commit()
+        conn_archive.commit()
+        conn_new.commit()
 
         # Now truncate the old database to only include files and jobs that are older or including the cutoff date.
         # Delete any files, jobs, or messages that are newer than the cutoff date.
@@ -1289,7 +1297,6 @@ class JobsDatabaseServer(JobsDatabaseClient):
 
         # Now truncate the old database to only include files and jobs that are older or including the cutoff date.
         # Delete any files, jobs, or messages that are newer than the cutoff date.
-        conn_archive = sqlite3.connect(archive_fname)
         cursor_archive = conn_archive.cursor()
         cursor_archive.execute("DELETE FROM ivert_files WHERE job_id >= ?;", (job_id_cutoff,))
         cursor_archive.execute("DELETE FROM ivert_jobs WHERE job_id >= ?;", (job_id_cutoff,))
@@ -1308,10 +1315,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
 
         # FOR NOW, CREATE A NEW TEMP DATABASE FOR THE NEW DATA
         # TODO: Delete this after testing.
-        new_db_name = base + f"_new_{cutoff_date_p1.year:04}{cutoff_date_p1.month:02}{cutoff_date_p1.day:02}" + ext
-        conn.backup(new_db_name)
 
-        conn_new = sqlite3.connect(new_db_name)
         cursor_new = conn_new.cursor()
         cursor_new.execute("DELETE FROM ivert_files WHERE job_id < ?;", (job_id_cutoff,))
         cursor_new.execute("DELETE FROM ivert_jobs WHERE job_id < ?;", (job_id_cutoff,))
