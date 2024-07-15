@@ -1275,13 +1275,15 @@ class JobsDatabaseServer(JobsDatabaseClient):
         if os.path.exists(archive_fname):
             os.remove(archive_fname)
 
-        new_db_name = base + f"_new_{cutoff_date_p1.year:04}{cutoff_date_p1.month:02}{cutoff_date_p1.day:02}" + ext
+        new_db_fname = base + f"_new_{cutoff_date_p1.year:04}{cutoff_date_p1.month:02}{cutoff_date_p1.day:02}" + ext
+        if os.path.exists(new_db_fname):
+            os.remove(new_db_fname)
 
         # Create a full copy of the old database.
         conn = self.get_connection()
         conn_archive = sqlite3.connect(archive_fname)
         conn.backup(conn_archive)
-        conn_new = sqlite3.connect(new_db_name)
+        conn_new = sqlite3.connect(new_db_fname)
         conn.backup(conn_new)
 
         # conn.commit()
@@ -1343,7 +1345,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
             print(os.path.basename(archive_fname), "written.")
             print(f"{total_jobs_count:,} jobs, {total_files_count:,} files, and {total_sns_count:,} messages in {os.path.basename(self.db_fname)}")
             print(f"{old_jobs_count:,} jobs, {old_files_count:,} files, and {old_sns_count:,} messages in {os.path.basename(archive_fname)}")
-            print(f"{new_jobs_count:,} jobs, {new_files_count:,} files, and {new_sns_count:,} messages in {os.path.basename(new_db_name)}")
+            print(f"{new_jobs_count:,} jobs, {new_files_count:,} files, and {new_sns_count:,} messages in {os.path.basename(new_db_fname)}")
 
         # # Get a list of all files in the trusted bucket.
         # trusted_files = self.s3m.listdir(self.ivert_config.s3_import_prefix_base, bucket_type="trusted", recursive=True)
