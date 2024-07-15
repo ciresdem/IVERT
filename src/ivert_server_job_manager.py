@@ -698,7 +698,10 @@ class IvertJob:
     def should_we_upload(upload_to_s3: typing.Union[bool, int], num_files: int) -> bool:
         """Given the number of files uploaded, decide if we should upload to the s3 bucket.
 
-        The download_job_files method accepts either a boolean (always upload to s3, or never), or an integer (upload to s3 every N files).
+        This is used when we're doing import jobs and just flagging all the files with entries before downloading them all,
+        or when we're doing export jobs and just downloading all the files. We don't need to re-upload the database
+        for every single file processed, just once in a while. If 'upload_to_s3' is an integer, we upload to the s3 bucket
+        once every 'upload_to_s3' files.
         """
         if type(upload_to_s3) is bool:
             return upload_to_s3
@@ -707,7 +710,7 @@ class IvertJob:
             if upload_to_s3 <= 1:
                 return True
             else:
-                # Else, upload once every 'num_files' files, when the remainder is zero.
+                # Else, upload once every 'upload_to_s3' files, when the remainder is zero.
                 return (num_files % upload_to_s3) == 0
 
         else:
