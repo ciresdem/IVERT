@@ -219,7 +219,7 @@ class JobsDatabaseClient:
         """
         conn = self.get_connection()
         cur = conn.cursor()
-        results = cur.execute("SELECT MAX(job_id) FROM ivert_jobs").fetchall()
+        results = cur.execute("SELECT MAX(job_id) FROM ivert_jobs;").fetchall()
 
         # The results is a list of sqlite.Row objects. Should be only one long of my logic is right here
         assert len(results) == 1
@@ -266,7 +266,7 @@ class JobsDatabaseClient:
             int: The last version number from the 'vnum' entry in the database.
         """
         conn = self.get_connection()
-        return conn.cursor().execute("SELECT vnum FROM vnumber;").fetchall()[0]["vnum"]
+        return conn.cursor().execute("SELECT vnum FROM vnumber LIMIT 1;").fetchall()[0]["vnum"]
 
     def fetch_latest_db_vnum_from_s3_metadata(self) -> typing.Union[int, None]:
         """Fetch the last version number from the S3 metadata.
@@ -352,7 +352,7 @@ class JobsDatabaseClient:
         conn = self.get_connection()
         cur = conn.cursor()
         if return_row:
-            results = cur.execute("SELECT * FROM ivert_jobs WHERE username = ? AND job_id = ?;",
+            results = cur.execute("SELECT * FROM ivert_jobs WHERE username = ? AND job_id = ? LIMIT 1;",
                                   (username, job_id)).fetchone()
             if results is None:
                 return False
@@ -1301,6 +1301,8 @@ class JobsDatabaseServer(JobsDatabaseClient):
         cursor_archive.execute("DELETE FROM ivert_files WHERE job_id >= ?;", (job_id_cutoff,))
         cursor_archive.execute("DELETE FROM ivert_jobs WHERE job_id >= ?;", (job_id_cutoff,))
         cursor_archive.execute("DELETE FROM sns_messages WHERE job_id >= ?;", (job_id_cutoff,))
+        # The "vacuum" command is used to free up disk space.
+        cursor_archive.execute("VACUUM;")
         conn_archive.commit()
 
         # Now query how many files there are.
@@ -1320,6 +1322,8 @@ class JobsDatabaseServer(JobsDatabaseClient):
         cursor_new.execute("DELETE FROM ivert_files WHERE job_id < ?;", (job_id_cutoff,))
         cursor_new.execute("DELETE FROM ivert_jobs WHERE job_id < ?;", (job_id_cutoff,))
         cursor_new.execute("DELETE FROM sns_messages WHERE job_id < ?;", (job_id_cutoff,))
+        # The "vacuum" command is used to free up disk space.
+        cursor_new.execute("VACUUM;")
         conn_new.commit()
 
         new_jobs_count = cursor_new.execute(f"SELECT COUNT(*) FROM ivert_jobs;").fetchone()[0]
