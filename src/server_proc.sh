@@ -9,10 +9,12 @@ do
     k)
       echo "pkill -e -f 'python3 maintain_server_manager.py'"
       pkill -e -f "python3 maintain_server_manager.py"
+      echo "pkill -e -f 'python3 ivert_server_job_manager.py'"
+      pkill -e -f "python3 ivert_server_job_manager.py"
       exit 0
       ;;
     l)
-      pgrep -a python3 | grep maintain_server_manager.py
+      pgrep -a python3 | grep -e maintain_server_manager\.py -e ivert_server_job_manager\.py
       exit 0
       ;;
     *)
