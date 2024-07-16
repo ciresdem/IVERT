@@ -602,6 +602,25 @@ class JobsDatabaseClient:
         else:
             return None
 
+    def list_unfinished_jobs(self,
+                             return_rows: bool = False) -> typing.Union[list[tuple], list[sqlite3.Row]]:
+        """Return a list of all jobs whose status is marked as 'started', 'running' or 'unknown'.
+
+        NOTE: This does not denote whether the job is actually still running or not.
+
+        If return_rows, return a list of sqlite3.Row objects.
+        Else, return a list of tuples of (username, job_id, job_pid, status).
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""SELECT username, job_id, job_pid, status
+                          FROM ivert_jobs WHERE status IN ('started', 'running', 'unknown');""")
+        rows = cursor.fetchall()
+        if return_rows:
+            return rows
+        else:
+            return [(row['username'], row['job_id'], row['job_pid'], row['status']) for row in rows]
+
 
 class JobsDatabaseServer(JobsDatabaseClient):
     """Class for managing the IVERT jobs database on the EC2 (server).
@@ -704,7 +723,6 @@ class JobsDatabaseServer(JobsDatabaseClient):
                 return
         else:
             raise ValueError(f"Job {job_username}_{job_id} does not exist in the database.")
-
 
         # Connect to the database
         conn = self.get_connection()
