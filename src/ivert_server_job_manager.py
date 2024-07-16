@@ -177,9 +177,11 @@ class IvertJobManager:
             # Check to see if they're both the same version number.
             local_vnum = db.fetch_latest_db_vnum_from_database()
             s3_vnum = db.fetch_latest_db_vnum_from_s3_metadata()
-            if local_vnum == s3_vnum:
+            local_jobs_since = db.earliest_job_number("database")
+            s3_jobs_since = db.earliest_job_number("s3")
+            if (local_vnum == s3_vnum) and (local_jobs_since == s3_jobs_since):
                 return
-            elif local_vnum < s3_vnum:
+            elif (local_jobs_since < s3_jobs_since) or (local_vnum < s3_vnum):
                 db.download_from_s3(only_if_newer=True)
             else:
                 db.upload_to_s3()

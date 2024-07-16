@@ -65,6 +65,7 @@ class JobsDatabaseClient:
         # The metadata key for the latest job in the database, to tag with the file in the s3 bucket.
         self.s3_latest_job_metadata_key = self.ivert_config.s3_jobs_db_latest_job_metadata_key
         self.s3_vnum_metadata_key = self.ivert_config.s3_jobs_db_version_number_metadata_key
+        self.s3_jobs_since_metadata_key = self.ivert_config.s3_jobs_db_jobs_since_metadata_key
 
         return
 
@@ -98,12 +99,9 @@ class JobsDatabaseClient:
             raise FileNotFoundError(f"The {db_key} database doesn't exist in the S3 bucket.")
 
         if only_if_newer and os.path.exists(local_db):
-            s3_vnum = self.fetch_latest_db_vnum_from_s3_metadata()
-            local_vnum = self.fetch_latest_db_vnum_from_database()
-
-            # If the s3 version number is less than the local version number, don't download.
-            if s3_vnum <= local_vnum:
+            if not self.is_s3_newer_than_local():
                 return
+
             # If the s3 version number is greater than the local version number, delete the local version.
             elif os.path.exists(local_db):
                 if self.conn:
@@ -166,6 +164,15 @@ class JobsDatabaseClient:
 
         # Return the connection
         return self.conn
+
+    def is_s3_newer_than_local(self):
+        """Return True if the jobs_database on the S3 bucket is newer than the local copy. False otherwise."""
+        s3_vnum = self.fetch_latest_db_vnum_from_s3_metadata()
+        local_vnum = self.fetch_latest_db_vnum_from_database()
+        s3_jobs_since = self.earliest_job_number("s3")
+        local_jobs_since = self.earliest_job_number("database")
+
+        return (s3_vnum > local_vnum) or (s3_jobs_since > local_jobs_since)
 
     def make_pickleable(self):
         """Makes the database connection pickleable.
@@ -316,12 +323,12 @@ class JobsDatabaseClient:
         if self.s3m.exists(self.s3_database_key, bucket_type=self.s3_bucket_type):
             md = self.s3m.get_metadata(self.s3_database_key, bucket_type=self.s3_bucket_type)
             if md is not None and self.ivert_config.s3_jobs_db_jobs_since_metdata_key in md.keys():
-                return md[self.ivert_config.s3_jobs_db_jobs_since_metdata_key]
+                return int(md[self.s3_jobs_db_jobs_since_metdata_key])
             else:
-                return None
+                return 0
         # If the database doesn't exist in the S3 bucket, just return None.
         else:
-            return None
+            return 0
 
     def fetch_earliest_job_number_from_database(self) -> int:
         """Fetch the earliest job number from the local database.
@@ -330,7 +337,12 @@ class JobsDatabaseClient:
             int: The earliest job number from the 'job_id' entry in the database.
         """
         conn = self.get_connection()
-        return conn.cursor().execute("SELECT MIN(job_id) FROM ivert_jobs;").fetchall()[0]["MIN(job_id)"]
+        resp = conn.cursor().execute("SELECT MIN(job_id) FROM ivert_jobs;").fetchall()
+
+        if len(resp) == 0:
+            return 0
+        else:
+            return int(resp[0]["MIN(job_id)"])
 
     def earliest_job_number(self, source_data: str = "database"):
         """Get the earliest job number from the database.
@@ -860,20 +872,14 @@ class JobsDatabaseServer(JobsDatabaseClient):
         Returns:
             None
         """
-        database_vnum = self.fetch_latest_db_vnum_from_database()
-        database_earliest_job_id = self.fetch_earliest_job_number_from_database("database")
-        # TODO: Upload the database with the "jobs_since" metadata parameter.
-
-        if only_if_newer:
-            s3_vnum = self.fetch_latest_db_vnum_from_s3_metadata()
-            # If the s3 version number is confirmed >= the local version number, then skip uploading.
-            if s3_vnum is not None and database_vnum <= s3_vnum:
-                return
+        if only_if_newer and not self.is_s3_newer_than_local():
+            return
 
         latest_job_id = self.fetch_latest_job_number_from_database()
         local_filename = self.db_fname
         db_s3_key = self.s3_database_key
         ivert_version_key = self.ivert_config.s3_jobs_db_ivert_version_metadata_key
+        database_earliest_job_id = self.fetch_earliest_job_number_from_database()
 
         # Upload the database to the S3 bucket.
         # Set the md5, the latest_job number, and the vnum in the S3 metadata.
@@ -885,7 +891,8 @@ class JobsDatabaseServer(JobsDatabaseClient):
                         other_metadata={
                             self.s3_latest_job_metadata_key: str(latest_job_id),
                             self.s3_vnum_metadata_key: str(self.fetch_latest_db_vnum_from_database()),
-                            ivert_version_key: version.__version__
+                            ivert_version_key: version.__version__,
+                            self.ivert_config.s3_jobs_db_jobs_since_metadata_key: str(database_earliest_job_id)
                         },
                         )
 
@@ -1092,7 +1099,9 @@ class JobsDatabaseServer(JobsDatabaseClient):
         existing_row = self.file_exists(f_basename, username, job_id, return_row=True)
         return existing_row
 
-    def increment_vnumber(self, cursor: typing.Union[sqlite3.Cursor, None] = None) -> None:
+    def increment_vnumber(self,
+                          cursor: typing.Union[sqlite3.Cursor, None] = None,
+                          reset_to_zero: bool = False) -> None:
         """Increment the version number in the database.
 
         This is done every time a commit change is made to the database.
@@ -1103,6 +1112,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
 
         Args:
             cursor (typing.Union[sqlite3.Cursor, None], optional): The cursor to use. Defaults to None.
+            reset_to_zero (bool, optional): Whether to reset the version number to zero. Defaults to False.
 
         Returns:
             None
@@ -1114,7 +1124,10 @@ class JobsDatabaseServer(JobsDatabaseClient):
         else:
             cursor_to_use = cursor
 
-        cursor_to_use.execute("UPDATE vnumber SET vnum = vnum + 1;")
+        if reset_to_zero:
+            cursor_to_use.execute("UPDATE vnumber SET vnum = 0;")
+        else:
+            cursor_to_use.execute("UPDATE vnumber SET vnum = vnum + 1;")
 
         if cursor is None:
             conn.commit()
@@ -1275,20 +1288,16 @@ class JobsDatabaseServer(JobsDatabaseClient):
         if os.path.exists(archive_fname):
             os.remove(archive_fname)
 
-        new_db_fname = base + f"_new_{cutoff_date_p1.year:04}{cutoff_date_p1.month:02}{cutoff_date_p1.day:02}" + ext
-        if os.path.exists(new_db_fname):
-            os.remove(new_db_fname)
-
         # Create a full copy of the old database.
         conn = self.get_connection()
         conn_archive = sqlite3.connect(archive_fname)
         conn.backup(conn_archive)
-        conn_new = sqlite3.connect(new_db_fname)
-        conn.backup(conn_new)
+        # conn_new = sqlite3.connect(new_db_fname)
+        # conn.backup(conn_new)
 
         # conn.commit()
         conn_archive.commit()
-        conn_new.commit()
+        # conn_new.commit()
 
         # Now truncate the old database to only include files and jobs that are older or including the cutoff date.
         # Delete any files, jobs, or messages that are newer than the cutoff date.
@@ -1318,62 +1327,37 @@ class JobsDatabaseServer(JobsDatabaseClient):
         del cursor_archive
         del conn_archive
 
-        # FOR NOW, CREATE A NEW TEMP DATABASE FOR THE NEW DATA
-        # TODO: Delete this after testing.
-
-        cursor_new = conn_new.cursor()
-        cursor_new.execute("DELETE FROM ivert_files WHERE job_id < ?;", (job_id_cutoff,))
-        cursor_new.execute("DELETE FROM ivert_jobs WHERE job_id < ?;", (job_id_cutoff,))
-        cursor_new.execute("DELETE FROM sns_messages WHERE job_id < ?;", (job_id_cutoff,))
-        conn_new.commit()
+        # Now, delete all the old jobs from the current database.
+        cursor.execute("DELETE FROM ivert_files WHERE job_id < ?;", (job_id_cutoff,))
+        cursor.execute("DELETE FROM ivert_jobs WHERE job_id < ?;", (job_id_cutoff,))
+        cursor.execute("DELETE FROM sns_messages WHERE job_id < ?;", (job_id_cutoff,))
+        conn.commit()
         # The "vacuum" command is used to free up disk space.
-        cursor_new.execute("VACUUM;")
-        conn_new.commit()
+        cursor.execute("VACUUM;")
+        conn.commit()
 
-        new_jobs_count = cursor_new.execute(f"SELECT COUNT(*) FROM ivert_jobs;").fetchone()[0]
-        new_files_count = cursor_new.execute("SELECT COUNT(*) FROM ivert_files;").fetchone()[0]
-        new_sns_count = cursor_new.execute("SELECT COUNT(*) FROM sns_messages;").fetchone()[0]
-        conn_new.close()
-
-        del cursor_new
-        del conn_new
-
-        # TODO: Finish here.
-
-        conn.close()
+        new_jobs_count = cursor.execute(f"SELECT COUNT(*) FROM ivert_jobs;").fetchone()[0]
+        new_files_count = cursor.execute("SELECT COUNT(*) FROM ivert_files;").fetchone()[0]
+        new_sns_count = cursor.execute("SELECT COUNT(*) FROM sns_messages;").fetchone()[0]
 
         assert os.path.exists(archive_fname)
         if verbose:
             print(os.path.basename(archive_fname), "written.")
-            print(f"{total_jobs_count:,} jobs, {total_files_count:,} files, and {total_sns_count:,} messages in {os.path.basename(self.db_fname)}")
-            print(f"{old_jobs_count:,} jobs, {old_files_count:,} files, and {old_sns_count:,} messages in {os.path.basename(archive_fname)}")
-            print(f"{new_jobs_count:,} jobs, {new_files_count:,} files, and {new_sns_count:,} messages in {os.path.basename(new_db_fname)}")
+            print(f"{total_jobs_count:,} jobs, {total_files_count:,} files, and {total_sns_count:,} messages in {os.path.basename(self.db_fname)} (originally).")
+            print(f"{old_jobs_count:,} jobs, {old_files_count:,} files, and {old_sns_count:,} messages in {os.path.basename(archive_fname)}.")
+            print(f"{new_jobs_count:,} jobs, {new_files_count:,} files, and {new_sns_count:,} messages in {os.path.basename(self.db_fname)} (now).")
 
-        # # Get a list of all files in the trusted bucket.
-        # trusted_files = self.s3m.listdir(self.ivert_config.s3_import_prefix_base, bucket_type="trusted", recursive=True)
-        # trusted_ini_files = [fname for fname in trusted_files if fname.endswith(".ini")]
-        #
-        # # Query the archive database.
-        # archive_conn = sqlite3.connect(archive_fname)
-        # archive_cursor = archive_conn.cursor()
-        #
-        # ini_query = "SELECT job_id, filename FROM ivert_files WHERE filename LIKE '%.ini';"
-        # non_ini_query = "SELECT job_id, filename FROM ivert_files WHERE filename NOT LIKE '%.ini';"
-        #
-        # # Remove all .ini files from the archive database that are currently in the trusted bucket (only archive older ones).
-        # ini_dicts = [dict(row) for row in archive_cursor.execute(ini_query).fetchall()]
-        # ini_job_ids = [i["job_id"] for i in ini_dicts]
-        # ini_fnames = [i["filename"] for i in ini_dicts]
-        #
-        # # TODO: Finish and execute once the lifecycle rules are in place and some of the files are gone.
-        #
-        # # Remove all jobs from the archive database whose .ini files are currently in the trusted bucket. Only keep older ones.
-        # del_jobs_query = f"DELETE FROM ivert_jobs WHERE job_id IN ({', '.join([str(i) for i in ini_job_ids])});"
-        # # Remove all other files from the archive database whose job_id is newer than the cutoff date.
-        #
-        # # Remove all .ini files from the current database that are NOT currently in the trusted bucket (only keep current ones).
-        # # Remove all jobs from the current database whose .ini are currently NOT in the trusted bucket.
-        # # Remove all other files from the current database whose job_id is older than the cutoff date.
+        # Reset the version number back to zero.
+        # TODO: This will require a hard (required) update in IVERT client software.
+        #   For now, keep it as is, where it doesn't reset to zero.
+        #   Only enable the line below when you are confident that users will be using a new IVERT client software version.
+        # self.increment_vnumber(cursor, reset_to_zero=True) # Enable only with a hard version upgrade for IVERT client.
+        self.increment_vnumber(cursor)
+
+        # Now upload the new (truncated) database to the S3, along with the cutoff date.
+        self.upload_to_s3(only_if_newer=False)
+
+        return
 
 
 def define_and_parse_args() -> argparse.Namespace:
