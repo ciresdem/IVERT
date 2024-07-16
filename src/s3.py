@@ -23,6 +23,7 @@ if vars(sys.modules[__name__])['__package__'] in ('ivert', 'ivert_utils'):
     import ivert_utils.configfile as configfile
     import ivert_utils.progress_bar as progress_bar
 else:
+    print(vars(sys.modules[__name__])['__package__'])
     import utils.query_yes_no as query_yes_no
     import utils.bcolors as bcolors
     import utils.configfile as configfile
