@@ -529,6 +529,8 @@ class JobsDatabaseClient:
             table_name = "sns_subscriptions"
         elif table_name == "messages":
             table_name = "sns_messages"
+        elif table_name == "vnum":
+            table_name = "vnumber"
 
         # Build the query
         query = f"SELECT * FROM {table_name}"
@@ -1351,8 +1353,8 @@ class JobsDatabaseServer(JobsDatabaseClient):
         # TODO: This will require a hard (required) update in IVERT client software.
         #   For now, keep it as is, where it doesn't reset to zero.
         #   Only enable the line below when you are confident that users will be using a new IVERT client software version.
-        # self.increment_vnumber(cursor, reset_to_zero=True) # Enable only with a hard version upgrade for IVERT client.
-        self.increment_vnumber(cursor)
+        # self.increment_vnumber(reset_to_zero=True) # Enable only with a hard version upgrade for IVERT client.
+        self.increment_vnumber()
 
         # Now upload the new (truncated) database to the S3, along with the cutoff date.
         self.upload_to_s3(only_if_newer=False)
