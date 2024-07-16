@@ -1264,16 +1264,17 @@ class JobsDatabaseServer(JobsDatabaseClient):
         # Delete the database locally using the JobsDatabaseClient::delete_database() method.
         super().delete_database()
 
-    def truncate_database(self,
-                          cutoff_date_str: str = "7 days ago",
-                          verbose: bool = True) -> None:
+    def archive_database(self,
+                         cutoff_date_str: str = "7 days ago",
+                         verbose: bool = True) -> None:
         """Truncate the database to only jobs that were created before a certain cutoff date.
 
         Files and jobs before that date will be copied into an archive file, of the name ivert_jobs_archive_YYYYMMDD_YYYYMMDD.db,
         with YYYYMMDD corresponding to the date of the earliest record in the database and the latest record in that archive.
 
         Args:
-            cutoff_date (str, optional): The date to use as the cutoff. Defaults to "7 days ago".
+            cutoff_date_str (str, optional): The date to use as the cutoff. Defaults to "7 days ago".
+            verbose (bool, optional): Whether to print verbose output. Defaults to True.
 
         Returns:
             None
@@ -1282,28 +1283,33 @@ class JobsDatabaseServer(JobsDatabaseClient):
         base, ext = os.path.splitext(self.db_fname)
         cutoff_date = dateparser.parse(cutoff_date_str).date()
         earliest_job_date_str = str(self.earliest_job_number('database'))[:-4]
-        archive_fname = base + f"_archive_{earliest_job_date_str}_{cutoff_date.year:04}{cutoff_date.month:02}{cutoff_date.day:02}" + ext
+        # Create the location of the archive database file.
+        archive_fname = os.path.join(self.ivert_config.ivert_jobs_archive_dir,
+                                     os.path.basename(base + f"_archive_{earliest_job_date_str}_{cutoff_date.year:04}{cutoff_date.month:02}{cutoff_date.day:02}" + ext))
+
         cutoff_date_p1 = cutoff_date + datetime.timedelta(days=1)
         job_id_cutoff = int(f"{cutoff_date_p1.year:04}{cutoff_date_p1.month:02}{cutoff_date_p1.day:02}0000")
 
-        # If an old archive tempfile exists, delete it.
-        if os.path.exists(archive_fname):
-            os.remove(archive_fname)
-
         # Create a full copy of the old database.
         conn = self.get_connection()
+
+        # First, see if there are any jobs in the current database that are older than the cutoff date.
+        # If not, there's nothing to do here.
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM ivert_jobs WHERE job_id < ?;", (job_id_cutoff,))
+        if cursor.fetchone()[0] == 0:
+            return
+
+        # Create the archive database as a "backup" of the existing one, then we'll truncate the tables.
+        # This connection will
         conn_archive = sqlite3.connect(archive_fname)
         conn.backup(conn_archive)
-        # conn_new = sqlite3.connect(new_db_fname)
-        # conn.backup(conn_new)
 
-        # conn.commit()
+        # Commit the archive backup of the current database.
         conn_archive.commit()
-        # conn_new.commit()
 
         # Now truncate the old database to only include files and jobs that are older or including the cutoff date.
         # Delete any files, jobs, or messages that are newer than the cutoff date.
-        cursor = conn.cursor()
         total_jobs_count = cursor.execute(f"SELECT COUNT(*) FROM ivert_jobs;").fetchone()[0]
         total_files_count = cursor.execute("SELECT COUNT(*) FROM ivert_files;").fetchone()[0]
         total_sns_count = cursor.execute("SELECT COUNT(*) FROM sns_messages;").fetchone()[0]
@@ -1364,14 +1370,16 @@ class JobsDatabaseServer(JobsDatabaseClient):
 
 def define_and_parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Manipulate the ivert_jobs database.")
-    parser.add_argument("command", type=str,
-                        help="The command to execute. Choices: create, upload, download, delete, print")
+    parser.add_argument("command", type=str, choices=["create", "upload", "download", "delete", "print", "archive"],
+                        help="The command to execute. Choices: create, upload, download, delete, print, archive")
     parser.add_argument("-o", "--overwrite", dest="overwrite", action="store_true",
                         help="Overwrite the existing database. (For create command only) Default: False")
     parser.add_argument("-t", "--table", dest="table",
                         help="Name of the table to print to the screen. Only used for the 'print' command.")
     parser.add_argument("-a", "--all", dest="all", action="store_true", default=False,
                         help="Print all the columns of the table. Used only with 'print -t' command.")
+    parser.add_argument("-d", "--days_ago", dest="days_ago", type=int, default=7,
+                        help="When 'archive'ing, archive job & file entries older than this many days. Default: 7")
     parser.add_argument("-vn", "--vnum", dest="vnum", default="",
                         help="Print the mod-version of the database, from the 'database'/'d' or 'server'/'s'. Used only with the print command.")
     parser.add_argument("-v", "--version", dest="version", action="store_true", default=False,
@@ -1400,6 +1408,8 @@ if __name__ == "__main__":
         idb.download_from_s3()
     elif args.command == "delete":
         idb.delete_database()
+    elif args.command == "archive":
+        idb.archive_database(cutoff_date_str=f"{args.days_ago} days ago")
     elif args.command == "print":
         if args.vnum:
             if args.vnum[0].lower() == "d":
