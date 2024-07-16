@@ -322,7 +322,7 @@ class JobsDatabaseClient:
         """
         if self.s3m.exists(self.s3_database_key, bucket_type=self.s3_bucket_type):
             md = self.s3m.get_metadata(self.s3_database_key, bucket_type=self.s3_bucket_type)
-            if md is not None and self.ivert_config.s3_jobs_db_jobs_since_metdata_key in md.keys():
+            if md is not None and self.ivert_config.s3_jobs_db_jobs_since_metadata_key in md.keys():
                 return int(md[self.s3_jobs_db_jobs_since_metadata_key])
             else:
                 return 0
