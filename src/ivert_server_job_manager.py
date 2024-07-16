@@ -188,25 +188,34 @@ class IvertJobManager:
 
         return
 
-    def check_for_new_files(self, new_only: bool = True) -> list[str]:
+    def check_for_new_files(self,
+                            new_only: bool = True,
+                            skip_older_than_cutoff: bool = True) -> list[str]:
         """Return a list of new files in the trusted bucket that haven't yet been added to the database.
 
         Args:
             new_only (bool, optional): If False, don't filter, and just return all the files.
+            skip_older_than_cutoff (bool, optional): If True, don't return any files that are older than the "jobs_since" cutoff in the database metadata.
             """
         # 1. Get a list of all files in the trusted bucket.
         # 2. Filter out any files already in the database.
         # 3. Return the remaining file list.
         files_in_bucket = self.s3m.listdir(self.input_prefix, bucket_type=self.input_bucket_type, recursive=True)
 
-        if not new_only:
+        if not new_only and not skip_older_than_cutoff:
             return files_in_bucket
+
+        if skip_older_than_cutoff:
+            cutoff_jnum = self.jobs_db.earliest_job_number("s3")
+        else:
+            cutoff_jnum = 999999999999
 
         new_files = []
         for s3_key in files_in_bucket:
             fname = s3_key.split("/")[-1]
             s3_params = self.jobs_db.get_params_from_s3_path(s3_key, bucket_type=self.input_bucket_type)
-            if not self.jobs_db.file_exists(fname, s3_params['username'], s3_params['job_id']):
+            if (new_only and not self.jobs_db.file_exists(fname, s3_params['username'], s3_params['job_id'])) \
+                    and not (skip_older_than_cutoff and int(s3_params['job_id']) < cutoff_jnum):
                 new_files.append(s3_key)
 
         return new_files
@@ -220,7 +229,9 @@ class IvertJobManager:
         # When one of these is a .ini file, kick off an IvertJob object to handle it.
         # Add it to the list of running jobs.
         # If we're looking for a specific job, don't filter by new jobs only.
-        new_ini_files = [fn for fn in self.check_for_new_files(new_only=not bool(self.specific_job_id)) if fn.lower().endswith('.ini')]
+        new_ini_files = [fn for fn in self.check_for_new_files(new_only=not bool(self.specific_job_id),
+                                                               skip_older_than_cutoff=not bool(self.specific_job_id))
+                         if fn.lower().endswith('.ini')]
 
         # If we're running this to only execute one specific job, then just do that here.
         if self.specific_job_id:
