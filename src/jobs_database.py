@@ -32,6 +32,7 @@ else:
 
 ivert_config = configfile.config()
 
+
 class JobsDatabaseClient:
     """Base class for common operations on the IVERT jobs database.
 
@@ -639,13 +640,16 @@ class JobsDatabaseServer(JobsDatabaseClient):
         super().__init__()
 
     def create_new_database(self,
+                            database_fname: typing.Union[str, None] = None,
                             only_if_not_exists_in_s3: bool = True,
                             overwrite: bool = False,
-                            verbose: bool = True) -> sqlite3.Connection:
+                            verbose: bool = True) -> typing.Union[sqlite3.Connection, None]:
         """
         Creates a new database from scratch.
 
         Args:
+            database_fname (str): The name of the database file to create. Defaults to self.db_fname, but can be
+                                  different if creating a different/temp database.
             only_if_not_exists_in_s3 (bool): Whether to warn if the database already exists in the S3 bucket.
             overwrite (bool): Whether to overwrite the database if it already exists.
             verbose (bool): Whether to print verbose output.
@@ -659,7 +663,8 @@ class JobsDatabaseServer(JobsDatabaseClient):
         assert sqlite3.complete_statement(schema_text)
 
         # Create database in its location outlined in ivert_config.ini (read by the base-class constructor)
-        database_fname = self.db_fname
+        if not database_fname:
+            database_fname = self.db_fname
 
         if only_if_not_exists_in_s3 and self.s3m.exists(self.s3_database_key, bucket_type=self.s3_bucket_type):
             raise RuntimeError('The jobs database already exists in the S3 bucket. Delete from there first:\n'
@@ -670,8 +675,13 @@ class JobsDatabaseServer(JobsDatabaseClient):
                 os.remove(database_fname)
                 if verbose:
                     print(f'Delete existing {database_fname}')
-            else:
+            elif database_fname == self.db_fname:
                 return self.get_connection()
+            else:
+                conn = sqlite3.connect(self.db_fname)
+                # We're setting row_factory to sqlite3.Row to return key-indexed dictionaries instead of tuples
+                conn.row_factory = sqlite3.Row
+                return conn
 
         # Create the database
         conn = sqlite3.connect(database_fname)
@@ -682,7 +692,8 @@ class JobsDatabaseServer(JobsDatabaseClient):
         conn.commit()
 
         # Assign it to the object attribute
-        self.conn = conn
+        if database_fname == self.db_fname:
+            self.conn = conn
 
         # Return the connection
         return conn
@@ -904,7 +915,6 @@ class JobsDatabaseServer(JobsDatabaseClient):
         latest_job_id = self.fetch_latest_job_number_from_database()
         local_filename = self.db_fname
         db_s3_key = self.s3_database_key
-        ivert_version_key = self.ivert_config.s3_jobs_db_ivert_version_metadata_key
         database_earliest_job_id = self.fetch_earliest_job_number_from_database()
 
         # Upload the database to the S3 bucket.
@@ -917,7 +927,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
                         other_metadata={
                             self.s3_latest_job_metadata_key: str(latest_job_id),
                             self.s3_vnum_metadata_key: str(self.fetch_latest_db_vnum_from_database()),
-                            ivert_version_key: version.__version__,
+                            self.ivert_config.s3_jobs_db_ivert_version_metadata_key: version.__version__,
                             self.ivert_config.s3_jobs_db_jobs_since_metadata_key: str(database_earliest_job_id)
                         },
                         )
@@ -1186,8 +1196,8 @@ class JobsDatabaseServer(JobsDatabaseClient):
         result = cursor.fetchone()
         if result is None:
             # The sns subscription doesn't exist. Create a new record.
-            cursor.execute("INSERT INTO sns_subscriptions (username, user_email, topic_arn, sns_filter_string, sns_arn) "
-                           "VALUES (?, ?, ?, ?, ?);",
+            cursor.execute("""INSERT INTO sns_subscriptions (username, user_email, topic_arn, sns_filter_string, sns_arn) "
+                           VALUES (?, ?, ?, ?, ?);""",
                            (username, email, topic_arn, sns_filter_string, sns_arn))
         else:
             cursor.execute("UPDATE sns_subscriptions SET username = ?, sns_filter_string = ? "
@@ -1287,6 +1297,77 @@ class JobsDatabaseServer(JobsDatabaseClient):
 
         # Delete the database locally using the JobsDatabaseClient::delete_database() method.
         super().delete_database()
+
+    def export_single_job_data(self,
+                               username: str,
+                               job_id: typing.Union[str, int],
+                               local_directory: str,
+                               s3_directory: str,
+                               upload_to_s3: bool = True,
+                               verbose: bool = False) -> None:
+        """Export a subset of the database, just the ivert_jobs and ivert_files data, for a single job.
+
+        Will automatically overwrite any other subset database in the local directory.
+
+        Args:
+            username (str): The username of the user who submitted the job.
+            job_id (typing.Union[str, int]): The id of the job to export.
+            local_directory (str): The local directory to export the data to.
+            s3_directory (str): The S3 directory to export the data to.
+            upload_to_s3 (bool, optional): Whether to upload the subset database to the s3 bucket. Defaults to True.
+            verbose (bool, optional): Whether to print verbose output. Defaults to False.
+
+        Returns:
+            None
+        """
+        # 1. Read data just for that job.
+        job_data = self.read("jobs", username, job_id)
+        if job_data is None or len(job_data) == 0:
+            return
+        assert job_data is not None and len(job_data) == 1
+
+        file_data = self.read("files", username, job_id)
+        assert file_data is not None
+
+        # 2. Write the data to a local database file.
+        base, ext = os.path.splitext(ivert_config.ivert_jobs_database_basename)
+        db_fname = os.path.join(local_directory, f"{base}_{username}_{job_id}{ext}")
+        if os.path.exists(db_fname):
+            os.remove(db_fname)
+
+        # Create a new database.
+        conn = self.create_new_database(database_fname=db_fname,
+                                        only_if_not_exists_in_s3=False,
+                                        overwrite=True,
+                                        verbose=verbose)
+
+        # Drop the subscriptions and messages tables, we don't need them.
+        conn.execute("DROP TABLE IF EXISTS sns_subscriptions;"
+                     "DROP TABLE IF EXISTS sns_messages;")
+
+        # Get the current vnum.
+        current_vnum = self.fetch_latest_db_vnum_from_database()
+
+        # Copy the data into the new database.
+        job_data.to_sql("ivert_jobs", conn, if_exists="replace", index=False)
+        file_data.to_sql("ivert_files", conn, if_exists="replace", index=False)
+        conn.execute("INSERT OR REPLACE INTO vnumber (vnum) VALUES (?)", (current_vnum,))
+        conn.commit()
+
+        # 3. Upload the local file to the s3 bucket.
+        if upload_to_s3:
+            s3_key = os.path.join(s3_directory, os.path.basename(db_fname))
+            self.s3m.upload(db_fname,
+                            s3_key,
+                            bucket_type="export",
+                            delete_original=True,
+                            recursive=False,
+                            other_metadata={
+                                self.s3_latest_job_metadata_key: str(job_id),
+                                self.s3_vnum_metadata_key: str(current_vnum),
+                                self.ivert_config.s3_jobs_db_ivert_version_metadata_key: version.__version__,
+                            },
+                            )
 
     def archive_database(self,
                          cutoff_date_str: str = "7 days ago",
