@@ -595,11 +595,18 @@ class S3Manager:
                 query_prompt = f"This will delete {len(matching_keys)} files in bucket '{bucket_name}'. Continue?"
                 delete_all_confirmation = query_yes_no.query_yes_no(query_prompt, default="no")
 
+                # If the user doesn't confirm, don't delete anything, just exit.
                 if not delete_all_confirmation:
                     return
 
-            for k in matching_keys:
-                client.delete_object(Bucket=bucket_name, Key=k)
+            # Use the client.delete_objects() method to delete multiple objects at once
+            # Loop over 1000 objects at a time (the AWS maximum for delete_objects())
+            for i in range(0, len(matching_keys), 1000):
+                # Get the next chunk of 1000 keys, or less if we're at the end
+                chunk_max_i = min(i + 1000, len(matching_keys))
+                client.delete_objects(Bucket=bucket_name,
+                                      Delete={"Objects": [{"Key": k} for k in matching_keys[i:chunk_max_i]]})
+
         else:
             client.delete_object(Bucket=bucket_name, Key=s3_key)
 

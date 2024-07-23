@@ -153,7 +153,7 @@ def clean_export_dirs(ivert_config: typing.Union[utils.configfile.config, None] 
 def clean_untrusted_bucket(ivert_config: typing.Union[utils.configfile.config, None] = None,
                            date_cutoff_str: str = "7 days ago",
                            verbose: bool = True):
-    """Clean out old files from the "untrusted" bucket in the Secure Ingest pipeline.
+    """Clean out old files from the "untrusted" bucket in the Secure Ingest pipeline from the client.
 
     This should be run from the client side.
 
@@ -168,21 +168,9 @@ def clean_untrusted_bucket(ivert_config: typing.Union[utils.configfile.config, N
     pass
 
 
-def define_and_parse_args(return_parser: bool = False):
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--what", default="all", choices=["all", "cache", "jobs", "database", "export"],
-                        help="What to clean from the server. 'all' means all of them. Other choices are 'cache' "
-                             "(clear the .cudem_cache directory), 'jobs' (clear any local jobs directories), 'databaase' "
-                             "(truncate the server's jobs database to only reflect recent jobs, or delete the database "
-                             "on the client), and 'export' (clear the export directories."
-                             " Default: 'all'")
-
-    return parser.parse_args()
-
-
 def delete_local_jobs_database(ivert_config: typing.Union[utils.configfile.config, None] = None,
                                verbose: bool = True):
-    """Delete the local jobs database.
+    """Delete the local jobs database on the client.
 
     Args:
         ivert_config (typing.Union[utils.configfile.config, None], optional): The IVERT config to use. Defaults to None.
@@ -192,13 +180,61 @@ def delete_local_jobs_database(ivert_config: typing.Union[utils.configfile.confi
         ivert_config = utils.configfile.config()
 
     if ivert_config.is_aws:
-        raise RuntimeError("'delete_local_jobs_database()' is intended solely for IVERT client research.")
+        raise RuntimeError("'delete_local_jobs_database()' is intended solely for the IVERT client.")
     else:
         jobs_db_fname = ivert_config.ivert_jobs_database_local_fname
         if os.path.exists(jobs_db_fname):
             if verbose:
                 print(f"Deleting {os.path.basename(jobs_db_fname)}.")
             os.remove(jobs_db_fname)
+
+
+def delete_local_photon_tiles(ivert_config: typing.Union[utils.configfile.config, None] = None,
+                              verbose: bool = True):
+    """Delete files from the local photon_tiles directory on the server, only if there are no active running ivert jobs.
+
+    Args:
+        ivert_config (typing.Union[utils.configfile.config, None], optional): The IVERT config to use. Defaults to None.
+        verbose (bool, optional): Whether to print verbose output. Defaults to True.
+    """
+    if ivert_config is None:
+        ivert_config = utils.configfile.config()
+
+    if not ivert_config.is_aws:
+        raise RuntimeError("'delete_local_photon_tiles()' is intended solely for the IVERT server.")
+
+    if not os.path.exists(ivert_config.icesat2_photon_tiles_directory):
+        return
+
+    # If there are active running jobs, don't delete anything.
+    if are_any_ivert_jobs_running():
+        raise RuntimeError("There are active running IVERT jobs. Won't delete photon tiles.")
+
+    tilenames = [fn for fn in os.listdir(ivert_config.icesat2_photon_tiles_directory) if fn.startswith("photon_tile_")]
+    if len(tilenames) == 0:
+        return
+    elif verbose:
+        print(f"Deleting {len(tilenames)} files from {ivert_config.icesat2_photon_tiles_directory}.")
+
+    rm_cmd = f"rm -rf {ivert_config.icesat2_photon_tiles_directory}/photon_tile_*"
+    if verbose:
+        print(rm_cmd)
+    os.system(rm_cmd)
+
+    return
+
+
+def define_and_parse_args(return_parser: bool = False):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--what", default="all", choices=["all", "cache", "jobs", "database", "export", "tiles", "untrusted"],
+                        help="What to clean from the server. 'all' means all of them. Other choices are 'cache' "
+                             "(clear the .cudem_cache directory), 'jobs' (clear any local jobs directories), 'databaase' "
+                             "(truncate the server's jobs database to only reflect recent jobs, or delete the database "
+                             "on the client), 'export' (clear the export bucket directories), 'tiles' (delete all"
+                             "locally-downloaded photon-tiles from the server), and 'untrusted' (clear the 'untrusted' bucket of old files from the client)."
+                             " Default: 'all'")
+
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
@@ -215,6 +251,7 @@ if __name__ == "__main__":
             fix_database_of_orphaned_jobs()
             truncate_jobs_database()
             clean_export_dirs(ivert_config=iconfig)
+            delete_local_photon_tiles(ivert_config=iconfig)
 
         elif args.what == "cache":
             clean_cudem_cache(ivert_config=iconfig)
@@ -229,6 +266,9 @@ if __name__ == "__main__":
         elif args.what == "export":
             clean_export_dirs(ivert_config=iconfig)
 
+        elif args.what == "tiles":
+            delete_local_photon_tiles(ivert_config=iconfig)
+
         else:
             print(f"Argument '{args.what}' not implemented for the IVERT server.")
 
@@ -237,12 +277,16 @@ if __name__ == "__main__":
         if args.what == "all":
             clean_old_jobs_dirs(ivert_config=iconfig)
             delete_local_jobs_database(ivert_config=iconfig)
+            clean_untrusted_bucket(ivert_config=iconfig)
 
         elif args.what == "jobs":
             clean_old_jobs_dirs(ivert_config=iconfig)
 
         elif args.what == "database":
             delete_local_jobs_database(ivert_config=iconfig)
+
+        elif args.what == "untrusted":
+            clean_untrusted_bucket(ivert_config=iconfig)
 
         else:
             print(f"Argument '{args.what}' not implemented for the IVERT client.")
