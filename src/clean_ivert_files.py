@@ -228,11 +228,13 @@ def define_and_parse_args(return_parser: bool = False):
     parser = argparse.ArgumentParser()
     parser.add_argument("--what", default="all", choices=["all", "cache", "jobs", "database", "export", "tiles", "untrusted"],
                         help="What to clean from the server. 'all' means all of them. Other choices are 'cache' "
-                             "(clear the .cudem_cache directory), 'jobs' (clear any local jobs directories), 'databaase' "
+                             "(clear the .cudem_cache directory), 'jobs' (clear any local jobs directories), 'database' "
                              "(truncate the server's jobs database to only reflect recent jobs, or delete the database "
                              "on the client), 'export' (clear the export bucket directories), 'tiles' (delete all"
                              "locally-downloaded photon-tiles from the server), and 'untrusted' (clear the 'untrusted' bucket of old files from the client)."
                              " Default: 'all'")
+    parser.add_argument("--when", default="7 days ago",
+                        help="The date cutoff for cleaning. Can be any string that can be passed to dateutil.parser.parse(). Default: '7 days ago'")
 
     return parser.parse_args()
 
@@ -249,8 +251,8 @@ if __name__ == "__main__":
             clean_cudem_cache(ivert_config=iconfig)
             clean_old_jobs_dirs(ivert_config=iconfig)
             fix_database_of_orphaned_jobs()
-            truncate_jobs_database()
-            clean_export_dirs(ivert_config=iconfig)
+            truncate_jobs_database(date_cutoff_str=args.when)
+            clean_export_dirs(ivert_config=iconfig, date_cutoff_str=args.when)
             delete_local_photon_tiles(ivert_config=iconfig)
 
         elif args.what == "cache":
@@ -277,7 +279,7 @@ if __name__ == "__main__":
         if args.what == "all":
             clean_old_jobs_dirs(ivert_config=iconfig)
             delete_local_jobs_database(ivert_config=iconfig)
-            clean_untrusted_bucket(ivert_config=iconfig)
+            clean_untrusted_bucket(ivert_config=iconfig, date_cutoff_str=args.when)
 
         elif args.what == "jobs":
             clean_old_jobs_dirs(ivert_config=iconfig)
@@ -286,7 +288,7 @@ if __name__ == "__main__":
             delete_local_jobs_database(ivert_config=iconfig)
 
         elif args.what == "untrusted":
-            clean_untrusted_bucket(ivert_config=iconfig)
+            clean_untrusted_bucket(ivert_config=iconfig, date_cutoff_str=args.when)
 
         else:
             print(f"Argument '{args.what}' not implemented for the IVERT client.")
