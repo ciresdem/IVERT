@@ -4,7 +4,6 @@ import argparse
 import os
 import psutil
 import shutil
-import time
 import typing
 
 import utils.configfile
@@ -234,7 +233,7 @@ def define_and_parse_args(return_parser: bool = False):
                              "locally-downloaded photon-tiles from the server), and 'untrusted' (clear the 'untrusted' bucket of old files from the client)."
                              " Default: 'all'")
     parser.add_argument("--when", default="7 days ago",
-                        help="The date cutoff for cleaning. Can be any string that can be passed to dateutil.parser.parse(). Default: '7 days ago'")
+                        help="The date cutoff for cleaning. Can be any string that can be passed to dateparser.parse(). Default: '7 days ago'")
 
     return parser.parse_args()
 
@@ -261,7 +260,7 @@ if __name__ == "__main__":
         elif args.what == "jobs":
             clean_old_jobs_dirs(ivert_config=iconfig)
 
-        elif args.what == "databaase":
+        elif args.what == "database":
             fix_database_of_orphaned_jobs()
             truncate_jobs_database()
 
