@@ -1342,8 +1342,8 @@ class JobsDatabaseServer(JobsDatabaseClient):
                                         verbose=verbose)
 
         # Drop the subscriptions and messages tables, we don't need them.
-        conn.execute("DROP TABLE IF EXISTS sns_subscriptions;"
-                     "DROP TABLE IF EXISTS sns_messages;")
+        conn.execute("DROP TABLE IF EXISTS sns_subscriptions;")
+        conn.execute("DROP TABLE IF EXISTS sns_messages;")
 
         # Get the current vnum.
         current_vnum = self.fetch_latest_db_vnum_from_database()
