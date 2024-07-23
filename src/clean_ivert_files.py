@@ -262,10 +262,10 @@ if __name__ == "__main__":
 
         elif args.what == "database":
             fix_database_of_orphaned_jobs()
-            truncate_jobs_database()
+            truncate_jobs_database(date_cutoff_str=args.when)
 
         elif args.what == "export":
-            clean_export_dirs(ivert_config=iconfig)
+            clean_export_dirs(ivert_config=iconfig, date_cutoff_str=args.when)
 
         elif args.what == "tiles":
             delete_local_photon_tiles(ivert_config=iconfig)
