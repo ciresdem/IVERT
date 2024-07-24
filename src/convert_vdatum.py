@@ -87,21 +87,6 @@ def list_all_datums():
         print("{0:<8s}".format(key), ":", vdd_descriptions_dict[key])
 
 
-# def cmd_smart_split(cmd_str, strip_quotes=True):
-#     """Split up a string using posix standards where quotes are respected.
-#
-#     strip_quotes:
-#         If True (default), remove any "" or '' surrounding an argument.
-#         If False, leave the quotes there.
-#
-#     Good for splitting up command-line arguments where a quoted string should be a single argument."""
-#     items = re.findall(r'(?:[^\s,"]|"(?:\\.|[^"])*")+', cmd_str)
-#     if strip_quotes:
-#         items = [item.strip("'\"") for item in items]
-#
-#     return items
-
-
 def vertical_datum_lookup(vd_name):
     """Given a string name or number, return the EPSG integer corresponding with that vertical datum."""
     try:
