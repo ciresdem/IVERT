@@ -528,7 +528,7 @@ class IvertJob:
 
             # 6. Download all other job files.
             # If it's specifically an "import" job, we don't need to download each file, just create records for them.
-            # By default, update the database entries for each file, and re-upload to the s3 bucket once every 10 files.
+            # By default, update the database entries for each file, and re-upload to the s3 bucket once every 20 files.
             self.download_job_files(only_create_database_entries=(self.command == "import"),
                                     upload_to_s3=20)
 
