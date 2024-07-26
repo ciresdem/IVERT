@@ -209,7 +209,7 @@ class S3Manager:
             if e.response["Error"]["Code"] == "404":
                 return False
             else:
-                warnings.warn(f"Warning: Unknown error fetching status of s3://{bucket_name}/{s3_key}")
+                warnings.warn(f"Warning: Unknown error fetching status of s3://{bucket_name}/{s3_key}. Response: {e.response}")
                 return False
 
     def is_existing_s3_directory(self, s3_key, bucket_type=None):

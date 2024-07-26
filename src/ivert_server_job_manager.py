@@ -414,7 +414,12 @@ class IvertJobManager:
                 except Exception:
                     job_exitcode = 1
 
-            self.clean_up_terminated_job(job_key, job_exitcode)
+            # If the applicatin is being shut down, objects may be disappering as this is being cleand up, causing
+            # random errors. If we hit errors here, just move on.
+            try:
+                self.clean_up_terminated_job(job_key, job_exitcode)
+            except Exception:
+                pass
 
         self.running_jobs = []
         return
