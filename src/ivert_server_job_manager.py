@@ -797,6 +797,9 @@ class IvertJob:
                                                         fake_file_stats=True)
                     files_to_download.remove(fname)
                     files_downloaded.append(fname)
+                    # If it's been quarantined, also remove it from our list of files to process as well.
+                    # We won't be doing this one.
+                    self.job_config_object.files.remove(os.path.basename(fname))
 
                 else:
                     pass
@@ -809,7 +812,7 @@ class IvertJob:
         if len(files_to_download) > 0:
             for fname in files_to_download:
                 # files will each be in the same prefix as the config file.
-                f_key = "/".join(self.job_config_s3_key.split("/")[:-1]) + "/" + fname
+                # f_key = self.job_config_s3_key.rsplit("/")[0] + "/" + fname
                 # Put in the same local folder as the configfile.
                 local_fname = os.path.join(os.path.dirname(self.job_config_local), fname)
 
