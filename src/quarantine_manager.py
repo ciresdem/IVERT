@@ -34,4 +34,15 @@ def is_quarantined(s3_key: str) -> bool:
     if not s3_key.startswith(iconfig.s3_quarantine_prefix_base):
         s3_key = (iconfig.s3_quarantine_prefix_base + "/" + s3_key).replace("//", "/")
 
-    return s3m.exists(s3_key, bucket_type='quarantine')
+    # We're using the "listdir" routine rather than "exists" because we don't have permissions to read the header in
+    # the quarantine bucket that "exists" uses. We do have permissions to "list_objects_v2" that listdir uses.
+    # return s3m.exists(s3_key, bucket_type='quarantine')
+    dirname = s3_key.rsplit("/", 1)[0]
+
+    try:
+        fnames = s3m.listdir(dirname, bucket_type='quarantine', recursive=False)
+    except FileNotFoundError:
+        # If the directory doesn't exist, it's not in quarantine (yet)
+        return False
+
+    return s3_key in fnames
