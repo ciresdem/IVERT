@@ -1317,13 +1317,15 @@ class ICESat2_Database:
 
         for i, tname in enumerate(tilenames):
             df = self.read_photon_tile(tname)
-            # Also, delete the local tile after we're done with it, if in on the AWS environment.
-            if self.ivert_config.is_aws:
-                os.remove(os.path.join(self.ivert_config.icesat2_photon_tiles_directory, tname))
 
             if df is None:
                 tiles_missing.append(tname)
                 continue
+            elif self.ivert_config.is_aws:
+                # Delete the local tile after we're done with it, if in on the AWS environment.
+                local_tile = os.path.join(self.ivert_config.icesat2_photon_tiles_directory, tname)
+                if os.path.exists(local_tile):
+                    os.remove(local_tile)
 
             # Fetch the record for this tile.
             row = gdf[gdf.filename == tname].iloc[0]
