@@ -348,7 +348,11 @@ class JobsDatabaseClient:
         if len(resp) == 0:
             return 0
         else:
-            return int(resp[0]["MIN(job_id)"])
+            resp_item = resp[0]["MIN(job_id)"]
+            if resp_item is None:
+                return 0
+            else:
+                return int(resp_item)
 
     def earliest_job_number(self, source_data: str = "database"):
         """Get the earliest job number from the database.
@@ -1392,7 +1396,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
         archive_fname = os.path.join(self.ivert_config.ivert_jobs_archive_dir,
                                      os.path.basename(base + f"_archive_{earliest_job_date_str}_{cutoff_date.year:04}{cutoff_date.month:02}{cutoff_date.day:02}" + ext))
 
-        cutoff_date_p1 = cutoff_date + datetime.timedelta(days=1)
+        cutoff_date_p1 = cutoff_date
         job_id_cutoff = int(f"{cutoff_date_p1.year:04}{cutoff_date_p1.month:02}{cutoff_date_p1.day:02}0000")
 
         # Create a full copy of the old database.
