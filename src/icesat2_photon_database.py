@@ -459,13 +459,13 @@ class ICESat2_Database:
         else:
             return gdf_subset["filename"].tolist()
 
-    def get_photon_database(self,
-                            polygon_or_bbox=None,
-                            build_tiles_if_nonexistent=False,
-                            good_photons_only=True,
-                            dem_fname=None,
-                            dem_epsg=None,
-                            verbose=True):
+    def get_photon_dataframe(self,
+                             polygon_or_bbox=None,
+                             build_tiles_if_nonexistent=False,
+                             good_photons_only=True,
+                             dem_fname=None,
+                             dem_epsg=None,
+                             verbose=True):
         """Given a polygon or bounding box, return the combined database of all
         the photons within the polygon or bounding box.
 
@@ -882,6 +882,7 @@ class ICESat2_Database:
                          'numphotons'       : [len(tile_df)],
                          'numphotons_canopy': [numpy.count_nonzero(tile_df["class_code"].between(2,3,inclusive="both"))],
                          'numphotons_ground': [numpy.count_nonzero(tile_df["class_code"] == 1)],
+                         'numphotons_bathy': [numpy.count_nonzero(tile_df["class_code"] == 4)],
                          'is_populated'     : [True]
                          }
 
@@ -1052,7 +1053,10 @@ class ICESat2_Database:
         # In v1 of the database we saved the entire path of the tile. This may be different on different machines.
         # Instead, use the directory from ivert_config.icesat2_photon_tiles_directory
         # v2 of the database uses just the file names (no directory). This will work either way.
-        tilename = os.path.join(self.ivert_config.icesat2_photon_tiles_directory, os.path.basename(tilename))
+
+        # If the tilename doesn't start with the directory, add it.
+        if self.ivert_config.icesat2_photon_tiles_directory not in tilename:
+            tilename = os.path.join(self.ivert_config.icesat2_photon_tiles_directory, os.path.basename(tilename))
         base, ext = os.path.splitext(tilename)
         assert ext.lower() in (".h5", ".feather")
         # Read it here and return it. Pretty simple.
@@ -1290,6 +1294,74 @@ class ICESat2_Database:
                                                               abs(bin_right),
                                                               "W" if (bin_right < 0) else "E")
         return os.path.join(dirname_out, basename_out + fmt)
+
+    def check_integrity(self,
+                        logfile: str = None,
+                        fix_db_mistakes: bool = True,
+                        verbose: bool = True) -> str:
+        """Check the integrity of all the files in the photon database, and that they match the database records.
+
+        Args:
+            logfile (str): The name of the log file to write to. If None, no log file will be written.
+            fix_db_mistakes (bool): If True, fix database mismatches with the photon files.
+            verbose (bool): If True, print extra information.
+
+        Returns:
+            str: The text contents of the log file.
+        """
+        tilenames = self.get_gdf(verbose=verbose).filename.to_list()
+        tiles_good = []
+        tiles_missing = []
+        tiles_w_mistakes = []
+        gdf = self.get_gdf()
+
+        for tname in tilenames:
+            df = self.read_photon_tile(tname)
+
+            if df is None:
+                tiles_missing.append(tname)
+                continue
+
+            # Fetch the record for this tile.
+            row = gdf[gdf.filename == tname].iloc[0]
+            if row['numphotons'] == len(df):
+                tiles_good.append(tname)
+            else:
+                tiles_w_mistakes.append(tname)
+                if fix_db_mistakes:
+                    gdf_subset = gdf[gdf.filename == tname]
+                    gdf_subset["numphotons"] = len(df)
+                    gdf_subset["numphotons_canopy"] = numpy.count_nonzero(df["class_code"].between(2, 3, inclusive="both"))
+                    gdf_subset["numphotons_ground"] = numpy.count_nonzero(df["class_code"] == 1)
+                    gdf_subset["numphotons_bathy"] = numpy.count_nonzero(df["class_code"] == 4)
+
+        if fix_db_mistakes and (len(tiles_w_mistakes) > 0):
+            if verbose:
+                print(f"Fixing {len(tiles_w_mistakes)} tiles with 'numphotons' mismatches.")
+                print(f"Writing {self.gpkg_fname}.")
+            self.save_geopackage(gdf=gdf, use_tempfile=True, compress=False)
+
+            if verbose:
+                print(f"Writing {self.gpkg_fname_compressed}.")
+            self.save_geopackage(gdf=gdf, use_tempfile=True, compress=True)
+
+        log_text = f"{len(tiles_good)} tiles are good.\n"
+        log_text += f"{len(tiles_missing)} tiles are missing.\n"
+        log_text += f"{len(tiles_w_mistakes)} tiles have 'numphotons' mismatches"
+        if fix_db_mistakes:
+            log_text += " and were fixed.\n"
+        else:
+            log_text += ".\n"
+
+        if verbose:
+            print(log_text)
+
+        if logfile is not None:
+            with open(logfile, "w") as f:
+                f.write(log_text)
+
+        return log_text
+
 
 if __name__ == "__main__":
 
