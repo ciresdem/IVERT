@@ -39,7 +39,7 @@ def write_photon_tiles_to_file(outfile: str):
         dirname = ivert_config.icesat2_photon_tiles_directory
         # Get rid of any subdirectories listed.
         fnames = sorted([fn for fn in os.listdir(dirname)
-                  if ((not os.path.isdir(os.path.join(dirname, fn))) and fn.startswith("photon_tile"))])
+                         if ((not os.path.isdir(os.path.join(dirname, fn))) and fn.startswith("photon_tile"))])
 
     with open(outfile, "w") as f:
         for fn in fnames:
