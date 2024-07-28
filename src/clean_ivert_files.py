@@ -230,10 +230,12 @@ def define_and_parse_args(return_parser: bool = False):
                              "(clear the .cudem_cache directory), 'jobs' (clear any local jobs directories), 'database' "
                              "(truncate the server's jobs database to only reflect recent jobs, or delete the database "
                              "on the client), 'export' (clear the export bucket directories), 'tiles' (delete all"
-                             "locally-downloaded photon-tiles from the server), and 'untrusted' (clear the 'untrusted' bucket of old files from the client)."
-                             " Default: 'all'")
+                             "locally-downloaded photon-tiles from the server), and 'untrusted' (clear the 'untrusted' "
+                             "bucket of old files from the client). Default: 'all'")
     parser.add_argument("--when", default="7 days ago",
-                        help="The date cutoff for cleaning. Can be any string that can be passed to dateparser.parse(). Default: '7 days ago'")
+                        help="The date cutoff for cleaning. All records befor that date will be archived, records "
+                             "on/after that day will be preserved.Can be any string that can be passed to "
+                             "dateparser.parse(). Default: '7 days ago'")
 
     return parser.parse_args()
 
