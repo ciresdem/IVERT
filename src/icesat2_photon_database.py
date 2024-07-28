@@ -1320,12 +1320,9 @@ class ICESat2_Database:
 
             if df is None:
                 tiles_missing.append(tname)
+                if verbose:
+                    utils.progress_bar.ProgressBar(i + 1, len(tilenames), suffix=f"{i + 1}/{len(tilenames)}")
                 continue
-            elif self.ivert_config.is_aws:
-                # Delete the local tile after we're done with it, if in on the AWS environment.
-                local_tile = os.path.join(self.ivert_config.icesat2_photon_tiles_directory, tname)
-                if os.path.exists(local_tile):
-                    os.remove(local_tile)
 
             # Fetch the record for this tile.
             row = gdf[gdf.filename == tname].iloc[0]
@@ -1339,6 +1336,13 @@ class ICESat2_Database:
                     gdf_subset["numphotons_canopy"] = numpy.count_nonzero(df["class_code"].between(2, 3, inclusive="both"))
                     gdf_subset["numphotons_ground"] = numpy.count_nonzero(df["class_code"] == 1)
                     gdf_subset["numphotons_bathy"] = numpy.count_nonzero(df["class_code"] == 4)
+
+            if self.ivert_config.is_aws:
+                # Delete the local tile after we're done with it, if in on the AWS environment.
+                # ONLY do this on the AWS environment, where tiles are stored in the s3 bucket but used locally.
+                local_tile = os.path.join(self.ivert_config.icesat2_photon_tiles_directory, tname)
+                if os.path.exists(local_tile):
+                    os.remove(local_tile)
 
             if verbose:
                 utils.progress_bar.ProgressBar(i + 1, len(tilenames), suffix=f"{i + 1}/{len(tilenames)}")
