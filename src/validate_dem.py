@@ -1084,12 +1084,12 @@ def validate_dem_parallel(dem_name: str,
     if icesat2_photon_database_obj is None:
         icesat2_photon_database_obj = icesat2_photon_database.ICESat2_Database()
 
-    photon_df = icesat2_photon_database_obj.get_photon_database(dem_bbox,
-                                                                build_tiles_if_nonexistent=False,
-                                                                good_photons_only=True,
-                                                                dem_fname=converted_dem_name,
-                                                                dem_epsg=dem_epsg,
-                                                                verbose=verbose)
+    photon_df = icesat2_photon_database_obj.get_photon_dataframe(dem_bbox,
+                                                                 build_tiles_if_nonexistent=False,
+                                                                 good_photons_only=True,
+                                                                 dem_fname=converted_dem_name,
+                                                                 dem_epsg=dem_epsg,
+                                                                 verbose=verbose)
 
     if photon_df is None:
         if mark_empty_results:
