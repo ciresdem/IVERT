@@ -33,13 +33,13 @@ def write_photon_tiles_to_file(outfile: str):
         # Get rid of any subdirectories listed and strip off the prefix.
         fnames = [fn.split("/")[-1] for fn in fnames if (fn[-1] != "/")]
         # Only include files that start with "photon_tile"
-        fnames = [fn for fn in fnames if fn.startswith("photon_tile")]
+        fnames = sorted([fn for fn in fnames if fn.startswith("photon_tile")])
 
     else:
         dirname = ivert_config.icesat2_photon_tiles_directory
         # Get rid of any subdirectories listed.
-        fnames = [fn for fn in os.listdir(dirname)
-                  if ((not os.path.isdir(os.path.join(dirname, fn))) and fn.startswith("photon_tile"))]
+        fnames = sorted([fn for fn in os.listdir(dirname)
+                  if ((not os.path.isdir(os.path.join(dirname, fn))) and fn.startswith("photon_tile"))])
 
     with open(outfile, "w") as f:
         for fn in fnames:
