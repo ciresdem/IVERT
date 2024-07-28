@@ -1315,8 +1315,11 @@ class ICESat2_Database:
         tiles_w_mistakes = []
         gdf = self.get_gdf()
 
-        for tname in tilenames:
+        for i, tname in enumerate(tilenames):
             df = self.read_photon_tile(tname)
+            # Also, delete the local tile after we're done with it, if in on the AWS environment.
+            if self.ivert_config.is_aws:
+                os.remove(os.path.join(self.ivert_config.icesat2_photon_tiles_directory, tname))
 
             if df is None:
                 tiles_missing.append(tname)
@@ -1334,6 +1337,9 @@ class ICESat2_Database:
                     gdf_subset["numphotons_canopy"] = numpy.count_nonzero(df["class_code"].between(2, 3, inclusive="both"))
                     gdf_subset["numphotons_ground"] = numpy.count_nonzero(df["class_code"] == 1)
                     gdf_subset["numphotons_bathy"] = numpy.count_nonzero(df["class_code"] == 4)
+
+            if verbose:
+                utils.progress_bar.ProgressBar(i + 1, len(tilenames), suffix=f"{i + 1}/{len(tilenames)}")
 
         if fix_db_mistakes and (len(tiles_w_mistakes) > 0):
             if verbose:
