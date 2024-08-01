@@ -16,6 +16,7 @@ import shutil
 import tables
 import time
 import itertools
+import pyarrow
 
 #####################################
 # Suppress the annoying pandas.FutureWarning warnings caused by library version conflicts.
@@ -1057,12 +1058,14 @@ class ICESat2_Database:
         # If the tilename doesn't start with the directory, add it.
         if self.ivert_config.icesat2_photon_tiles_directory not in tilename:
             tilename = os.path.join(self.ivert_config.icesat2_photon_tiles_directory, os.path.basename(tilename))
+
+        # Look for either a .h5 or .feather tile. If neither exists, return None.
         base, ext = os.path.splitext(tilename)
         assert ext.lower() in (".h5", ".feather")
-        # Read it here and return it. Pretty simple.
 
         feather_name = base + ".feather"
         h5_name = base + ".h5"
+
         # If the file doesn't exist locally but we're in the AWS cloud, see if we can download it from an S3 bucket.
         if not os.path.exists(feather_name) and not os.path.exists(h5_name) and self.ivert_config.is_aws:
             s3_manager = self.get_s3_manager()
@@ -1086,10 +1089,14 @@ class ICESat2_Database:
         # To make the HDF5 and Feather formats basically interchangeable, first look for the one.
         # Then if you can't find it, look for the other.
         # Try the feather file first.
-        if os.path.exists(feather_name):
-            return pandas.read_feather(feather_name)
-        elif os.path.exists(h5_name):
-            return pandas.read_hdf(h5_name, mode='r')
+        try:
+            if os.path.exists(feather_name):
+                return pandas.read_feather(feather_name)
+            elif os.path.exists(h5_name):
+                return pandas.read_hdf(h5_name, mode='r')
+        except (pyarrow.lib.ArrowInvalid, pyarrow.lib.ArrowIOError, pyarrow.lib.ArrowKeyError,
+                tables.exceptions.HDF5ExtError, tables.exceptions.NodeError, tables.exceptions.FlavorError):
+            pass
 
         # If neither of those work, return None if the file is not found.
         return None
