@@ -13,21 +13,25 @@ import sys
 import time
 import typing
 
-try:
-    if vars(sys.modules[__name__])['__package__'] in ('ivert', 'ivert_utils'):
-        # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
-        import ivert_utils.configfile as configfile
-        import ivert_utils.version_check_server as version_check_server
-        import ivert_utils.version as version
-        import ivert.s3 as s3
-    else:
+if vars(sys.modules[__name__])['__package__'] in ('ivert', 'ivert_utils'):
+    # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
+    import ivert_utils.configfile as configfile
+    import ivert_utils.version_check_server as version_check_server
+    import ivert_utils.version as version
+    import ivert.s3 as s3
+else:
+    try:
         import utils.configfile as configfile
         import utils.version as version
         import utils.version_check_server as version_check_server
         import s3
-except ModuleNotFoundError as e:
-    print(vars(sys.modules[__name__])['__package__'])
-    raise e
+    except ModuleNotFoundError:
+        # It's weird, when running jobs_database.py as a standalone script in the IVERT package, it fails to import
+        # these modules above, but this works.
+        import ivert_utils.configfile as configfile
+        import ivert_utils.version_check_server as version_check_server
+        import ivert_utils.version as version
+        import ivert.s3 as s3
 
 ivert_config = configfile.config()
 
