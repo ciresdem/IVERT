@@ -266,17 +266,32 @@ def define_and_parse_args(return_parser: bool = False):
         return parser.parse_args()
 
 
+def prompt_for_latest_version():
+    """Prompt the user to upgrade the IVERT client."""
+    return yes_no.query_yes_no(f"Your IVERT client ({version.__version__}) is out of date with the IVERT server that requires {version.__minimum_client_version__} or higher. Would you like to upgrade it?",
+                               default="y")
+
+
 def ivert_client_cli():
     """Run the IVERT client CLI."""
     args = define_and_parse_args()
 
-    # Set up the IVERT client on a new system
-    if args.command == "setup":
-        new_user_setup.setup_new_user(args)
-
     # Upgrade the client software.
     if args.command == "upgrade":
         client_upgrade.upgrade()
+        sys.exit(0)
+
+    # For all other commands, make sure the IVERT client is up-to-date enough to be compatible with the server.
+    # If not, prompt if they want to upgrade before continuing.
+    # ONLY do this if we're running as a package, not as a script.
+    if (vars(sys.modules[__name__])['__package__'] == 'ivert') and not version.is_this_client_compatible():
+        if prompt_for_latest_version():
+            client_upgrade.upgrade()
+        sys.exit(0)
+
+    # Set up the IVERT client on a new system
+    if args.command == "setup":
+        new_user_setup.setup_new_user(args)
 
     # Subscribe to IVERT email notifications
     elif args.command == "subscribe":
