@@ -70,14 +70,20 @@ def minimum_client_version():
         return [line.strip() for line in f.readlines() if line.strip()[0] != '#' and len(line.strip()) > 0][0]
 
 
-__minimum_client_version__ = minimum_client_version()
-
-
 def is_compatible(client_version: str) -> bool:
     """Returns True if the given client version is compatible with the server."""
     if not is_aws.is_aws():
         raise NotImplementedError("is_compatible is supported only on the AWS server. Use is_this_client_compatible instead.")
     return Version(client_version) >= Version(minimum_client_version())
+
+
+def fetch_min_client_from_server(ivert_config=None):
+    if ivert_config is None:
+        ivert_config = configfile.config()
+
+    # Initiate a boto3 session and client.
+    client = boto3.Session(profile_name=ivert_config.aws_profile_ivert_export).client('s3')
+    return client.head_object(Bucket=ivert_config.s3_bucket_export, Key=jobs_db_s3_key)['Metadata'][ivert_config.s3_jobs_db_min_client_version_metadata_key]
 
 
 def is_this_client_compatible():
@@ -86,12 +92,17 @@ def is_this_client_compatible():
 
     ivert_config = configfile.config()
     jobs_db_s3_key = ivert_config.s3_ivert_jobs_database_key
-
-    # Initiate a boto3 session and client.
-    client = boto3.Session(profile_name=ivert_config.aws_profile_ivert_export).client('s3')
-    min_client_key = client.head_object(Bucket=ivert_config.s3_bucket_export, Key=jobs_db_s3_key)['Metadata'][ivert_config.s3_jobs_db_min_client_version_metadata_key]
+    min_client_key = fetch_min_client_from_server(ivert_config=ivert_config)
 
     return Version(__version__) >= Version(min_client_key)
+
+
+# If we're in the ivert client package, fetch the minimum client version from the server.
+if vars(sys.modules[__name__])['__package__'] == 'ivert_utils':
+    __minimum_client_version__ = fetch_min_client_from_server()
+# Otherwise fetch it locally.
+else:
+    __minimum_client_version__ = minimum_client_version()
 
 
 if __name__ == "__main__":
