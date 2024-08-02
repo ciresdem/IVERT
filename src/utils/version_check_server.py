@@ -2,6 +2,18 @@ import os
 import sys
 from packaging.version import Version
 
+if vars(sys.modules[__name__])['__package__'] == 'ivert_utils':
+    # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
+    import ivert_utils.is_aws as is_aws
+else:
+    try:
+        # If running as a script, import this way.
+        import is_aws
+    except ModuleNotFoundError:
+        # If this script is imported from another module in the src/ directory, import this way.
+        import utils.is_aws as is_aws
+
+
 def minimum_client_version():
     # This is the minimum version of the client that the server will accept.
     # This is stored in ivert/VERSION_CLIENT_MIN
