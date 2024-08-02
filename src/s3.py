@@ -690,17 +690,21 @@ class S3Manager:
                 # If we're not recursing, directories can be returned as well. Ignore those.
                 # Otherwise, add the key to the dictionary by calling this function recursively on the non-globbed match.
                 if not self.is_existing_s3_directory(key):
-                    keyvals[key] = self.get_metadata(key, bucket_type=bucket_type, recursive=False)
+                    keyvals[key] = self.get_metadata(key,
+                                                     bucket_type=bucket_type,
+                                                     recursive=False,
+                                                     return_entire_header=return_entire_header)
 
             return keyvals
 
-        bname = self.get_bucketname(bucket_type=bucket_type)
-        head = client.head_object(Bucket=bname, Key=s3_key)
-
-        if return_entire_header:
-            return head
         else:
-            return head["Metadata"]
+            bname = self.get_bucketname(bucket_type=bucket_type)
+            head = client.head_object(Bucket=bname, Key=s3_key)
+
+            if return_entire_header:
+                return head
+            else:
+                return head["Metadata"]
 
 
 def pretty_print_bucket_list(use_formatting=True):
