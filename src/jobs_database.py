@@ -932,7 +932,8 @@ class JobsDatabaseServer(JobsDatabaseClient):
                             self.s3_latest_job_metadata_key: str(latest_job_id),
                             self.s3_vnum_metadata_key: str(self.fetch_latest_db_vnum_from_database()),
                             self.ivert_config.s3_jobs_db_ivert_version_metadata_key: version.__version__,
-                            self.ivert_config.s3_jobs_db_jobs_since_metadata_key: str(database_earliest_job_id)
+                            self.ivert_config.s3_jobs_db_jobs_since_metadata_key: str(database_earliest_job_id),
+                            self.ivert_config.s3_jobs_db_min_client_version_metadata_key: version.minimum_client_version()
                         },
                         )
 
@@ -1505,9 +1506,9 @@ if __name__ == "__main__":
     args = define_and_parse_args()
 
     if ivert_config.is_aws:
-        idb = JobsDatabaseClient()
-    else:
         idb = JobsDatabaseServer()
+    else:
+        idb = JobsDatabaseClient()
 
     if args.command == "create":
         idb.create_new_database(only_if_not_exists_in_s3=True, overwrite=args.overwrite)
