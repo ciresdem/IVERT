@@ -1,4 +1,5 @@
 import os
+import sys
 from packaging.version import Version
 
 if vars(sys.modules[__name__])['__package__'] == 'ivert_utils':
