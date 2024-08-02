@@ -26,8 +26,9 @@ try:
         import utils.version as version
         import utils.version_check_server as version_check_server
         import s3
-except ModuleNotFoundError:
+except ModuleNotFoundError as e:
     print(vars(sys.modules[__name__])['__package__'])
+    raise e
 
 ivert_config = configfile.config()
 
