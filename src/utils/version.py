@@ -1,22 +1,7 @@
 import os
 import sys
 
-if vars(sys.modules[__name__])['__package__'] == 'ivert_utils':
-    # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
-    import ivert_utils.version_check_client as version_check_client
-    import ivert_utils.version_check_server as version_check_server
-else:
-    try:
-        # If running as a script, import this way.
-        import version_check_client
-        import version_check_server
-    except ModuleNotFoundError:
-        # If this script is imported from another module in the src/ directory, import this way.
-        import utils.version_check_client as version_check_client
-        import utils.version_check_server as version_check_server
-
 __version__ = None
-__minimum_client_version__ = None
 
 
 def current_version():
@@ -44,15 +29,6 @@ def current_version():
 
 # Define the __version__ variable in this module.
 __version__ = current_version()
-
-
-# If we're in the ivert client package, fetch the minimum client version from the server.
-if vars(sys.modules[__name__])['__package__'] == 'ivert_utils':
-    __minimum_client_version__ = version_check_client.fetch_min_client_from_server()
-# Otherwise fetch it locally.
-else:
-    __minimum_client_version__ = version_check_server.minimum_client_version()
-
 
 if __name__ == "__main__":
     print(__version__)
