@@ -34,9 +34,10 @@ do
     h)
       # Print a help message.
       echo "Usage: server_proc.sh [-klrh]"
+      echo "  (no option): Start the server"
       echo "  -k: Kill the server"
       echo "  -l: List the running server processes"
-      echo "  -r: Restart the server"
+      echo "  -r: Restart the server (kill existing, then start)"
       echo "  -h: Print this help message"
       exit 0
       ;;
