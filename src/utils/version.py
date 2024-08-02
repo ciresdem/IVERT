@@ -32,10 +32,10 @@ def current_version():
     # In the package files, after installing.
     VFILE2 = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "ivert_data", "VERSION"))
 
-    if os.path.exists(VFILE1):
-        file_to_use = VFILE1
-    elif os.path.exists(VFILE2):
+    if vars(sys.modules[__name__])['__package__'] == 'ivert_utils' and os.path.exists(VFILE2):
         file_to_use = VFILE2
+    elif os.path.exists(VFILE1):
+        file_to_use = VFILE1
     else:
         raise FileNotFoundError("Could not find 'VERSION' file.")
 
@@ -58,10 +58,10 @@ def minimum_client_version():
     # This is stored in ivert/VERSION_CLIENT_MIN
     MCVFILE1 = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "VERSION_CLIENT_MIN"))
     MCVFILE2 = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "ivert_data", "VERSION_CLIENT_MIN"))
-    if os.path.exists(MCVFILE1):
-        file_to_use = MCVFILE1
-    elif os.path.exists(MCVFILE2):
+    if vars(sys.modules[__name__])['__package__'] == 'ivert_utils' and os.path.exists(MCVFILE2):
         file_to_use = MCVFILE2
+    elif os.path.exists(MCVFILE1):
+        file_to_use = MCVFILE1
     else:
         raise FileNotFoundError("Could not find 'VERSION_CLIENT_MIN' file.")
 
