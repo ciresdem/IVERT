@@ -599,17 +599,17 @@ class IvertJob:
             client_version = self.job_config_object.ivert_version
         else:
             self.write_to_logfile("The IVERT Client version you are using is no longer compatible with the IVERT "
-                                  f"Server ({utils.version.__version__}). Please upgrade your IVERT Client by running"
-                                  "the command 'ivert upgrade'.")
+                                  f"Server (v{utils.version.__version__}). Please upgrade your IVERT Client by running"
+                                  "the command 'ivert upgrade' or following the instructions on the IVERT install guide.")
             self.update_job_status("error")
             return False
 
         if utils.version_check_server.is_compatible(client_version):
             return True
         else:
-            self.write_to_logfile(f"The IVERT Client version you are using ({client_version}) is no longer compatible "
-                                  f"with the IVERT Server ({utils.version.__version__}). Please upgrade your IVERT "
-                                  "Client by running the command 'ivert upgrade'.""")
+            self.write_to_logfile(f"The IVERT Client version you are using (v{client_version}) is no longer compatible "
+                                  f"with the IVERT Server (v{utils.version.__version__}). Please upgrade your IVERT "
+                                  "Client by running the command 'ivert upgrade' or following the instructions on the IVERT install guide.")
             self.update_job_status("error")
             return False
 
@@ -1039,7 +1039,6 @@ class IvertJob:
             print("Executing job.")
 
         try:
-
             # THIS IS THE LOGIC FOR DETERMINING WHICH COMMAND TO RUN ON THE SERVER.
 
             if self.command == "validate":

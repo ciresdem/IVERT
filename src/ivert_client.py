@@ -288,6 +288,7 @@ def ivert_client_cli():
     if (vars(sys.modules[__name__])['__package__'] == 'ivert') and not version_check_client.is_this_client_compatible():
         if prompt_for_latest_version():
             client_upgrade.upgrade()
+            print("You may now re-run your command.")
         sys.exit(0)
 
     # Set up the IVERT client on a new system
