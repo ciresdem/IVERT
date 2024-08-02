@@ -20,15 +20,15 @@ if vars(sys.modules[__name__])['__package__'] == 'ivert':
     import ivert_utils.version as version
     import ivert.s3 as s3
 else:
-    try:
-        # If running as a script, import this way.
-        import utils.configfile as configfile
-        import utils.version as version
-        import s3
-    except ModuleNotFoundError:
-        import ivert_utils.configfile as configfile
-        import ivert_utils.version as version
-        import ivert.s3 as s3
+    # try:
+    # If running as a script, import this way.
+    import utils.configfile as configfile
+    import utils.version as version
+    import s3
+    # except ModuleNotFoundError:
+    #     import ivert_utils.configfile as configfile
+    #     import ivert_utils.version as version
+    #     import ivert.s3 as s3
 
 ivert_config = configfile.config()
 
