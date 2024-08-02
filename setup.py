@@ -49,7 +49,7 @@ setuptools.setup(
                                          "config/ivert_job_config_TEMPLATE.ini",
                                          "config/ivert_user_config_TEMPLATE.ini",
                                          "config/ivert_jobs_schema.sql"]),
-                  ("ivert_data/", ["VERSION", "LICENSE", "README.md"]),
+                  ("ivert_data/", ["VERSION", "LICENSE", "README.md", "VERSION_CLIENT_MIN"]),
                   ],
     # package_data = {'ivert': ['data/icesat2/ATL03_EMPTY_TILE.h5',
     #                           'data/empty_tile.tif',
