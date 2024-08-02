@@ -220,8 +220,7 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     # Create the "subscribe" subparser
     ###############################################################
-    subscribe_help_msg = ("Subscribe to IVERT email notifications. It will overwrite any previous subscriptions defined"
-                          " for that user.")
+    subscribe_help_msg = "Subscribe to IVERT email notifications. Overwrite previous subscription for that user."
     parser_subscribe = subparsers.add_parser("subscribe", help=subscribe_help_msg, description=subscribe_help_msg)
     parser_subscribe.add_argument("email", type=str,
                                   help="Enter an email address to subscribe to IVERT email notifications.")
