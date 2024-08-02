@@ -17,18 +17,14 @@ import typing
 if vars(sys.modules[__name__])['__package__'] == 'ivert':
     # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
     import ivert_utils.configfile as configfile
+    import ivert_utils.version_check_server as version_check_server
     import ivert_utils.version as version
     import ivert.s3 as s3
 else:
-    # try:
-    # If running as a script, import this way.
     import utils.configfile as configfile
     import utils.version as version
+    import utils.version_check_server as version_check_server
     import s3
-    # except ModuleNotFoundError:
-    #     import ivert_utils.configfile as configfile
-    #     import ivert_utils.version as version
-    #     import ivert.s3 as s3
 
 ivert_config = configfile.config()
 
@@ -933,7 +929,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
                             self.s3_vnum_metadata_key: str(self.fetch_latest_db_vnum_from_database()),
                             self.ivert_config.s3_jobs_db_ivert_version_metadata_key: version.__version__,
                             self.ivert_config.s3_jobs_db_jobs_since_metadata_key: str(database_earliest_job_id),
-                            self.ivert_config.s3_jobs_db_min_client_version_metadata_key: version.minimum_client_version()
+                            self.ivert_config.s3_jobs_db_min_client_version_metadata_key: version_check_server.minimum_client_version()
                         },
                         )
 
