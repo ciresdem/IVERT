@@ -28,6 +28,7 @@ import server_file_export
 import sns
 import utils.configfile
 import utils.sizeof_format as sizeof
+import utils.version
 
 
 def is_another_manager_running() -> typing.Union[bool, psutil.Process]:
@@ -523,43 +524,50 @@ class IvertJob:
             # 3. Parse the job configuration file.
             self.parse_job_config_ini()
 
-            # 4. Create a new job entry in the jobs database.
+            # 4. Check if the job is using a recent-enough version of the client. If not, error out and be done.
+            is_valid_version = self.check_ivert_client_version()
+            # If it's not a valid version, the check_ivert_client_version() method will have already logged the error
+            # to the logfile and marked the job as "error". Just exit at this point.
+            if not is_valid_version:
+                return
+
+            # 5. Create a new job entry in the jobs database.
             # -- also creates an ivert_files entry for the logfile, and uploads the new database version.
             self.create_new_job_entry()
 
-            # 5. Send SNS notification that the job has started.
+            # 6. Send SNS notification that the job has started.
             #  --- Insert SNS record in database (upload to s3)
             self.push_sns_notification(start_or_finish="start", upload_to_s3=False)
 
-            # 6. Download all other job files.
+            # 7. Download all other job files.
             # If it's specifically an "import" job, we don't need to download each file, just create records for them.
             # By default, update the database entries for each file, and re-upload to the s3 bucket once every 20 files.
             self.download_job_files(only_create_database_entries=(self.command == "import"),
                                     upload_to_s3=20)
 
-            # 7. Run the job!
+            # 8. Run the job!
             # -- Figure out how to monitor the status of the job as it goes along.
             self.update_job_status("running", upload_to_s3=True)
 
             # See execute_job() for the logic of parsing out the work to individual jobs.
             self.execute_job()
 
-            # 8. Upload export files to the S3 bucket (if any). Enter them into the database.
+            # 9. Upload export files to the S3 bucket (if any). Enter them into the database.
             # Exclude the logfile because we may still be writing to it if any of these files have errors.
             self.upload_export_files(exclude_logfile=True, upload_to_s3=False)
 
-            # 9. Upload the logfile (if exists) and enter in database. (Upload to s3)
+            # 10. Upload the logfile (if exists) and enter in database. (Upload to s3)
             self.export_logfile_if_exists(upload_db_to_s3=False)
 
             if self.jobs_db.job_status(self.username, self.job_id) not in ("killed", "error", "complete", "unknown"):
-                # 10. Mark the job as finished in the jobs database. (Upload to s3). If the job was already marked as
+                # 11. Mark the job as finished in the jobs database. (Upload to s3). If the job was already marked as
                 # an error or killed, keep it that way.
                 self.update_job_status("complete", upload_to_s3=False)
 
-            # 11. Send SNS notification that the job has finished.
+            # 12. Send SNS notification that the job has finished.
             self.push_sns_notification(start_or_finish="finish", upload_to_s3=True)
 
-            # 12. After exporting output files, delete the local job files & folders.
+            # 13. After exporting output files, delete the local job files & folders.
             self.delete_local_job_folders()
 
             # If needed, upload the jobs database to the s3
@@ -583,6 +591,26 @@ class IvertJob:
             self.update_job_status("error")
             self.export_logfile_if_exists(upload_db_to_s3=False)
             return
+
+    def check_ivert_client_version(self) -> bool:
+        """Check if the client version is recent enough."""
+        if hasattr(self.job_config_object, "ivert_version"):
+            client_version = self.job_config_object.ivert_version
+        else:
+            self.write_to_logfile("The IVERT Client version you are using is no longer compatible with the IVERT "
+                                  f"Server ({utils.version.__version__}). Please upgrade your IVERT Client by running"
+                                  "the command 'ivert upgrade'.")
+            self.update_job_status("error")
+            return False
+
+        if utils.version.is_compatible(client_version):
+            return True
+        else:
+            self.write_to_logfile(f"The IVERT Client version you are using ({client_version}) is no longer compatible "
+                                  f"with the IVERT Server ({utils.version.__version__}). Please upgrade your IVERT "
+                                  "Client by running the command 'ivert upgrade'.""")
+            self.update_job_status("error")
+            return False
 
     def get_email_templates(self) -> utils.configfile.config:
         """Get the email templates."""
