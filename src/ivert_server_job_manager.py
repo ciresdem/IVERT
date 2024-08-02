@@ -598,8 +598,8 @@ class IvertJob:
             client_version = self.job_config_object.ivert_version
         else:
             self.write_to_logfile("The IVERT Client version you are using is no longer compatible with the IVERT "
-                                  f"Server (v{utils.version.__version__}). Please upgrade your IVERT Client by running"
-                                  "the command 'ivert upgrade' or following the instructions on the IVERT install guide.")
+                                  f"Server (v{utils.version.__version__}). Please upgrade your IVERT Client by running "
+                                  "'ivert upgrade' or following instructions on the online IVERT install guide.")
             self.update_job_status("error")
             return False
 
