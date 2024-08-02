@@ -29,6 +29,7 @@ import sns
 import utils.configfile
 import utils.sizeof_format as sizeof
 import utils.version
+import utils.version_check_server
 
 
 def is_another_manager_running() -> typing.Union[bool, psutil.Process]:
@@ -603,7 +604,7 @@ class IvertJob:
             self.update_job_status("error")
             return False
 
-        if utils.version.is_compatible(client_version):
+        if utils.version_check_server.is_compatible(client_version):
             return True
         else:
             self.write_to_logfile(f"The IVERT Client version you are using ({client_version}) is no longer compatible "

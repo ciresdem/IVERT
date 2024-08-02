@@ -16,6 +16,7 @@ if vars(sys.modules[__name__])['__package__'] == 'ivert':
     import ivert.client_upgrade as client_upgrade
     import ivert_utils.query_yes_no as yes_no
     import ivert_utils.version as version
+    import ivert_utils.version_check_client as version_check_client
 else:
     # If running as a script, import this way.
     import new_user_setup
@@ -29,6 +30,7 @@ else:
     import client_upgrade
     import utils.query_yes_no as yes_no
     import utils.version as version
+    import utils.version_check_client as version_check_client
 
 def define_and_parse_args(return_parser: bool = False):
     parser = argparse.ArgumentParser(description="The ICESat-2 Validation of Elevations Reporting Tool (IVERT)."
@@ -283,7 +285,7 @@ def ivert_client_cli():
     # For all other commands, make sure the IVERT client is up-to-date enough to be compatible with the server.
     # If not, prompt if they want to upgrade before continuing.
     # ONLY do this if we're running as a package, not as a script.
-    if (vars(sys.modules[__name__])['__package__'] == 'ivert') and not version.is_this_client_compatible():
+    if (vars(sys.modules[__name__])['__package__'] == 'ivert') and not version_check_client.is_this_client_compatible():
         if prompt_for_latest_version():
             client_upgrade.upgrade()
         sys.exit(0)
