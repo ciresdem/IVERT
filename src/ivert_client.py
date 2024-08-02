@@ -13,6 +13,7 @@ if vars(sys.modules[__name__])['__package__'] == 'ivert':
     import ivert.client_job_status as client_job_status
     import ivert.client_job_validate as client_job_validate
     import ivert.client_job_import as client_job_import
+    import ivert.client_upgrade as client_upgrade
     import ivert_utils.query_yes_no as yes_no
     import ivert_utils.version as version
 else:
@@ -25,6 +26,7 @@ else:
     import client_job_validate
     import client_job_update
     import client_test_job
+    import client_upgrade
     import utils.query_yes_no as yes_no
     import utils.version as version
 
@@ -239,6 +241,12 @@ def define_and_parse_args(return_parser: bool = False):
     parser_unsubscribe.add_argument("email", type=str,
                                     help="Enter an email address to unsubscribe from IVERT email notifications. This can also be done by clicking the 'unsubscribe' link in any IVERT emails you receive.")
 
+    ###############################################################
+    # Create the "upgrade" subparser
+    ###############################################################
+    upgrade_help_msg = "Upgrade the IVERT client to the lasest version."
+    parser_upgrade = subparsers.add_parser("upgrade", help=upgrade_help_msg, description=upgrade_help_msg)
+
     # Not implemented yet.
     # ###############################################################
     # # Create the 'kill' subparser
@@ -265,6 +273,10 @@ def ivert_client_cli():
     # Set up the IVERT client on a new system
     if args.command == "setup":
         new_user_setup.setup_new_user(args)
+
+    # Upgrade the client software.
+    if args.command == "upgrade":
+        client_upgrade.upgrade()
 
     # Subscribe to IVERT email notifications
     elif args.command == "subscribe":

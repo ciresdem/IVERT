@@ -14,12 +14,14 @@ if vars(sys.modules[__name__])['__package__'] == 'ivert':
     import ivert.client_job_status as client_job_status
     import ivert_utils.configfile as configfile
     import ivert_utils.progress_bar as progress_bar
+    import ivert_utils.version as version
 else:
     import jobs_database
     import s3
     import client_job_status
     import utils.configfile as configfile
     import utils.progress_bar as progress_bar
+    import utils.version as version
 
 # The ivert_config object loads user information from the user's config file if it exists.
 ivert_config = configfile.config()
@@ -133,7 +135,6 @@ def create_new_job_config(ivert_args: argparse.Namespace,
     args.command = args.command.strip().lower()
     assert args.command in ivert_config.ivert_commands
 
-    config_text = grab_job_config_template()
     username, new_job_number = create_new_job_params(ivert_config.username)
 
     # Genereate the full upload prefix for this new job.
@@ -184,6 +185,8 @@ def create_new_job_config(ivert_args: argparse.Namespace,
     if len(cmd_args_text) == 0:
         cmd_args_text = '{}'
 
+    ivert_version = version.__version__
+
     # Now that we've gathered all the fields needed, insert them into the config template text.
     config_text = grab_job_config_template()
     config_text = config_text.replace("[USERNAME]", username) \
@@ -191,6 +194,7 @@ def create_new_job_config(ivert_args: argparse.Namespace,
         .replace("[JOB_NAME]", job_name) \
         .replace("[JOB_UPLOAD_PREFIX]", upload_prefix) \
         .replace("[JOB_COMMAND]", command) \
+        .replace("[IVERT_VERSION]", ivert_version) \
         .replace("[LIST_OF_FILES]", files_text) \
         .replace("[PARAMS_STRING]", cmd_args_text)
 

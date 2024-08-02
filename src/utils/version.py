@@ -6,8 +6,12 @@ if vars(sys.modules[__name__])['__package__'] == 'ivert_utils':
     # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
     import ivert_utils.is_aws as is_aws
 else:
-    # If running as a script, import this way.
-    import is_aws
+    try:
+        # If running as a script, import this way.
+        import is_aws
+    except ModuleNotFoundError:
+        # If this script is imported from another module in the src/ directory, import this way.
+        import utils.is_aws as is_aws
 
 __version__ = None
 __minimum_client_version__ = None
