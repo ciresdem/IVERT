@@ -525,37 +525,36 @@ class IvertJob:
             # 3. Parse the job configuration file.
             self.parse_job_config_ini()
 
-            # 4. Check if the job is using a recent-enough version of the client. If not, error out and be done.
-            is_valid_version = self.check_ivert_client_version()
-            # If it's not a valid version, the check_ivert_client_version() method will have already logged the error
-            # to the logfile and marked the job as "error". Just exit at this point.
-            if not is_valid_version:
-                return
-
-            # 5. Create a new job entry in the jobs database.
+            # 4. Create a new job entry in the jobs database.
             # -- also creates an ivert_files entry for the logfile, and uploads the new database version.
             self.create_new_job_entry()
 
-            # 6. Send SNS notification that the job has started.
-            #  --- Insert SNS record in database (upload to s3)
-            self.push_sns_notification(start_or_finish="start", upload_to_s3=False)
+            # 5. Check if the job is using a recent-enough version of the client. If not, error out and be done.
+            is_valid_version = self.check_ivert_client_version()
+            # If it's not a valid version, the check_ivert_client_version() method will have already logged the error
+            # to the logfile and marked the job as "error". Just exit at this point.
 
-            # 7. Download all other job files.
-            # If it's specifically an "import" job, we don't need to download each file, just create records for them.
-            # By default, update the database entries for each file, and re-upload to the s3 bucket once every 20 files.
-            self.download_job_files(only_create_database_entries=(self.command == "import"),
-                                    upload_to_s3=20)
+            if is_valid_version:
+                # 6. Send SNS notification that the job has started.
+                #  --- Insert SNS record in database (upload to s3)
+                self.push_sns_notification(start_or_finish="start", upload_to_s3=False)
 
-            # 8. Run the job!
-            # -- Figure out how to monitor the status of the job as it goes along.
-            self.update_job_status("running", upload_to_s3=True)
+                # 7. Download all other job files.
+                # If it's specifically an "import" job, we don't need to download each file, just create records for them.
+                # By default, update the database entries for each file, and re-upload to the s3 bucket once every 20 files.
+                self.download_job_files(only_create_database_entries=(self.command == "import"),
+                                        upload_to_s3=20)
 
-            # See execute_job() for the logic of parsing out the work to individual jobs.
-            self.execute_job()
+                # 8. Run the job!
+                # -- Figure out how to monitor the status of the job as it goes along.
+                self.update_job_status("running", upload_to_s3=True)
 
-            # 9. Upload export files to the S3 bucket (if any). Enter them into the database.
-            # Exclude the logfile because we may still be writing to it if any of these files have errors.
-            self.upload_export_files(exclude_logfile=True, upload_to_s3=False)
+                # See execute_job() for the logic of parsing out the work to individual jobs.
+                self.execute_job()
+
+                # 9. Upload export files to the S3 bucket (if any). Enter them into the database.
+                # Exclude the logfile because we may still be writing to it if any of these files have errors.
+                self.upload_export_files(exclude_logfile=True, upload_to_s3=False)
 
             # 10. Upload the logfile (if exists) and enter in database. (Upload to s3)
             self.export_logfile_if_exists(upload_db_to_s3=False)
