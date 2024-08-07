@@ -19,14 +19,14 @@ if vars(sys.modules[__name__])['__package__'] == 'ivert':
     import ivert_utils.version_check_client as version_check_client
 else:
     # If running as a script, import this way.
-    import new_user_setup
+    import client_user_setup
     import client_subscriptions
     import client_job_download
     import client_job_import
     import client_job_status
     import client_job_validate
     import client_job_update
-    import client_test_job
+    import client_job_test
     import client_upgrade
     import utils.query_yes_no as yes_no
     import utils.version as version
@@ -45,7 +45,7 @@ def define_and_parse_args(return_parser: bool = False):
     # Create the "validate" subparser
     ###############################################################
     validate_help_msg = "Validate DEMs (IVERT's core functionality)."
-    # NOTE: The script client_test_job.py creates an identical copy of this argument list to send off a test job.
+    # NOTE: The script client_job_test.py creates an identical copy of this argument list to send off a test job.
     # If any of these options are changed, go change the equivalent lines in that script as well to match the same
     # field names.
     parser_validate = subparsers.add_parser("validate", help=validate_help_msg, description=validate_help_msg)
@@ -111,9 +111,9 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     setup_help_msg = ("Install user-settings, AWS profiles, and .ivert directories on the local machine. "
                       "Run once before using IVERT on a new machine.")
-    # Use the parent parser from new_user_setup.py to define the arguments for the subparser
+    # Use the parent parser from client_user_setup.py to define the arguments for the subparser
     subparsers.add_parser("setup",
-                          parents=[new_user_setup.define_and_parse_args(just_return_parser=True)],
+                          parents=[client_user_setup.define_and_parse_args(just_return_parser=True)],
                           add_help=False,
                           help=setup_help_msg, description=setup_help_msg)
 
@@ -322,7 +322,7 @@ def ivert_client_cli():
 
     # Test the IVERT client and server in an end-to-end "test run."
     elif args.command == "test":
-        client_test_job.run_test_command(args)
+        client_job_test.run_test_command(args)
 
     # Check on the status of a running job
     elif args.command == "status":
