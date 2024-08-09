@@ -6,10 +6,10 @@ import sys
 if vars(sys.modules[__name__])['__package__'] == 'ivert':
     # When this is built a setup.py package, it names the modules 'ivert' and 'ivert_utils'. This reflects that.
     # See setup.py for details about that.
-    import ivert.new_user_setup as new_user_setup
+    import ivert.client_user_setup as new_user_setup
     import ivert.client_subscriptions as client_subscriptions
     import ivert.client_job_download as client_job_download
-    import ivert.client_test_job as client_test_job
+    import ivert.client_job_test as client_job_test
     import ivert.client_job_status as client_job_status
     import ivert.client_job_validate as client_job_validate
     import ivert.client_job_import as client_job_import
