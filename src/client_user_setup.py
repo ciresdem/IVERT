@@ -50,25 +50,26 @@ def setup_new_user(args: argparse.Namespace) -> None:
     # Update the IVERT config file, since the credentials fields should now be populated. They weren't before this.
     global ivert_config
     ivert_config = configfile.config()
-    # Gotta do this in the client upload module too, or else these variables won't be there.
+    # Gotta do this in the client_job_upload module too, or else these new variables won't be there either.
+    # This is a bit of a hack but it works.
     client_job_upload.reset_ivert_config()
     # And the s3 module.
 
     if args.subscribe_to_sns:
-        print("\nSending a job to the IVERT server to subscribe you to IVERT SNS notifications:")
+        print("\nSending a job to the IVERT server to subscribe you to IVERT SNS notifications.")
         # Send new_user config (as an "update" command) to the IVERT cloud tool. This will subscribe the user to the IVERT SNS topic.
         subscribe_user_to_sns_notifications(args)
 
     print("\nIVERT user setup complete!")
     if args.subscribe_to_sns:
-        print(f"\nYou sould receive an email from the IVERT server to {bcolors.BOLD}{args.email}{bcolors.ENDC} confirming your subscription to the IVERT SNS notifications.")
+        print(f"\nYou sould soon receive an email from the IVERT server to {bcolors.BOLD}{args.email}{bcolors.ENDC} confirming your subscription to the IVERT SNS notifications.")
         print("\nAfter receiveing that email, you may ", end="")
     else:
         print("\nYou may now ", end="")
 
-    print(f"run\n\n> {bcolors.BOLD}{bcolors.OKBLUE}ivert test{bcolors.ENDC}{bcolors.ENDC}\n\n...to perform a dry run, end-to-end test the IVERT system.\n")
+    print(f"run\n> {bcolors.BOLD}{bcolors.OKBLUE}ivert test{bcolors.ENDC}{bcolors.ENDC}\n...to perform a dry run end-to-end test the IVERT system.\n")
     print(f"At any time, run\n> {bcolors.BOLD}{bcolors.OKBLUE}ivert --help{bcolors.ENDC}{bcolors.ENDC}\n...to see a complete list of other IVERT commands. "
-          f"Happy validations!\n")
+          f"Happy Validations!\n")
 
 
 def read_ivert_s3_credentials(creds_file: str = "", error_if_not_found: bool = True):
@@ -382,7 +383,7 @@ def update_local_aws_config(aws_config_file: str,
     with open(aws_config_file, "r") as f:
         config_text = f.read()
 
-    config_text_old = config_text
+    # config_text_old = config_text
 
     # Find eac profile if it already exists. If so, replace it. If not, add it.
     for profile_id_string, bname in [(args.ivert_ingest_profile, args.untrusted_bucket_name),

@@ -280,6 +280,10 @@ def ivert_client_cli():
     # Upgrade the client software.
     if args.command == "upgrade":
         client_upgrade.upgrade()
+
+    # Set up the IVERT client on a new system
+    elif args.command == "setup":
+        client_user_setup.setup_new_user(args)
         sys.exit(0)
 
     # For all other commands, make sure the IVERT client is up-to-date enough to be compatible with the server.
@@ -290,10 +294,6 @@ def ivert_client_cli():
             client_upgrade.upgrade()
             print("You may now re-run your command.")
         sys.exit(0)
-
-    # Set up the IVERT client on a new system
-    if args.command == "setup":
-        client_user_setup.setup_new_user(args)
 
     # Subscribe to IVERT email notifications
     elif args.command == "subscribe":
