@@ -530,7 +530,10 @@ class ICESat2_Database:
                 if dem_epsg is not None and dem_epsg != 4326:
                     dem_proj_wkt = gdal.Open(dem_fname, gdal.GA_ReadOnly).GetProjection()
 
-                    assert dem_proj_wkt is not None and len(dem_proj_wkt) > 0
+    q               try:
+                        assert dem_proj_wkt is not None and len(dem_proj_wkt) > 0
+                    except AssertionError:
+                        print(dem_fname, dem_epsg, dem_proj_wkt)
 
                     icesat2_srs = osr.SpatialReference()
                     icesat2_srs.SetWellKnownGeogCS("EPSG:4326")
