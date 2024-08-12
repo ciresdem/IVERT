@@ -528,7 +528,8 @@ class ICESat2_Database:
             # If the DEM is not in WGS84, project the points into the DEM coordinate system.
             if tile_df is not None and dem_fname is not None:
                 if dem_epsg is not None and dem_epsg != 4326:
-                    dem_proj_wkt = dem_ds.GetProjection()
+                    dem_proj_wkt = gdal.Open(dem_fname, gdal.GA_ReadOnly).GetProjection()
+
                     assert dem_proj_wkt is not None and len(dem_proj_wkt) > 0
 
                     icesat2_srs = osr.SpatialReference()
