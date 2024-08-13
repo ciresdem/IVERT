@@ -73,8 +73,12 @@ def are_any_ivert_jobs_running() -> bool:
         bool: True if any IVERT jobs are still running, False otherwise."""
     jobs_db = jobs_database.JobsDatabaseServer()
 
-    running_jobs = [job for job in jobs_db.list_unfinished_jobs(return_rows=True)
-                    if is_pid_an_active_ivert_job(job['job_pid'])]
+    try:
+        running_jobs = [job for job in jobs_db.list_unfinished_jobs(return_rows=True)
+                        if is_pid_an_active_ivert_job(job['job_pid'])]
+    except FileNotFoundError:
+        return False
+
     if len(running_jobs) > 0:
         return True
     else:
