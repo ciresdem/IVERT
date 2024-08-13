@@ -138,7 +138,10 @@ def truncate_jobs_database(date_cutoff_str: str = "7 days ago",
         date_cutoff_str (str, optional): The date cutoff to use. Defaults to "7 days ago".
         verbose (bool, optional): Whether to print verbose output. Defaults to True.
     """
-    jobs_database.JobsDatabaseServer().archive_database(date_cutoff_str, verbose=verbose)
+    try:
+        jobs_database.JobsDatabaseServer().archive_database(date_cutoff_str, verbose=verbose)
+    except FileNotFoundError:
+        pass
 
 
 def clean_export_dirs(ivert_config: typing.Union[utils.configfile.config, None] = None,
