@@ -1088,6 +1088,7 @@ def validate_dem_parallel(dem_name: str,
                                                                  build_tiles_if_nonexistent=False,
                                                                  good_photons_only=True,
                                                                  dem_fname=converted_dem_name,
+                                                                 dem_fname_orig_backup=dem_name,
                                                                  dem_epsg=dem_epsg,
                                                                  verbose=verbose)
 

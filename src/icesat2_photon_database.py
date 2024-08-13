@@ -465,6 +465,7 @@ class ICESat2_Database:
                              build_tiles_if_nonexistent=False,
                              good_photons_only=True,
                              dem_fname=None,
+                             dem_fname_orig_backup=None,
                              dem_epsg=None,
                              verbose=True):
         """Given a polygon or bounding box, return the combined database of all
@@ -528,12 +529,17 @@ class ICESat2_Database:
             # If the DEM is not in WGS84, project the points into the DEM coordinate system.
             if tile_df is not None and dem_fname is not None:
                 if dem_epsg is not None and dem_epsg != 4326:
-                    dem_proj_wkt = gdal.Open(dem_fname, gdal.GA_ReadOnly).GetProjection()
+                    dem_proj_wkt = dem_ds.GetProjection()
 
-                    try:
-                        assert dem_proj_wkt is not None and len(dem_proj_wkt) > 0
-                    except AssertionError:
-                        print(dem_fname, dem_epsg, dem_proj_wkt)
+                    if dem_proj_wkt is None or len(dem_proj_wkt) == 0 and dem_fname_orig_backup is not None:
+                        # If the primary file fails (maybe something got messed up in the vertical transformation),
+                        # try to read the projection from the original DEM file.
+
+                        dem_ds = gdal.Open(dem_fname_orig_backup, gdal.GA_ReadOnly)
+                        dem_proj_wkt = dem_ds.GetProjection()
+                        dem_ds = None
+
+                    assert dem_proj_wkt is not None and len(dem_proj_wkt) > 0
 
                     icesat2_srs = osr.SpatialReference()
                     icesat2_srs.SetWellKnownGeogCS("EPSG:4326")
