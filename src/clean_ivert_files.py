@@ -22,14 +22,17 @@ def clean_cudem_cache(ivert_config: typing.Union[utils.configfile.config, None] 
 
     # First check to see if any active IVERT jobs are running. If so, we don't want to clean out the cache.
     if only_if_no_running_jobs:
-        jobs_db = jobs_database.JobsDatabaseServer()
-
-        running_jobs = [job for job in jobs_db.list_unfinished_jobs(return_rows=True) if psutil.pid_exists(job['job_pid'])]
-        for running_job in running_jobs:
-            if is_pid_an_active_ivert_job(running_job['job_pid']):
-                if verbose:
-                    print(f"Skipping .cudem_cache cleanup for job {running_job['job_id']}, as it is still running.")
-                return
+        try:
+            jobs_db = jobs_database.JobsDatabaseServer()
+            # Check if any of the jobs are still running.
+            running_jobs = [job for job in jobs_db.list_unfinished_jobs(return_rows=True) if psutil.pid_exists(job['job_pid'])]
+            for running_job in running_jobs:
+                if is_pid_an_active_ivert_job(running_job['job_pid']):
+                    if verbose:
+                        print(f"Skipping .cudem_cache cleanup for job {running_job['job_id']}, as it is still running.")
+                    return
+        except FileNotFoundError:
+            pass
 
     cache_dir = os.path.join(ivert_config.cudem_cache_directory, ".cudem_cache")
     shutil.rmtree(cache_dir, ignore_errors=True)
@@ -252,9 +255,9 @@ if __name__ == "__main__":
             clean_cudem_cache(ivert_config=iconfig)
             clean_old_jobs_dirs(ivert_config=iconfig)
             fix_database_of_orphaned_jobs()
-            truncate_jobs_database(date_cutoff_str=args.when)
             clean_export_dirs(ivert_config=iconfig, date_cutoff_str=args.when)
             delete_local_photon_tiles(ivert_config=iconfig)
+            truncate_jobs_database(date_cutoff_str=args.when)
 
         elif args.what == "cache":
             clean_cudem_cache(ivert_config=iconfig)
@@ -279,8 +282,8 @@ if __name__ == "__main__":
     else:
         if args.what == "all":
             clean_old_jobs_dirs(ivert_config=iconfig)
-            delete_local_jobs_database(ivert_config=iconfig)
             clean_untrusted_bucket(ivert_config=iconfig, date_cutoff_str=args.when)
+            delete_local_jobs_database(ivert_config=iconfig)
 
         elif args.what == "jobs":
             clean_old_jobs_dirs(ivert_config=iconfig)
