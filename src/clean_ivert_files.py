@@ -85,15 +85,18 @@ def fix_database_of_orphaned_jobs():
     """Fix the job status of any orphaned jobs that are no longer running on the server."""
     jobs_db = jobs_database.JobsDatabaseServer()
 
-    open_jobs = [job for job in jobs_db.list_unfinished_jobs(return_rows=True)]
+    try:
+        open_jobs = [job for job in jobs_db.list_unfinished_jobs(return_rows=True)]
 
-    for job in open_jobs:
-        # For any jobs that are still 'unfinished' on the server but don't map to any active IVERT processes,
-        # mark them as 'error'
-        if (not psutil.pid_exists(job['job_pid'])) or (not is_pid_an_active_ivert_job(job['job_pid'])):
-            jobs_db.update_job_status(job['username'], job['job_id'], 'error', upload_to_s3=False)
+        for job in open_jobs:
+            # For any jobs that are still 'unfinished' on the server but don't map to any active IVERT processes,
+            # mark them as 'error'
+            if (not psutil.pid_exists(job['job_pid'])) or (not is_pid_an_active_ivert_job(job['job_pid'])):
+                jobs_db.update_job_status(job['username'], job['job_id'], 'error', upload_to_s3=False)
 
-    jobs_db.upload_to_s3(only_if_newer=True)
+        jobs_db.upload_to_s3(only_if_newer=True)
+    except FileNotFoundError:
+        pass
 
 
 def clean_old_jobs_dirs(ivert_config: typing.Union[utils.configfile.config, None] = None,
