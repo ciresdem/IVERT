@@ -34,21 +34,24 @@ class PersistentIvertServer:
                     iv_args = ["python3", "ivert_server_job_manager.py"]
                     if self.verbose:
                         iv_args.append("-v")
+                        print(" ".join(iv_args))
 
-                    print(" ".join(iv_args))
                     self.subproc = subprocess.Popen(iv_args, cwd=os.path.dirname(__file__))
                     self.sub_pid = self.subproc.pid
 
             # Handle if the process goes down.
             if (isinstance(self.subproc, psutil.Process) and self.subproc.is_running()) \
                     or (isinstance(self.subproc, subprocess.Popen) and self.subproc.poll() is None):
+
                 if self.sub_pid != self.subproc.pid:
                     if self.verbose:
                         print(f"Subprocess {self.sub_pid} has apparently restarted. Reassigning sub_pid.")
+
                     self.sub_pid = self.subproc.pid
 
                 time.sleep(5)
                 continue
+
             else:
                 if self.verbose:
                     print(f"Subprocess {self.sub_pid} terminated. Restarting ivert_server_job_manager.py.")
