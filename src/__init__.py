@@ -1,6 +1,6 @@
 import os
 # in the codes files.
-VFILE1 = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "VERSION"))
+VFILE1 = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "VERSION"))
 # In the package files, after installing.
 VFILE2 = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "ivert_data", "VERSION"))
 
