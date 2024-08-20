@@ -15,9 +15,9 @@ def get_countries():
 
 
 @app.get("/countries/<int:id>")
-def get_country(id: int):
+def get_country_by_id(id: int):
     return jsonify(countries[id - 1])
 
 @app.get("/countries/<string:name>")
-def get_country(name: str):
+def get_country_by_name(name: str):
     return jsonify([country for country in countries if country["name"] == name])
