@@ -545,10 +545,10 @@ class IvertJob:
                 self.download_job_files(only_create_database_entries=(self.command == "import"),
                                         upload_to_s3=20)
 
-                # 8. Run the job!
                 # -- Figure out how to monitor the status of the job as it goes along.
                 self.update_job_status("running", upload_to_s3=True)
 
+                # 8. Run the job!
                 # See execute_job() for the logic of parsing out the work to individual jobs.
                 self.execute_job()
 
