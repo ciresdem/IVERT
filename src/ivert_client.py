@@ -286,6 +286,7 @@ def ivert_client_cli():
     # Upgrade the client software.
     if args.command == "upgrade":
         client_upgrade.upgrade()
+        sys.exit(0)
 
     # Set up the IVERT client on a new system
     elif args.command == "setup":
