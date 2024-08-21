@@ -528,7 +528,12 @@ class ICESat2_Database:
 
             # If the DEM is not in WGS84, project the points into the DEM coordinate system.
             if tile_df is not None and dem_fname is not None:
-                if dem_epsg is not None and dem_epsg != 4326:
+
+                if len(tile_df) == 0:
+                    tile_df["dem_x"] = 0.0
+                    tile_df["dem_y"] = 0.0
+
+                elif dem_epsg is not None and dem_epsg != 4326:
                     dem_proj_wkt = dem_ds.GetProjection()
 
                     if dem_proj_wkt is None or len(dem_proj_wkt) == 0 and dem_fname_orig_backup is not None:
@@ -552,8 +557,10 @@ class ICESat2_Database:
                     latlon_array = numpy.array([lon_x, lat_y]).transpose()
 
                     points = numpy.array(is2_to_dem.TransformPoints(latlon_array))
+
                     tile_df["dem_x"] = points[:, 0]
                     tile_df["dem_y"] = points[:, 1]
+
                 else:
                     tile_df["dem_x"] = tile_df["longitude"]
                     tile_df["dem_y"] = tile_df["latitude"]
