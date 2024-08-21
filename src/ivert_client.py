@@ -277,6 +277,8 @@ def ivert_client_cli():
     """Run the IVERT client CLI."""
     args = define_and_parse_args()
 
+    print(args.command)
+
     # Upgrade the client software.
     if args.command == "upgrade":
         client_upgrade.upgrade()
