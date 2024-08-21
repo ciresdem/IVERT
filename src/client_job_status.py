@@ -37,6 +37,8 @@ def find_latest_job_submitted(username,
     if jobs_db is None:
         jobs_db = jobs_database.JobsDatabaseClient()
 
+    ##########################################################################################################
+    # TODO: Use the REST API rather than the jobs database for this.
     jobs_db.download_from_s3(only_if_newer=True)
     # Read the table of all the jobs submitted by this user.
     df = jobs_db.read_table_as_pandas_df("jobs", username=None if username == "" else username)
@@ -50,11 +52,13 @@ def find_latest_job_submitted(username,
 
     username_to_use = username if username else "__nada" # __nada will be less than any actual username.
     job_name_from_db = f"{username_to_use}_{job_id_from_db}"
+    ##########################################################################################################
 
     job_name_from_folders = get_latest_job_name_from_local_dirs()
 
     # Return whichever job name is greater.
     return max(job_name_from_db, job_name_from_folders)
+
 
 def get_latest_job_name_from_local_dirs():
     # Now look in the local jobs folder to see if there's a more recent job there that was submitted, but isn't yet in

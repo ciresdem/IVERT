@@ -80,6 +80,8 @@ def create_new_job_params(username: str = None) -> tuple[str, int]:
     if last_job_name is None:
         last_job_name = "nada_000000000000"
 
+    #############################################################################################3
+    # TODO: Get the new job number from the REST API, not the database.
     last_job_number = int(last_job_name[-12:])
 
     last_job_nubmer_by_anyone = db.fetch_latest_job_number_from_s3_metadata()
@@ -103,6 +105,7 @@ def create_new_job_params(username: str = None) -> tuple[str, int]:
         new_job_number = last_job_number + 1
     else:
         new_job_number = int(datetime.date.today().strftime("%Y%m%d")) * 10000
+    ##################################################################################################
 
     return username, new_job_number
 

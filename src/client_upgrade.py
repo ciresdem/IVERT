@@ -13,9 +13,8 @@ else:
 def upgrade():
     """Upgrade the IVERT client."""
     ivert_config = configfile.config()
-    if ivert_config.is_aws:
-        raise Exception("Client upgrade not supported on the AWS server.")
 
+    # Run the upgrade, using the pip command specified in the config file.
     args = shlex.split(ivert_config.ivert_pip_upgrade_command)
     subprocess.run(args)
 
