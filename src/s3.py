@@ -782,7 +782,7 @@ def add_subparser_bucket_param(subparser):
                            type=str)
 
 
-def define_and_parse_args_v2() -> argparse.Namespace:
+def define_and_parse_args_v2(just_return_parser: bool = False) -> argparse.Namespace:
     """Parse command-line arguments using sub-parsers in python."""
 
     #####################################################
@@ -937,16 +937,25 @@ def define_and_parse_args_v2() -> argparse.Namespace:
 
     ##############################################################
     # Parse args and return namespace
-    return parser.parse_args()
+    if just_return_parser:
+        return parser
+    else:
+        return parser.parse_args()
 
 
 def s3_cli():
     args = define_and_parse_args_v2()
 
+    # If no command was given, just print help.
+    if args.command is None:
+        parser = define_and_parse_args_v2(just_return_parser=True)
+        parser.print_help()
+        sys.exit(0)
+
     #####################################################
     #################### 'ls' parser ####################
     #####################################################
-    if args.command == "ls":
+    elif args.command == "ls":
         # TODO: ADD SUPPORT FOR --meta AND/OR --md5 ARGS
         # If we supply just a . or /, make the key empty.
         if args.key in ('.', '/'):
