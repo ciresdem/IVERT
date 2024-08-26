@@ -40,7 +40,9 @@ def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFra
         raise ValueError("total_df must have a 'filename' column.")
 
     unique_files = total_df['filename'].unique().tolist()
-    N = len(unique_files) + len(list_of_empty_files)
+    all_filenames = list(unique_files) + list(list_of_empty_files)
+    N = len(all_filenames)
+
     means = numpy.empty((N,), dtype=float)
     stds = numpy.empty((N,), dtype=float)
     rmses = numpy.empty((N,), dtype=float)
@@ -49,7 +51,8 @@ def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFra
     canopy_mean = numpy.empty((N,), dtype=float)
     canopy_mean_gt0 = numpy.empty((N,), dtype=float)
 
-    for i, fname in enumerate(list(unique_files) + list(list_of_empty_files)):
+    # Fill in the values
+    for i, fname in enumerate(all_filenames):
         if fname in unique_files:
             temp_df = total_df[total_df['filename'] == fname]
             means[i] = temp_df['diff_mean'].mean()
@@ -59,7 +62,9 @@ def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFra
             photons_per_cell[i] = temp_df['numphotons_intd'].mean()
             canopy_mean[i] = temp_df['canopy_fraction'].mean()
             canopy_mean_gt0[i] = temp_df[temp_df['canopy_fraction'] > 0]['canopy_fraction'].mean()
+
         else:
+            # For files with no results, just list n/a for this.
             assert fname in list_of_empty_files
             means[i] = numpy.nan
             stds[i] = numpy.nan
@@ -69,7 +74,7 @@ def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFra
             canopy_mean[i] = numpy.nan
             canopy_mean_gt0[i] = numpy.nan
 
-    output_df = pandas.DataFrame(data={'filename': unique_files,
+    output_df = pandas.DataFrame(data={'filename': all_filenames,
                                        "rmse": rmses,
                                        "mean_bias": means,
                                        "stddev_from_mean": stds,
