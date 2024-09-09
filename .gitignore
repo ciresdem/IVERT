@@ -162,5 +162,5 @@ cython_debug/
 !data/icesat2/
 !data/empty_tile.tif
 /scratch_data/*
-/src/tests
-/src/tests_old
+/src/tests/
+/src/tests_old/
