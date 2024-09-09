@@ -162,6 +162,7 @@ data/*
 !data/icesat2/
 !data/empty_tile.tif
 scratch_data/*
+src/tests
 src/tests_old
 # A convention I used for old files that I am (at least temporarily) excluding.
 /OLD_*
