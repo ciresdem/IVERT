@@ -208,6 +208,13 @@ class S3Manager:
 
             if e.response["Error"]["Code"] == "404":
                 return False
+            elif e.response["Error"]["Code"] == "403" and \
+                    e.response["Error"]["Message"].lower() in ("access denied", "accessdenied", "forbidden"):
+                warnings.warn(f"Warning: Access denied to s3://{bucket_name}/{s3_key}. Response: {e.response}"
+                              "\nAre your credentials up to date? If not, try running 'ivert setup' again with the latest credentials file."
+                              "\nIf that doesn't work, talk to your IVERT administrator for help.")
+                return False
+
             else:
                 warnings.warn(f"Warning: Unknown error fetching status of s3://{bucket_name}/{s3_key}. Response: {e.response}")
                 return False
@@ -216,29 +223,43 @@ class S3Manager:
         """Return True if 'key' points to an existing directory (prefix) in the bucket. NOT a file. False otherwise."""
         bucket_type = self.convert_btype(bucket_type)
 
-        bucket_obj = self.get_resource_bucket(bucket_type=bucket_type)
+        try:
+            bucket_obj = self.get_resource_bucket(bucket_type=bucket_type)
 
-        if bucket_obj and s3_key in (".", "", "/"):
-            return True
-
-        # Filter the list of objects by the prefix. If the prefix doesn't exist, this will be empty.
-        objects = bucket_obj.objects.filter(Prefix=s3_key)
-
-        # Loop through the objects returned.
-        for i, obj in enumerate(objects):
-            # If it's an exact match with the key, then it's a file (not a directory). Return False.
-            if obj.key == s3_key:
-                return False
-
-            # Otherwise, the key should be the start of the object.
-            assert obj.key.find(s3_key) == 0
-
-            # If we match with an object and the character immediately after the prefix is a '/', then it's a directory.
-            # If some other character is there, then we're not sure yet, move along to the next object.
-            if s3_key[-1] == "/" or obj.key[len(s3_key)] == "/":
+            if bucket_obj and s3_key in (".", "", "/"):
                 return True
 
-        return False
+            # Filter the list of objects by the prefix. If the prefix doesn't exist, this will be empty.
+            objects = bucket_obj.objects.filter(Prefix=s3_key)
+
+            # Loop through the objects returned.
+            for i, obj in enumerate(objects):
+                # If it's an exact match with the key, then it's a file (not a directory). Return False.
+                if obj.key == s3_key:
+                    return False
+
+                # Otherwise, the key should be the start of the object.
+                assert obj.key.find(s3_key) == 0
+
+                # If we match with an object and the character immediately after the prefix is a '/', then it's a directory.
+                # If some other character is there, then we're not sure yet, move along to the next object.
+                if s3_key[-1] == "/" or obj.key[len(s3_key)] == "/":
+                    return True
+
+            return False
+
+        except botocore.exceptions.ClientError as e:
+            if e.response["Error"]["Code"] == "404":
+                return False
+            elif e.response["Error"]["Code"] == "403" and \
+                     e.response["Error"]["Message"].lower() in ("access denied", "accessdenied", "forbidden"):
+                warnings.warn(f"Warning: Access denied to s3://{bucket_name}/{s3_key}. Response: {e.response}"
+                              "\nAre your credentials up to date? If not, try running 'ivert setup' again with the latest credentials file."
+                              "\nIf that doesn't work, talk to your IVERT administrator for help.")
+                return False
+            else:
+                warnings.warn(f"Warning: Unknown error fetching status of s3://{bucket_name}/{s3_key}. Response: {e.response}")
+                return False
 
     def download(self,
                  s3_key: str,
