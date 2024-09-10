@@ -144,7 +144,8 @@ class IvertJobManager:
     def sync_database_with_s3(self) -> None:
         """Sync the jobs database with the S3 bucket.
 
-        This is called only once when start() is called, to make sure the "best" version of the database is being used."""
+        This is called only once when start() is called, to make sure the "best" version of the database is
+        being used."""
         # Check to see if the jobs database exists, locally and/or in the S3 bucket.
         # If not, create it.
         db = self.jobs_db
@@ -197,7 +198,8 @@ class IvertJobManager:
 
         Args:
             new_only (bool, optional): If False, don't filter, and just return all the files.
-            skip_older_than_cutoff (bool, optional): If True, don't return any files that are older than the "jobs_since" cutoff in the database metadata.
+            skip_older_than_cutoff (bool, optional): If True, don't return any files that are older than the
+            'jobs_since' cutoff in the database metadata.
             """
         # 1. Get a list of all files in the trusted bucket.
         # 2. Filter out any files already in the database.
@@ -696,19 +698,19 @@ class IvertJob:
     def is_valid_job_config(job_config_obj: utils.configfile.config) -> bool:
         """Validate to make sure the input configfile is correctly formatted and has all the necessary fields."""
         jco = job_config_obj
-        if (not hasattr(jco, "username")) or type(jco.username) is not str:
+        if (not hasattr(jco, "username")) or not isinstance(jco.username, str):
             return False
-        if (not hasattr(jco, "job_id")) or type(jco.job_id) is not int:
+        if (not hasattr(jco, "job_id")) or not isinstance(jco.job_id, int):
             return False
-        if (not hasattr(jco, "job_name")) or type(jco.job_name) is not str:
+        if (not hasattr(jco, "job_name")) or not isinstance(jco.job_name, str):
             return False
-        if (not hasattr(jco, "job_upload_prefix")) or type(jco.job_upload_prefix) is not str:
+        if (not hasattr(jco, "job_upload_prefix")) or not isinstance(jco.job_upload_prefix, str):
             return False
-        if (not hasattr(jco, "ivert_command")) or type(jco.ivert_command) is not str:
+        if (not hasattr(jco, "ivert_command")) or not isinstance(jco.ivert_command, str):
             return False
-        if (not hasattr(jco, "files")) or type(jco.files) is not list:
+        if (not hasattr(jco, "files")) or type(jco.files) not in (list, tuple):
             return False
-        if (not hasattr(jco, "cmd_args")) or type(jco.cmd_args) is not dict:
+        if (not hasattr(jco, "cmd_args")) or not isinstance(jco.cmd_args, dict):
             return False
 
         return True
@@ -1014,8 +1016,8 @@ class IvertJob:
             command_str = command_str + " --files"
         fnames_str = ""
         for fname in self.job_config_object.files:
-            fnames_str = fnames_str + " " + (f'"{fname}"' \
-                                             if (self.contains_whitespace(fname) or (len(fname) == 0)) \
+            fnames_str = fnames_str + " " + (f'"{fname}"'
+                                             if (self.contains_whitespace(fname) or (len(fname) == 0))
                                              else fname)
 
         if len(fnames_str) > max_filenames_length_chars:
@@ -1292,12 +1294,12 @@ class IvertJob:
         time_started = time.time()
         bytes_copied = 0
 
-        if len(files_to_transfer) > 0:
+        if files_to_transfer:
             self.write_to_logfile(
                 f"Importing {len(files_to_transfer)} files to "
                 f"s3://{self.s3m.get_bucketname(bucket_type='database')}/{dest_prefix}.")
 
-        while len(files_to_transfer) > 0 and ((time.time() - time_started) < self.download_timeout_s):
+        while files_to_transfer and ((time.time() - time_started) < self.download_timeout_s):
             for fname in files_to_transfer.copy():
 
                 fkey_src = str(os.path.join(os.path.dirname(self.job_config_s3_key), fname))
