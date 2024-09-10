@@ -529,7 +529,7 @@ class ICESat2_Database:
             # If the DEM is not in WGS84, project the points into the DEM coordinate system.
             if tile_df is not None and dem_fname is not None:
 
-                if len(tile_df) is None or len(tile_df) == 0:
+                if len(tile_df) == 0:
                     tile_df["dem_x"] = 0.0
                     tile_df["dem_y"] = 0.0
 
