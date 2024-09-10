@@ -1454,7 +1454,6 @@ if __name__ == "__main__":
         old_vnum = database.fetch_latest_db_vnum_from_database()
         database.delete_database()
         database.create_new_database(only_if_not_exists_in_s3=True)
-        new_vnum = JM.jobs_db.fetch_latest_db_vnum_from_database()
         JM.quietly_populate_database(new_vnum=old_vnum + 1)
         sys.exit(0)
 
