@@ -334,10 +334,20 @@ class IvertJobManager:
         # Any files that haven't been entered or given a proper status yet, do so.
         for fn in job_obj.job_config_object.files:
             if fn in job_files_df['filename'].values:
-                if job_files_df[job_files_df['filename'] == fn]['status'].values[0] not in ("processed", "uploaded", "error", "quarantined", "unknown"):
-                    self.jobs_db.update_file_status(job_obj.username, job_obj.job_id, fn, status="error", upload_to_s3=False)
+                if (job_files_df[job_files_df['filename'] == fn]['status'].values[0] not in
+                        ("processed", "uploaded", "error", "quarantined", "unknown")):
+                    self.jobs_db.update_file_status(job_obj.username,
+                                                    job_obj.job_id,
+                                                    fn,
+                                                    status="error",
+                                                    upload_to_s3=False)
             else:
-                self.jobs_db.create_new_file_record(fn, job_obj.job_id, job_obj.username, status="unknown", upload_to_s3=False)
+                self.jobs_db.create_new_file_record(fn,
+                                                    job_obj.job_id,
+                                                    job_obj.username,
+                                                    0,  # 0 == an imported file
+                                                    status="unknown",
+                                                    upload_to_s3=False)
 
         # If there aren't already 2 notifications in the database for this job (start and finish), push a notification
         # that the job has finished (even if unsuccessfully).
@@ -486,9 +496,9 @@ class IvertJob:
                                               .replace('[job_id]', self.job_id)
         self.export_prefix = self.ivert_config.s3_export_prefix_base + \
                              ("" if self.ivert_config.s3_export_prefix_base[-1] == "/" else "") + \
-                             (self.ivert_config.s3_ivert_job_subdirs_template \
-                                  .replace('[command]', self.command) \
-                                  .replace('[username]', self.username) \
+                             (self.ivert_config.s3_ivert_job_subdirs_template
+                                  .replace('[command]', self.command)
+                                  .replace('[username]', self.username)
                                   .replace('[job_id]', self.job_id))
 
         # The logfile to write output text and status messages.
@@ -888,9 +898,9 @@ class IvertJob:
         # For instance, "unsubscribe" commands send no notifications. "subscribe" only send a notification at
         # job completion.
         if (self.command == "update") and \
-           ("sub_command" in self.job_config_object.cmd_args) and \
-           ((self.job_config_object.cmd_args["sub_command"] == "unsubscribe") or \
-            (self.job_config_object.cmd_args["sub_command"] == "subscribe" and start_or_finish == "start")):
+                ("sub_command" in self.job_config_object.cmd_args) and \
+                ((self.job_config_object.cmd_args["sub_command"] == "unsubscribe") or
+                 ((self.job_config_object.cmd_args["sub_command"] == "subscribe") and (start_or_finish == "start"))):
             return
 
         start_or_finish = start_or_finish.strip().lower()
@@ -1366,7 +1376,10 @@ class IvertJob:
                         print("Error with file", fname)
 
                     # If we can't find the file and its status is not some type of error, mark it as 'error'.
-                    self.jobs_db.update_file_status(self.username, self.job_id, fname, "error", upload_to_s3=False)
+                    self.jobs_db.update_file_status(self.username,
+                                                    self.job_id, fname,
+                                                    "error",
+                                                    upload_to_s3=False)
 
                     self.write_to_logfile(f"{fname}: Error, did not import successfully.")
 
@@ -1384,9 +1397,11 @@ class IvertJob:
 
         # Get the total size of the files from this job. Write it to the logfile.
         self.write_to_logfile(
-            f"Imported {numfiles_processed} of {len(jco.files)} files totaling {sizeof.sizeof_fmt(bytes_copied)} to directory {dest_prefix}.")
+            f"Imported {numfiles_processed} of {len(jco.files)} files totaling {sizeof.sizeof_fmt(bytes_copied)} to "
+            f"directory {dest_prefix}.")
         if len(files_to_transfer) > 0:
-            self.write_to_logfile(f"{len(files_to_transfer)} files timed out after {self.download_timeout_s} seconds and were not imported.")
+            self.write_to_logfile(f"{len(files_to_transfer)} files timed out after {self.download_timeout_s} seconds "
+                                  "and were not imported.")
 
         return
 
@@ -1406,18 +1421,24 @@ def define_and_parse_arguments() -> argparse.Namespace:
     Returns:
         An argparse.Namespace object containing the parsed arguments.
     """
-    parser = argparse.ArgumentParser(description="Ivert Job Manager... for detecting, running, and managing IVERT jobs on an EC2 instance.")
+    parser = argparse.ArgumentParser(description="Ivert Job Manager... for detecting, running, and managing IVERT jobs "
+                                                 "on an EC2 instance.")
     parser.add_argument("-t", "--time_interval_s", type=int, dest="time_interval_s", default=5,
-                        help="The time interval in seconds between checking for new IVERT jobs. Default: 5 seconds (for CLI testing purposes).")
+                        help="The time interval in seconds between checking for new IVERT jobs. Default: 5 seconds "
+                             "(for CLI testing purposes).")
     parser.add_argument("-b", "--bucket", type=str, dest="bucket", default="trusted",
                         help="The S3 bucket type to search for incoming job files. Default: 'trusted'. "
                              "Run 'python s3.py list_buckets' to see all available bucket types.")
     parser.add_argument("-j", "--job_id", type=int, dest="job_id", default=-1,
-                        help="Run processing on a single job with this ID. For testing purposes only. Ignores the '-t' option.")
+                        help="Run processing on a single job with this ID. For testing purposes only. "
+                             "Ignores the '-t' option.")
     parser.add_argument("-p", "--populate", action="store_true", default=False,
-                        help="Quietly enter all new jobs into the database without running anything. Useful if we've reset the database.")
-    parser.add_argument("-r", "--reset_database", dest="reset_database", action="store_true", default=False,
-                        help="Reset and then quietly populate the jobs database. Useful to rebuild if we've reset the database schema.")
+                        help="Quietly enter all new jobs into the database without running anything. "
+                             "Useful if we've reset the database.")
+    parser.add_argument("-r", "--reset_database", dest="reset_database", action="store_true",
+                        default=False,
+                        help="Reset and then quietly populate the jobs database. Useful to rebuild if we've reset "
+                             "the database schema.")
     parser.add_argument("-v", "--verbose", dest="verbose", action="store_true", default=False,
                         help="Print verbose output while running.")
     parser.add_argument("-k", "--kill", dest="kill", action="store_true", default=False,
