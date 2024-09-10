@@ -67,4 +67,15 @@ if __name__ == "__main__":
     parser.add_argument("-v", "--verbose", dest="verbose", action="store_true", default=False,
                         help="Print verbose output")
     args = parser.parse_args()
-    PersistentIvertServer(verbose=args.verbose).run()
+
+    # If for whatever reason the .run() process breaks, just restart it and keep doing that forever.
+    while True:
+        try:
+            PersistentIvertServer(verbose=args.verbose).run()
+
+        except KeyboardInterrupt:
+            break
+
+        except:
+            pass
+
