@@ -49,13 +49,14 @@ class PersistentIvertServer:
 
                     self.sub_pid = self.subproc.pid
 
-                time.sleep(5)
-                continue
-
             else:
                 if self.verbose:
                     print(f"Subprocess {self.sub_pid} terminated. Restarting ivert_server_job_manager.py.")
                 self.subproc = None
+
+            # Wait 5 seconds before checking again.
+            time.sleep(5)
+            continue
 
     def __del__(self):
         if self.subproc is not None:
