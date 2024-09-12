@@ -15,12 +15,14 @@ try:
 except:
     raise ModuleNotFoundError("Module 'cudem/waffles.py' required. Update paths, or refer to https://github.com/ciresdem/cudem for installation instructions.")
 
+import argparse
 import os
 from osgeo import gdal
 import rich.console
 import subprocess
-import argparse
 # import pyproj
+import shutil
+import sys
 import time
 import typing
 
@@ -138,7 +140,10 @@ def create_coastline_mask(input_dem,
         kwargs["cwd"] = tempdir
 
     subprocess.run(waffle_args,
-                   check=True, **kwargs)
+                   check=True,
+                   stdout=sys.stdout,
+                   stderr=sys.stderr,
+                   **kwargs)
 
     if os.path.splitext(output_filepath_base)[1].lower() != ".tif":
         final_output_path = os.path.join(output_filepath_base + ".tif")
@@ -150,8 +155,7 @@ def create_coastline_mask(input_dem,
     # assert os.path.exists(final_output_path)
 
     if run_in_tempdir:
-        rm_cmd = ["rm", "-rf", tempdir]
-        subprocess.run(rm_cmd, stdout=None, stderr=None)
+        shutil.rmtree(tempdir, ignore_errors=True)
 
     if return_bounds_step_epsg:
         return final_output_path, bbox, step_xy, epsg

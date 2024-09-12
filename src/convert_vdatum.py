@@ -14,6 +14,7 @@ Created: August 18, 2021
 
 try:
     import cudem
+    import utils.loggerproc
 except ImportError as e:
     print("Error: cudem installation required to run the vertcal_datum_convert.py script from convert_vdatum.py.")
     raise e
@@ -134,7 +135,11 @@ def convert_vdatum(input_dem,
 
     if verbose:
         print("Running:", command)
-    retproc = subprocess.run(shlex.split(command), capture_output=not verbose, cwd=cwd)
+    retproc = subprocess.run(shlex.split(command),
+                             capture_output=not verbose,
+                             stdout=sys.stdout,
+                             stderr=sys.stderr,
+                             cwd=cwd)
 
     if verbose and retproc.returncode != 0:
         print("ERROR: Process\n'{0}'\n... returned status code {1}.".format(command, retproc.returncode))
@@ -148,33 +153,49 @@ def define_args():
     --list_vdatums
     input_DEM_or_directory
     """
-    parser = argparse.ArgumentParser(
-        description="A quick tool for converting vertical datums of a DEM or directory of DEMs to other vertical datums.")
+    parser = argparse.ArgumentParser(description="A quick tool for converting vertical datums of a DEM or directory "
+                                                 "of DEMs to other vertical datums.")
     parser.add_argument("-input_vdatum", "-i", type=str, default="itrf2014",
                         help="Input vertical datum.")
     parser.add_argument("-output_vdatum", "-o", type=str, default="itrf2014",
                         help="Output vertical datum.")
     parser.add_argument("-input_file_filter", "-filter", type=str, default=r".tif\Z",
-                        help=r"Regex string to search for in input file names. Ignore all other files. Default '.tif\Z', indicating .tif at the end of the string.")
+                        help=r"Regex string to search for in input file names. Ignore all other files. "
+                             r"Default '.tif\Z', indicating .tif at the end of the string.")
     parser.add_argument("-output_folder", "-dir", default=None,
-                        help="Directory in which to put the output files. Ignored if -output_filename is given. Default: Use same directory as input file directory.")
+                        help="Directory in which to put the output files. Ignored if -output_filename is given. "
+                             "Default: Use same directory as input file directory.")
     parser.add_argument("-output_subdir", "-sdir", default=None,
-                        help="Put the output file in a relative sub-directory of the input file. This will override any '-output_folder' argument.")
+                        help="Put the output file in a relative sub-directory of the input file. "
+                             "This will override any '-output_folder' argument.")
     parser.add_argument("-output_filename", "-of", default=None,
-                        help="Output filename. Only used if the input_DEM_or_directory is a single file (and not a directory). If a directory is listed, this option is ignored and the suffix specified in '-output_suffix' is appended onto each of the input file names.")
+                        help="Output filename. Only used if the input_DEM_or_directory is a single file "
+                             "(and not a directory). If a directory is listed, this option is ignored and "
+                             "the suffix specified in '-output_suffix' is appended onto each of the input file names.")
     parser.add_argument("-output_suffix", "-suffix", type=str, default="_out",
-                        help="Suffix to append to input file(s) to create output file name. Ignored if -output_filename is set. If set, files that already end in this suffix will be ignored as input files.")
+                        help="Suffix to append to input file(s) to create output file name. Ignored if "
+                             "-output_filename is set. If set, files that already end in this suffix will be "
+                             "ignored as input files.")
     parser.add_argument("--list_vdatums", "--list", action="store_true", default=False,
-                        help="Print a list of all supported vertical datums in the tool. Ignore all other arguments. If this argument is omitted, an argument must be provided for [input_DEM_or_directory].")
+                        help="Print a list of all supported vertical datums in the tool. Ignore all other arguments. "
+                             "If this argument is omitted, an argument must be provided for [input_DEM_or_directory].")
     parser.add_argument("--quiet", action="store_true", default=False,
-                        help="Execute quietly (unless an error occurs). Ignored if --help or --list_vdatums is selected.")
+                        help="Execute quietly (unless an error occurs). Ignored if --help or --list_vdatums "
+                             "is selected.")
     parser.add_argument("--recurse", "-r", default=False, action="store_true",
-                        help="Recurse through the directory to find matching files (default: only look in the local directory).")
+                        help="Recurse through the directory to find matching files (default: only look in the "
+                             "local directory).")
     parser.add_argument("--overwrite", "-ov", default=False, action="store_true",
                         help="Overwrite output files. Default: Skip generating output file if it already exists.")
-    parser.add_argument("--nprocs", default=1, help="Number of parallel processes to use. Default 1 (serial execution).")
+    parser.add_argument("--nprocs", default=1, help="Number of parallel processes to use. Default 1 "
+                                                    "(serial execution).")
     parser.add_argument("input_DEM_or_directory", nargs='?', default=None,
-                        help="Input DEM file or a directory of DEM files. If a single existing file is given, -input_file_filter is ignored and the file is read, and the converted file is written either to -output_filename location (if given), or is put in the -output_directory with the -output_suffix applied to the filename. If a directory is given, -input_file_filter is applied to identify input files, and the outputs are written to the -output_filter (if given) with the string denoted in ")
+                        help="Input DEM file or a directory of DEM files. If a single existing file is given, "
+                             "-input_file_filter is ignored and the file is read, and the converted file is "
+                             "written either to -output_filename location (if given), or is put in the "
+                             "-output_directory with the -output_suffix applied to the filename. If a directory "
+                             "is given, -input_file_filter is applied to identify input files, and the outputs are "
+                             "written to the -output_filter (if given).")
 
     return parser
 
