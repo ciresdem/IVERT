@@ -863,7 +863,7 @@ class IvertJob:
                     time_since_last_download = time.time()
 
                     if only_create_database_entries:
-                        file_status = "unknown"
+                        file_status = "unprocessed"
                     elif os.path.exists(local_fname):
                         file_status = "downloaded"
                     else:

@@ -91,6 +91,11 @@ class Logger:
             self.terminal_stdout.flush()
         self.log.flush()
 
+    @staticmethod
+    def isatty():
+        """Return True if the log is a terminal."""
+        return False
+
     def write(self, message):
         """Write a message to both the terminal (if selected) and the log.
 

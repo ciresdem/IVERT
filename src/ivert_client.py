@@ -139,6 +139,9 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     test_help_msg = "Test the end-to-end functionalty of IVERT with an empty test job."
     parser_test = subparsers.add_parser("test", help=test_help_msg, description=test_help_msg)
+    parser_test.add_argument("-sns", "--sns_notifications", dest="sns_notifications", type=yes_no.interpret_yes_no,
+                             default=True,
+                             help="Whether to send SNS notifications. Must be followed by 'True', 'False'. Default 'True'")
     parser_test.add_argument("-w", "--wait", dest="wait", default=False, action="store_true",
                              help="Wait to exit until the results are finished and downloaded. If False,"
                                   " just upload the data and exit. You can run 'ivert_client.py check <job_id>' to check the status"
