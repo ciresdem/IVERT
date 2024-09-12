@@ -1418,7 +1418,6 @@ class JobsDatabaseServer(JobsDatabaseClient):
 
         # Create the archive database as a "backup" of the existing one, then we'll truncate the tables.
         # This connection will
-        print(archive_fname)
         conn_archive = sqlite3.connect(archive_fname)
         conn.backup(conn_archive)
 
