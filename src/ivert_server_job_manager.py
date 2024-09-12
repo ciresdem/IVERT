@@ -30,7 +30,7 @@ import utils.configfile
 import utils.sizeof_format as sizeof
 import utils.version
 import utils.version_check_server
-import utils.subproc_logger as subproc_logger
+import utils.loggerproc as loggerproc
 
 
 def is_another_manager_running() -> typing.Union[bool, psutil.Process]:
@@ -314,15 +314,17 @@ class IvertJobManager:
             print(f"Starting job {ini_s3_key[ini_s3_key.rfind('/') + 1: ini_s3_key.rfind('.')]}.", flush=True)
 
         # Start the job. Redirect the stdout and stderr to a file.
-        job = subproc_logger.subproc_logger(subproc,
-                                            proc_stdout_file,
-                                            args=proc_args,
-                                            kwargs=proc_kwargs,
-                                            include_terminal=self.verbose2)
+        job = loggerproc.LoggerProc(target=subproc,
+                                    filename_out=proc_stdout_file,
+                                    args=proc_args,
+                                    kwargs=proc_kwargs,
+                                    output_to_terminal=self.verbose2)
 
         # Keep track of the job.
         self.running_jobs.append(job)
         self.running_jobs_keys.append(ini_s3_key)
+
+        job.start()
 
         return
 
