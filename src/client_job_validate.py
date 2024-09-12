@@ -41,8 +41,9 @@ def run_validate_command(args: argparse.Namespace) -> None:
     assert hasattr(args, "include_photons")
     assert hasattr(args, "band_num")
     assert hasattr(args, "coastlines_only")
-    assert hasattr(args, "mask_buildings")
-    assert hasattr(args, "mask_urban")
+    assert hasattr(args, "mask_osm_buildings")
+    assert hasattr(args, "mask_bing_buldings")
+    assert hasattr(args, "mask_wsf_urban")
     assert hasattr(args, "outlier_sd_threshold")
 
     # Make a copy we can modify to generate a config file for the job.
