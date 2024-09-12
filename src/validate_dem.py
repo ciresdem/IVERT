@@ -1591,8 +1591,8 @@ def validate_dem_parallel(dem_name: str,
     results_dataframe = pandas.concat(results_dataframes_list)
     # Subset for only valid results out. Eliminate useless nodata values and any cell with not enough photons,
     # or any nan values. DO NOT YET filter out cells outside the outlier threshold range. That's done later.
-    results_dataframe = results_dataframe[results_dataframe["mean"] != EMPTY_VAL
-                                          & ~numpy.isnan(results_dataframe["mean"])
+    results_dataframe = results_dataframe[(results_dataframe["mean"] != EMPTY_VAL)
+                                          & (~numpy.isnan(results_dataframe["mean"]))
                                           & (results_dataframe["numphotons_intd"] >= 3)].copy()
 
     if verbose:
