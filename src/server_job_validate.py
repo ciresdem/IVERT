@@ -121,4 +121,10 @@ def run_validate_command(ivert_job_obj):
                                                       outliers_sd_threshold=cargs["outlier_sd_threshold"],
                                                       verbose=ivj.verbose)
 
+    print(
+        "===============================================\n"
+        f"Job {ivj.username}_{ivj.job_id} is complete.\n"
+        "==============================================="
+    )
+
     return
