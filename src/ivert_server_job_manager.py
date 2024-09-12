@@ -130,7 +130,6 @@ class IvertJobManager:
 
                 # If no jobs are running, sleep and try again.
                 time.sleep(self.time_interval_s)
-                print("Sleeping for {} seconds...".format(self.time_interval_s), flush=True)
 
             except KeyboardInterrupt:
                 raise

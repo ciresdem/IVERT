@@ -29,12 +29,8 @@ class Logger:
         if self.terminal:
             self.terminal.write(message)
 
-        self.log.write(self.strip_color_and_carriage_return(message))
-
-    @staticmethod
-    def strip_color_and_carriage_return(message):
-        """Strip ANSI escape codes and lines with carriage returns."""
-        return ut.unformat_and_delete_cr_lines(message)
+        self.log.write(ut.unformat_and_delete_cr_lines(message))
+        self.log.flush()
 
 
 def subproc_logger(target: callable,
@@ -68,7 +64,7 @@ def subproc_logger(target: callable,
     sys.stderr = sys.stdout
 
     # Start the process.
-    proc = mp.Process(target=target, args=args, kwargs=kwargs)
+    proc = mp.Process(target=target, args=args if args else (), kwargs=kwargs if kwargs else {})
     proc.start()
 
     # Sleep for just a moment for the process to kick off before reassigning stdout and stderr back to their
