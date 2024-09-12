@@ -576,6 +576,7 @@ def validate_dem(dem_name: str,
               'verbose': verbose
               }
 
+    # If we're in this from a logged process, make sure the children are logged processes as well.
     if isinstance(sys.stdout, utils.loggerproc.Logger):
         subproc = utils.loggerproc.LoggerProc(target=validate_dem_parallel,
                                               filename_out=sys.stdout.filename_out,
