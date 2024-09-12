@@ -1,14 +1,17 @@
 """Quick utility for cleaning out job files, database, and cache directory to free up disk space."""
 
 import argparse
+import dateparser
 import os
 import psutil
+import re
 import shutil
 import typing
 
 import utils.configfile
 import utils.traverse_directory
 import jobs_database
+import s3
 
 
 def clean_cudem_cache(ivert_config: typing.Union[utils.configfile.config, None] = None,
@@ -112,20 +115,43 @@ def clean_old_jobs_dirs(ivert_config: typing.Union[utils.configfile.config, None
         ivert_config = utils.configfile.config()
 
     if ivert_config.is_aws:
-        # TODO: Clean up job directories for any no-longer-running jobs on the server side.
-        pass
-
         jobs_files = utils.traverse_directory.list_files(ivert_config.ivert_jobs_directory_local)
         jobs_db = jobs_database.JobsDatabaseServer()
 
-    else:
-        # TODO: Clean up job directories for any no-longer-running jobs on the client side.
-        jobs_subdirs = sorted([os.path.join(ivert_config.ivert_jobs_directory_local, job_dir)
-                            for job_dir in os.listdir(ivert_config.ivert_jobs_directory_local)
-                            if os.path.isdir(os.path.join(ivert_config.ivert_jobs_directory_local, job_dir))])
+        jobs_df = jobs_db.read_table_as_pandas_df("jobs")
+        for i, job_row in jobs_df.iterrows():
+            job_pid = job_row["job_pid"]
 
-        jobs_db = jobs_database.JobsDatabaseServer()
-        pass
+            if is_pid_an_active_ivert_job(job_pid):
+                continue
+
+            job_datadir = job_row["input_dir_local"]
+            if os.path.exists(job_datadir):
+                shutil.rmtree(job_datadir)
+
+            job_ini_file = job_row['configfile']
+            stdout_file = os.path.join(ivert_config.ivert_jobs_stdout_dir,
+                                       os.path.splitext(job_ini_file)[0] + "_stdout.txt")
+            if os.path.exists(stdout_file):
+                os.remove(stdout_file)
+
+    else:
+        jobs_subdirs = sorted([os.path.join(ivert_config.ivert_jobs_directory_local, job_dir)
+                               for job_dir in os.listdir(ivert_config.ivert_jobs_directory_local)
+                               if os.path.isdir(os.path.join(ivert_config.ivert_jobs_directory_local, job_dir))])
+
+        jobs_db = jobs_database.JobsDatabaseClient()
+        jobs_db.download_from_s3(only_if_newer=True)
+        running_jobs_list = jobs_db.list_unfinished_jobs()
+
+        for job_dir in jobs_subdirs:
+            job_name = os.path.split(job_dir)[-1].strip(os.sep)
+            job_username = job_name.rsplit("_", 1)[0]
+            job_id = job_name.rsplit("_", 1)[-1]
+
+            # Remove any jobs that are no longer running
+            if [job for job in running_jobs_list if job['username'] == job_username and job['job_id'] == job_id]:
+                shutil.rmtree(job_dir)
 
 
 def truncate_jobs_database(date_cutoff_str: str = "7 days ago",
@@ -158,7 +184,31 @@ def clean_export_dirs(ivert_config: typing.Union[utils.configfile.config, None] 
     """
     if ivert_config is None:
         ivert_config = utils.configfile.config()
-    # TODO: implement
+
+    cutoff_datetime = dateparser.parse(date_cutoff_str)
+
+    cutoff_job_number = int(f"{cutoff_datetime.year}{cutoff_datetime.month:02d}{cutoff_datetime.day:02d}0000")
+
+    s3m = s3.S3Manager()
+    key_list = s3m.listdir(ivert_config.s3_export_prefix_base, bucket_type="export", recursive=True)
+
+    # Find all job IDs in the keys
+    job_id_regex = re.compile(r"(?<=/)\d{12}(?=/)")
+
+    numfiles_deleted = 0
+    for key in key_list:
+        result = job_id_regex.search(key)
+        if result is None:
+            continue
+
+        job_id = int(result.group(0))
+
+        if job_id < cutoff_job_number:
+            s3m.delete(key, bucket_type="export")
+            numfiles_deleted += 1
+
+    if verbose:
+        print(f"Deleted {numfiles_deleted} files from the export bucket.")
     pass
 
 
@@ -176,7 +226,31 @@ def clean_untrusted_bucket(ivert_config: typing.Union[utils.configfile.config, N
     """
     if ivert_config is None:
         ivert_config = utils.configfile.config()
-    # TODO: implement
+
+    cutoff_datetime = dateparser.parse(date_cutoff_str)
+
+    cutoff_job_number = int(f"{cutoff_datetime.year}{cutoff_datetime.month:02d}{cutoff_datetime.day:02d}0000")
+
+    s3m = s3.S3Manager()
+    key_list = s3m.listdir(ivert_config.s3_import_prefix_base, bucket_type="untrusted", recursive=True)
+
+    # Find all job IDs in the keys
+    job_id_regex = re.compile(r"(?<=/)\d{12}(?=/)")
+
+    numfiles_deleted = 0
+    for key in key_list:
+        result = job_id_regex.search(key)
+        if result is None:
+            continue
+
+        job_id = int(result.group(0))
+
+        if job_id < cutoff_job_number:
+            s3m.delete(key, bucket_type="untrusted")
+            numfiles_deleted += 1
+
+    if verbose:
+        print(f"Deleted {numfiles_deleted} files from the export bucket.")
     pass
 
 
@@ -303,6 +377,9 @@ if __name__ == "__main__":
 
         elif args.what == "untrusted":
             clean_untrusted_bucket(ivert_config=iconfig, date_cutoff_str=args.when)
+
+        elif args.what == "export":
+            clean_export_dirs(ivert_config=iconfig, date_cutoff_str=args.when)
 
         else:
             print(f"Argument '{args.what}' not implemented for the IVERT client.")
