@@ -108,7 +108,7 @@ class IvertJobManager:
         """
         # Check to see if another instance of this script is already running
         if is_another_manager_running():
-            print("Another instance of ivert_server_job_manager.py is already running. Exiting.")
+            print("Another instance of ivert_server_job_manager.py is already running. Exiting.", flush=True)
             return
 
         self.sync_database_with_s3()
@@ -130,6 +130,7 @@ class IvertJobManager:
 
                 # If no jobs are running, sleep and try again.
                 time.sleep(self.time_interval_s)
+                print("Sleeping for {} seconds...".format(self.time_interval_s), flush=True)
 
             except KeyboardInterrupt:
                 raise
@@ -139,9 +140,10 @@ class IvertJobManager:
                 # TODO: Implement logging if errors pop up.
                 if self.verbose:
                     traceback_txt = traceback.format_exc()
-                    print(traceback_txt, file=sys.stderr)
+                    print(traceback_txt, file=sys.stderr, flush=True)
 
-                    print(f"Continuing to iterate. Will try again in {self.time_interval_s} seconds.", file=sys.stderr)
+                    print("Continuing to iterate. Will try again in {} seconds.".format(self.time_interval_s),
+                          file=sys.stderr, flush=True)
 
                 time.sleep(self.time_interval_s)
                 continue
@@ -285,7 +287,7 @@ class IvertJobManager:
 
                 if self.verbose:
                     job_name = job_key[job_key.rfind("/") + 1: job_key.rfind(".ini")]
-                    print(f"Job {job_name} is finished.")
+                    print(f"Job {job_name} is finished.", flush=True)
 
                 # If the job stdout file exists, delete it.
                 if os.path.exists(self.job_stdout_file(job_key)):
@@ -310,7 +312,7 @@ class IvertJobManager:
         proc_kwargs = {'auto_start': True, 'stdout_file': proc_stdout_file, 'verbose': True}
 
         if self.verbose:
-            print(f"Starting job {ini_s3_key[ini_s3_key.rfind('/') + 1: ini_s3_key.rfind('.')]}.")
+            print(f"Starting job {ini_s3_key[ini_s3_key.rfind('/') + 1: ini_s3_key.rfind('.')]}.", flush=True)
 
         # Start the job. Redirect the stdout and stderr to a file.
         job = subproc_logger.subproc_logger(subproc,
@@ -341,7 +343,7 @@ class IvertJobManager:
 
         # Print the exit code if in verbose mode.
         if self.verbose:
-            print(f"Job {job_obj.username}_{job_obj.job_id} exited with code {exitcode}. Cleaning up.")
+            print(f"Job {job_obj.username}_{job_obj.job_id} exited with code {exitcode}. Cleaning up.", flush=True)
 
         # Re-parse the .ini to get the info from it.
         job_obj.parse_job_config_ini()
@@ -622,7 +624,7 @@ class IvertJob:
 
         except KeyboardInterrupt as e:
             if self.verbose:
-                print("Caught keyboard interrupt. Terminating job.")
+                print("Caught keyboard interrupt. Terminating job.", flush=True)
             self.write_to_logfile(traceback.format_exc())
 
             self.update_job_status("killed")
@@ -633,7 +635,7 @@ class IvertJob:
             trace = traceback.format_exc()
             self.write_to_logfile(trace)
             if self.verbose:
-                print(trace, file=sys.stderr)
+                print(trace, file=sys.stderr, flush=True)
 
             self.update_job_status("error")
             self.export_logfile_if_exists(upload_db_to_s3=False)
@@ -673,7 +675,7 @@ class IvertJob:
         # Create the job directory if it doesn't exist.
         if not os.path.exists(self.job_dir):
             if self.verbose:
-                print("Creating job directory:", self.job_dir[self.job_dir.find(data_basedir):].lstrip("/"))
+                print("Creating job directory:", self.job_dir[self.job_dir.find(data_basedir):].lstrip("/"), flush=True)
             os.makedirs(self.job_dir)
 
         # Create the output directory if it doesn't exist.
@@ -693,7 +695,8 @@ class IvertJob:
         parent_dir = os.path.dirname(self.job_dir)
         if self.verbose:
             print("Deleting job directory:",
-                  self.job_dir[self.job_dir.find(self.ivert_config.ivert_jobs_directory_local):].lstrip("/"))
+                  self.job_dir[self.job_dir.find(self.ivert_config.ivert_jobs_directory_local):].lstrip("/"),
+                  flush=True)
 
         # Then peruse up the parent directories, deleting them *if* no other jobs are using that directory, there are no
         # other files present there, and it's not the top "jobs" directory that we obviously don't want to delete.
@@ -709,7 +712,7 @@ class IvertJob:
     def download_job_config_file(self):
         """Download the job configuration file from the S3 bucket."""
         if self.verbose:
-            print(f"Downloading {os.path.basename(self.job_config_local)}")
+            print(f"Downloading {os.path.basename(self.job_config_local)}", flush=True)
 
         self.s3m.download(self.job_config_s3_key, self.job_config_local, bucket_type=self.job_config_s3_bucket_type)
 
@@ -729,7 +732,7 @@ class IvertJob:
             self.write_to_logfile(error_msg)
 
             if self.verbose:
-                print(error_msg)
+                print(error_msg, flush=True)
 
             self.export_logfile_if_exists()
             self.update_job_status("error", upload_to_s3=not dry_run_only)
@@ -836,7 +839,7 @@ class IvertJob:
                     # Download from the s3 bucket.
                     if not only_create_database_entries:
                         if self.verbose:
-                            print(f"Downloading {os.path.basename(local_fname)}")
+                            print(f"Downloading {os.path.basename(local_fname)}", flush=True)
 
                         self.s3m.download(f_key, local_fname, bucket_type=self.job_config_s3_bucket_type)
 
@@ -864,7 +867,7 @@ class IvertJob:
 
                 elif quarantine_manager.is_quarantined(f_key):
                     if self.verbose:
-                        print(f"File {os.path.basename(local_fname)} is quarantined.")
+                        print(f"File {os.path.basename(local_fname)} is quarantined.", flush=True)
 
                     self.jobs_db.create_new_file_record(local_fname,
                                                         self.job_id,
@@ -909,7 +912,7 @@ class IvertJob:
                 local_fname = os.path.join(os.path.dirname(self.job_config_local), fname)
 
                 if self.verbose:
-                    print(f"File {os.path.basename(local_fname)} failed to download.")
+                    print(f"File {os.path.basename(local_fname)} failed to download.", flush=True)
 
                 self.jobs_db.create_new_file_record(local_fname,
                                                     self.job_id,
@@ -958,7 +961,7 @@ class IvertJob:
         start_or_finish = start_or_finish.strip().lower()
 
         if self.verbose:
-            print(f"Pushing SNS {start_or_finish} notification.")
+            print(f"Pushing SNS {start_or_finish} notification.", flush=True)
 
         if start_or_finish == "start":
             # Produce a job started notification
@@ -1099,14 +1102,14 @@ class IvertJob:
 
         Monitor files that are being output."""
         if self.verbose:
-            print("Executing job.")
+            print("Executing job.", flush=True)
 
         try:
             # THIS IS THE LOGIC FOR DETERMINING WHICH COMMAND TO RUN ON THE SERVER.
 
             if self.command == "validate":
-                # If EMPTY_TEST is set in the config file, don't actually do a validation. Just print a confirm message to
-                # the logfile and upload it, then we're done.
+                # If EMPTY_TEST is set in the config file, don't actually do a validation. Just print a confirm message
+                # to the logfile and upload it, then we're done.
 
                 # RUN A TEST COMMAND
                 if "EMPTY_TEST" in self.job_config_object.cmd_args:
@@ -1139,7 +1142,7 @@ class IvertJob:
 
         except KeyboardInterrupt as e:
             if self.verbose:
-                print("Caught keyboard interrupt. Terminating job.")
+                print("Caught keyboard interrupt. Terminating job.", flush=True)
 
             self.update_job_status("killed")
             return
@@ -1148,7 +1151,7 @@ class IvertJob:
             trace = traceback.format_exc()
             self.write_to_logfile(trace)
             if self.verbose:
-                print(trace, file=sys.stderr)
+                print(trace, file=sys.stderr, flush=True)
 
             self.update_job_status("error")
             return
@@ -1188,6 +1191,9 @@ class IvertJob:
         """If we've written anyting to the job's stdout file, export it upon completion of the job.
 
         Also add an entry to the jobs_database for this stdout export."""
+        # Flush the stdout buffer.
+        print("", end="", flush=True)
+
         if not os.path.exists(self.stdout_file):
             return
 
@@ -1415,7 +1421,7 @@ class IvertJob:
                 if self.s3m.exists(fkey_dst, bucket_type="database"):
 
                     if self.verbose:
-                        print(fname, "transferred to", dest_prefix)
+                        print(fname, "transferred to", dest_prefix, flush=True)
 
                     fsize = self.s3m.size(fkey_dst, bucket_type="database")
 
@@ -1429,7 +1435,7 @@ class IvertJob:
 
                 else:
                     if self.verbose:
-                        print("Error with file", fname)
+                        print("Error with file", fname, flush=True)
 
                     # If we can't find the file and its status is not some type of error, mark it as 'error'.
                     self.jobs_db.update_file_status(self.username,
