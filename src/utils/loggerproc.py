@@ -77,12 +77,15 @@ class Logger:
     def __init__(self,
                  filename: str,
                  output_to_terminal: bool = True):
-        if output_to_terminal:
+
+        self.output_to_terminal = output_to_terminal
+        if self.output_to_terminal:
             self.terminal_stdout = sys.stdout
         else:
             self.terminal_stdout = None
 
-        self.log = open(filename, "a", buffering=1)
+        self.filename_out = filename
+        self.log = open(self.filename_out, "a", buffering=1)
         # Apparently this should have a flush attribute to be compatible with stdout print(flush=True) statements.
 
     def flush(self):

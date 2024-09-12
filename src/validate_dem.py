@@ -29,6 +29,7 @@ import pyproj
 import re
 import signal
 import subprocess
+import sys
 import time
 import typing
 
@@ -45,6 +46,7 @@ import server_file_export
 import icesat2_photon_database
 import find_bad_icesat2_granules
 import utils.query_yes_no as yes_no
+import utils.loggerproc
 
 # # Just for debugging memory issues. TODO: REmove later.
 # import psutil
@@ -543,37 +545,47 @@ def validate_dem(dem_name: str,
     manager = mp.Manager()
     sub_shared_ret_values = manager.dict()
 
-    subproc = mp.Process(target=validate_dem_parallel,
-                         args=(dem_name,),
-                         kwargs={'output_dir': output_dir,
-                                 'shared_ret_values': sub_shared_ret_values,
-                                 'icesat2_photon_database_obj': icesat2_photon_database_obj,
-                                 'band_num': band_num,
-                                 'dem_vertical_datum': dem_vertical_datum,
-                                 'output_vertical_datum': output_vertical_datum,
-                                 'ivert_job_name': ivert_job_name,
-                                 'interim_data_dir': interim_data_dir,
-                                 'overwrite': overwrite,
-                                 'delete_datafiles': delete_datafiles,
-                                 'mask_out_lakes': mask_out_lakes,
-                                 'mask_osm_buildings': mask_osm_buildings,
-                                 'mask_bing_buildings': mask_bing_buildings,
-                                 'mask_wsf_urban': mask_wsf_urban,
-                                 'include_gmrt_mask': include_gmrt_mask,
-                                 'write_result_tifs': write_result_tifs,
-                                 'write_summary_stats': write_summary_stats,
-                                 'export_coastline_mask': export_coastline_mask,
-                                 'outliers_sd_threshold': outliers_sd_threshold,
-                                 'include_photon_level_validation': include_photon_level_validation,
-                                 'plot_results': plot_results,
-                                 'location_name': location_name,
-                                 'mark_empty_results': mark_empty_results,
-                                 'omit_bad_granules': omit_bad_granules,
-                                 'measure_coverage': measure_coverage,
-                                 'max_photons_per_cell': max_photons_per_cell,
-                                 'numprocs': numprocs,
-                                 'verbose': verbose},
-                         )
+    args = (dem_name,)
+    kwargs = {'output_dir': output_dir,
+              'shared_ret_values': sub_shared_ret_values,
+              'icesat2_photon_database_obj': icesat2_photon_database_obj,
+              'band_num': band_num,
+              'dem_vertical_datum': dem_vertical_datum,
+              'output_vertical_datum': output_vertical_datum,
+              'ivert_job_name': ivert_job_name,
+              'interim_data_dir': interim_data_dir,
+              'overwrite': overwrite,
+              'delete_datafiles': delete_datafiles,
+              'mask_out_lakes': mask_out_lakes,
+              'mask_osm_buildings': mask_osm_buildings,
+              'mask_bing_buildings': mask_bing_buildings,
+              'mask_wsf_urban': mask_wsf_urban,
+              'include_gmrt_mask': include_gmrt_mask,
+              'write_result_tifs': write_result_tifs,
+              'write_summary_stats': write_summary_stats,
+              'export_coastline_mask': export_coastline_mask,
+              'outliers_sd_threshold': outliers_sd_threshold,
+              'include_photon_level_validation': include_photon_level_validation,
+              'plot_results': plot_results,
+              'location_name': location_name,
+              'mark_empty_results': mark_empty_results,
+              'omit_bad_granules': omit_bad_granules,
+              'measure_coverage': measure_coverage,
+              'max_photons_per_cell': max_photons_per_cell,
+              'numprocs': numprocs,
+              'verbose': verbose
+              }
+
+    if isinstance(sys.stdout, utils.loggerproc.Logger):
+        subproc = utils.loggerproc.LoggerProc(target=validate_dem_parallel,
+                                              filename_out=sys.stdout.filename_out,
+                                              output_to_terminal=sys.stdout.output_to_terminal,
+                                              args=args,
+                                              kwargs=kwargs)
+    else:
+        subproc = mp.Process(target=validate_dem_parallel,
+                             args=args,
+                             kwargs=kwargs)
 
     subproc.start()
     # while subproc.is_alive():
