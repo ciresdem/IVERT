@@ -23,6 +23,7 @@ import jobs_database
 import server_file_export
 import plot_validation_results as plot_validation_results
 import validate_dem as validate_dem
+import utils.query_yes_no as yes_no
 
 
 def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFrame, str],
@@ -102,8 +103,9 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
                           output_vdatum: str = "egm2008",
                           overwrite: bool = False,
                           place_name: typing.Union[str, None] = None,
-                          mask_buildings: bool = True,
-                          use_urban_mask: bool = False,
+                          mask_osm_buildings: bool = True,
+                          mask_bing_buildings: bool = True,
+                          mask_wsf_urban: bool = False,
                           create_individual_results: bool = False,
                           export_coastline_masks: bool = True,
                           delete_datafiles: bool = False,
@@ -310,8 +312,9 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
                                       overwrite=overwrite,
                                       delete_datafiles=delete_datafiles,
                                       write_result_tifs=write_result_tifs,
-                                      mask_out_buildings=mask_buildings,
-                                      mask_out_urban=use_urban_mask,
+                                      mask_osm_buildings=mask_osm_buildings,
+                                      mask_bing_buildings=mask_bing_buildings,
+                                      mask_wsf_urban=mask_wsf_urban,
                                       write_summary_stats=create_individual_results,
                                       export_coastline_mask=export_coastline_masks,
                                       include_photon_level_validation=include_photon_validation,
@@ -439,12 +442,13 @@ def define_and_parse_args():
                         help="Directory to output results. Default to the a sub-directory named 'icesat2' within the "
                              "input directory.")
 
-    parser.add_argument("--input_vdatum", "-ivd", default="wgs84",
-                        help="The vertical datum of the input DEMs. [TODO: List possibilities here.] Default: 'wgs84'")
+    parser.add_argument("--input_vdatum", "-ivd", default="egm2008",
+                        help="The vertical datum of the input DEMs. [TODO: List possibilities here.] "
+                             "Default: 'egm2008'")
 
-    parser.add_argument("--output_vdatum", "-ovd", default="wgs84",
+    parser.add_argument("--output_vdatum", "-ovd", default="egm2008",
                         help="The vertical datume of the output analysis. Must be a vdatum compatible with Icesat-2 "
-                             "granules. Default: Use the same vdatum as the input files.")
+                             "granules. Default: 'egm2008'.")
 
     parser.add_argument("--place_name", "-name", type=str, default=None,
                         help="Readable name of the location being validated. Will be used in output summary plots and "
@@ -454,20 +458,37 @@ def define_and_parse_args():
                         help="Overwrite all files, including intermittent data files. Default: False "
                              "(skips re-computing already-computed reseults.")
 
-    parser.add_argument("--create_folders", action="store_true", default=False,
+    parser.add_argument("-cf", "--create_folders", dest="create_folders",
+                        type=yes_no.interpret_yes_no, default=True,
                         help="Create folders specified in -output_dir and -data_dir, as well as the full path to "
-                             "-photon_h5, if they do not already exist. Default: Raise errors if paths don't "
-                             "already exist.")
+                             "-photon_h5, if they do not already exist. Otherwise will raise errors if directories "
+                             "don't already exist. Default: True.")
 
-    parser.add_argument('--use_urban_mask', action='store_true', default=False,
-                        help="Use the WSL 'Urban Area' mask rather than OSM building footprints to mask out "
-                             "ICESat-2 data. Useful over lower-resolution (10m or coarser) dems, which tend to be "
-                             "bigger than building footprints.")
+    parser.add_argument("-mob", "--mask_osm_buildings", dest="mask_osm_buildings",
+                        type=yes_no.interpret_yes_no, default=True,
+                        help="Whether to mask out OSM-derived building footprints in the coastline mask. "
+                             "Must be followed by 'True', 'False', 'Yes', 'No', or any abbreviation thereof "
+                             "(case-insensitive). (Default: True)")
 
-    parser.add_argument("--individual_results", "-ind", action="store_true", default=False,
+    parser.add_argument("-mbb", "--mask_bing_buildings", dest="mask_bing_buildings",
+                        type=yes_no.interpret_yes_no, default=True,
+                        help="Whether to mask out Bing-derived building footprints in the coastline mask. "
+                             "Must be followed by 'True', 'False', 'Yes', 'No', or any abbreviation thereof "
+                             "(case-insensitive). (Default: True)")
+
+    parser.add_argument("-mwsf", "--mask_wsf_urban", dest="mask_wsf_urban",
+                        type=yes_no.interpret_yes_no, default=False,
+                        help="Whether to mask out World-Settlement-Footprint heavy urban areas in the "
+                             "coastline mask. Typically used instead of building footprints for coarse DEMs "
+                             "with grid cells larger than typical buildings (~20-ish m). Must be followed by "
+                             "'True', 'False', 'Yes', 'No', or any abbreviation thereof (case-insensitive). "
+                             "(Default: False)")
+
+    parser.add_argument("-ind", "--individual_results", dest="individual_results",
+                        type=yes_no.interpret_yes_no, default=True,
                         help="By default, a summary plot and text file are generated for the dataset. If this is "
                              "selected, they will be generated for each individual DEM as well. Files will be placed "
-                             "in the -output_dir directory.")
+                             "in the -output_dir directory. Default: True")
 
     parser.add_argument("--include_photon_validation", "-ph", action="store_true", default=False,
                         help="Produce a photon database (stored in '*_photon_level_results.h5') with errors on a "
@@ -484,11 +505,13 @@ def define_and_parse_args():
     parser.add_argument("--measure_coverage", "-mc", action="store_true", default=False,
                         help="Measure the coverage %age of icesat-2 data in each of the output DEM cells.")
 
-    parser.add_argument("--write_result_tifs", action='store_true', default=False,
+    parser.add_argument("-wrt", "--write_result_tifs", dest="write_result_tifs",
+                        type=yes_no.interpret_yes_no, default=True,
                         help="Write output geotiff with the errors in cells that have ICESat-2 photons, "
-                             "NDVs elsewhere.")
+                             "NDVs elsewhere. Default: True")
 
-    parser.add_argument("--write_summary_csv", action='store_true', default=False,
+    parser.add_argument("-wsc", "--write_summary_csv", dest="write_summary_csv",
+                        type=yes_no.interpret_yes_no, default=True,
                         help="Write a CSV with summary results of each individual DEM.")
 
     parser.add_argument("--quiet", "-q", action="store_true", default=False,
@@ -544,7 +567,6 @@ def main():
                           delete_datafiles=args.delete_datafiles,
                           include_photon_validation=args.include_photon_validation,
                           write_result_tifs=args.write_result_tifs,
-                          use_urban_mask=args.use_urban_mask,
                           omit_bad_granules=True,
                           measure_coverage=args.measure_coverage,
                           write_summary_csv=args.write_summary_csv,

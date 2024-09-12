@@ -44,7 +44,7 @@ import jobs_database
 import server_file_export
 import icesat2_photon_database
 import find_bad_icesat2_granules
-import ivert_server_job_manager
+import utils.query_yes_no as yes_no
 
 # # Just for debugging memory issues. TODO: REmove later.
 # import psutil
@@ -459,9 +459,9 @@ def validate_dem(dem_name: str,
                  overwrite: bool = False,
                  delete_datafiles: bool = False,
                  mask_out_lakes: bool = True,
-                 mask_out_buildings: bool = True,
-                 use_osm_planet: bool = False,
-                 mask_out_urban: bool = False,
+                 mask_osm_buildings: bool = True,
+                 mask_bing_buildings: bool = True,
+                 mask_wsf_urban: bool = True,
                  include_gmrt_mask: bool = False,
                  write_result_tifs: bool = True,
                  write_summary_stats: bool = True,
@@ -501,9 +501,9 @@ def validate_dem(dem_name: str,
         overwrite (bool): Overwrite existing files.
         delete_datafiles (bool): Delete intermediate data files after validation is complete.
         mask_out_lakes (bool): Mask out lakes using NHD and HydroLakes.
-        mask_out_buildings (bool): Mask out buildings using OpenStreetMap.
-        use_osm_planet (bool): Use Open Street Map "whole planet" data. Typically ignored.
-        mask_out_urban (bool): Mask out urban areas using World Settlement Footprint (WSF).
+        mask_osm_buildings (bool): Mask out OSM buildings.
+        mask_bing_buildings (bool): Mask out Bing buildings.
+        mask_wsf_urban (bool): Mask out WSF urban areas.
         include_gmrt_mask (bool): Include GMRT mask for coastline masking (typically not used).
         write_result_tifs (bool): Write result geotifs with ICESat-2 derived errors.
         write_summary_stats (bool): Write summary statistics of results to a textfile.
@@ -556,9 +556,9 @@ def validate_dem(dem_name: str,
                                  'overwrite': overwrite,
                                  'delete_datafiles': delete_datafiles,
                                  'mask_out_lakes': mask_out_lakes,
-                                 'mask_out_buildings': mask_out_buildings,
-                                 'use_osm_planet': use_osm_planet,
-                                 'mask_out_urban': mask_out_urban,
+                                 'mask_osm_buildings': mask_osm_buildings,
+                                 'mask_bing_buildings': mask_bing_buildings,
+                                 'mask_wsf_urban': mask_wsf_urban,
                                  'include_gmrt_mask': include_gmrt_mask,
                                  'write_result_tifs': write_result_tifs,
                                  'write_summary_stats': write_summary_stats,
@@ -637,9 +637,9 @@ def validate_dem(dem_name: str,
                          overwrite=overwrite,
                          delete_datafiles=delete_datafiles,
                          mask_out_lakes=mask_out_lakes,
-                         mask_out_buildings=mask_out_buildings,
-                         use_osm_planet=use_osm_planet,
-                         mask_out_urban=mask_out_urban,
+                         mask_osm_buildings=mask_osm_buildings,
+                         mask_bing_buildings=mask_bing_buildings,
+                         mask_wsf_urban=mask_wsf_urban,
                          include_gmrt_mask=include_gmrt_mask,
                          write_result_tifs=False, # No need to write the results tifs for subsets.
                          write_summary_stats=False, # No need to write the summary stats file for subsets.
@@ -812,9 +812,9 @@ def validate_dem_parallel(dem_name: str,
                           overwrite: bool = False,
                           delete_datafiles: bool = False,
                           mask_out_lakes: bool = True,
-                          mask_out_buildings: bool = True,
-                          use_osm_planet: bool = False,
-                          mask_out_urban: bool = False,
+                          mask_osm_buildings: bool = True,
+                          mask_bing_buildings: bool = True,
+                          mask_wsf_urban: bool = True,
                           include_gmrt_mask: bool = False,
                           write_result_tifs: bool = True,
                           write_summary_stats: bool = True,
@@ -979,9 +979,9 @@ def validate_dem_parallel(dem_name: str,
 
                 coastline_mask.create_coastline_mask(dem_name,
                                                      mask_out_lakes = mask_out_lakes,
-                                                     mask_out_buildings = mask_out_buildings,
-                                                     mask_out_urban = mask_out_urban,
-                                                     use_osm_planet = use_osm_planet,
+                                                     mask_osm_buildings = mask_osm_buildings,
+                                                     mask_bing_buildings = mask_bing_buildings,
+                                                     mask_wsf_urban = mask_wsf_urban,
                                                      include_gmrt = include_gmrt_mask,
                                                      output_file = coastline_mask_filename,
                                                      verbose=verbose)
@@ -1007,9 +1007,9 @@ def validate_dem_parallel(dem_name: str,
         coastline_mask_filename, coastline_mask_array = \
         coastline_mask.get_coastline_mask_and_other_dem_data(dem_name,
                                                              mask_out_lakes=mask_out_lakes,
-                                                             mask_out_buildings=mask_out_buildings,
-                                                             mask_out_urban=mask_out_urban,
-                                                             use_osm_planet=use_osm_planet,
+                                                             mask_osm_buildings=mask_osm_buildings,
+                                                             mask_bing_buildings=mask_bing_buildings,
+                                                             mask_wsf_urban=mask_wsf_urban,
                                                              include_gmrt=include_gmrt_mask,
                                                              target_fname_or_dir=coastline_mask_filename,
                                                              band_num=band_num,
@@ -1414,9 +1414,8 @@ def validate_dem_parallel(dem_name: str,
         # First, set up each child process and start it (importing arguments)
         for i in range(cpu_count):
             if counter_started >= N:
-                # DEBUG print statement
-                # print(counter_started, N, "Delegated all the data before finishing setting up processes, now will go on to process it.")
-                # Shorten the list of processes we are using.
+                # If the number of processes we need for this job is less than the number of cores available, just
+                # shorten the list of processes we are using.
                 running_procs     = running_procs[:i]
                 open_pipes_parent = open_pipes_parent[:i]
                 open_pipes_child  = open_pipes_child[:i]
@@ -1811,8 +1810,26 @@ def read_and_parse_args():
                         help='The number of sub-processes to run for this validation. Default to the maximum physical CPU count on this machine.')
     parser.add_argument('--delete_datafiles', action='store_true', default=False,
                         help='Delete the interim data files generated. Reduces storage requirements. (Default: keep them all.)')
-    parser.add_argument('--use_urban_mask', action='store_true', default=False,
-                        help="Use the WSL 'Urban Area' mask rather than OSM building footprints to mask out IceSat-2 data. Useful over lower-resolution (10m or coarser) dems, which tend to be bigger than building footprints.")
+    parser.add_argument("-mob", "--mask_osm_buildings", dest="mask_osm_buildings",
+                        type=yes_no.interpret_yes_no, default=True,
+                        help="Whether to mask out OSM-derived building footprints in the coastline mask. "
+                             "Must be followed by 'True', 'False', 'Yes', 'No', or any abbreviation thereof "
+                             "(case-insensitive). (Default: True)")
+
+    parser.add_argument("-mbb", "--mask_bing_buildings", dest="mask_bing_buildings",
+                        type=yes_no.interpret_yes_no, default=True,
+                        help="Whether to mask out Bing-derived building footprints in the coastline mask. "
+                             "Must be followed by 'True', 'False', 'Yes', 'No', or any abbreviation thereof "
+                             "(case-insensitive). (Default: True)")
+
+    parser.add_argument("-mwsf", "--mask_wsf_urban", dest="mask_wsf_urban",
+                        type=yes_no.interpret_yes_no, default=False,
+                        help="Whether to mask out World-Settlement-Footprint heavy urban areas in the "
+                             "coastline mask. Typically used instead of building footprints for coarse DEMs "
+                             "with grid cells larger than typical buildings (~20-ish m). Must be followed by "
+                             "'True', 'False', 'Yes', 'No', or any abbreviation thereof (case-insensitive). "
+                             "(Default: False)")
+
     parser.add_argument("--measure_coverage", "-mc", action="store_true", default=False,
                         help="Measure the coverage %age of icesat-2 data in each of the output DEM cells.")
     parser.add_argument('--write_result_tifs', action='store_true', default=False,
@@ -1860,8 +1877,9 @@ if __name__ == "__main__":
                  plot_results=args.plot_results,
                  location_name=args.place_name,
                  outliers_sd_threshold=ast.literal_eval(args.outlier_sd_threshold),
-                 mask_out_buildings=not args.use_urban_mask,
-                 mask_out_urban=args.use_urban_mask,
+                 mask_osm_buildings=args.mask_osm_buildings,
+                 mask_bing_buildings=args.mask_bing_buildings,
+                 mask_wsf_urban=args.mask_wsf_urban,
                  measure_coverage=args.measure_coverage,
                  numprocs=args.numprocs,
                  band_num=args.band_num,

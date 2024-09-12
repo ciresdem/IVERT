@@ -20,13 +20,25 @@ def run_validate_command(ivert_job_obj):
     # assert "output_vdatum" in cargs
     # TODO: Remove this line after modifhying the photons to meet the input vdatum.
     cargs["output_vdatum"] = 'egm2008'
+
+    # Maintain backward compatibility with previous IVERT versions.
+    if "mask_buildings" in cargs:
+        cargs["mask_bing_buildings"] = cargs["mask_buildings"]
+        cargs["mask_osm_buildings"] = cargs["mask_buildings"]
+        del cargs["mask_buildings"]
+
+    if "mask_urban" in cargs:
+        cargs["mask_wsf_urban"] = cargs["mask_urban"]
+        del cargs["mask_urban"]
+
     assert "region_name" in cargs
     assert "measure_coverage" in cargs
     assert "include_photons" in cargs
     assert "band_num" in cargs
     assert "coastlines_only" in cargs
-    assert "mask_buildings" in cargs
-    assert "mask_urban" in cargs
+    assert "mask_osm_buildings" in cargs
+    assert "mask_bing_buildings" in cargs
+    assert "mask_wsf_urban" in cargs
     assert "outlier_sd_threshold" in cargs
 
     outputs_dir = str(os.path.join(ivj.job_dir, "outputs"))
@@ -42,8 +54,9 @@ def run_validate_command(ivert_job_obj):
 
             cfile = coastline_mask.create_coastline_mask(dem_fn,
                                                          mask_out_lakes=True,
-                                                         mask_out_buildings=cargs["mask_buildings"],
-                                                         mask_out_urban=cargs["mask_urban"],
+                                                         mask_osm_buildings=cargs["mask_osm_buildings"],
+                                                         mask_bing_buildings=cargs["mask_bing_buildings"],
+                                                         mask_wsf_urban=cargs["mask_wsf_urban"],
                                                          mask_out_nhd=True,
                                                          run_in_tempdir=True,
                                                          horizontal_datum_only=True,
@@ -67,8 +80,9 @@ def run_validate_command(ivert_job_obj):
                                   dem_vertical_datum=cargs["input_vdatum"],
                                   output_vertical_datum=cargs["output_vdatum"],
                                   mask_out_lakes=True,
-                                  mask_out_buildings=cargs["mask_buildings"],
-                                  mask_out_urban=cargs["mask_urban"],
+                                  mask_osm_buildings=cargs["mask_osm_buildings"],
+                                  mask_bing_buildings=cargs["mask_bing_buildings"],
+                                  mask_wsf_urban=cargs["mask_wsf_urban"],
                                   write_result_tifs=True,
                                   write_summary_stats=True,
                                   export_coastline_mask=True,
@@ -94,8 +108,9 @@ def run_validate_command(ivert_job_obj):
                                                       output_vdatum=cargs["output_vdatum"],
                                                       overwrite=False,
                                                       place_name=cargs["region_name"],
-                                                      mask_buildings=cargs["mask_buildings"],
-                                                      use_urban_mask=cargs["mask_urban"],
+                                                      mask_osm_buildings=cargs["mask_osm_buildings"],
+                                                      mask_bing_buildings=cargs["mask_bing_buildings"],
+                                                      mask_wsf_urban=cargs["mask_wsf_urban"],
                                                       create_individual_results=True,
                                                       delete_datafiles=False,
                                                       include_photon_validation=cargs["include_photons"],

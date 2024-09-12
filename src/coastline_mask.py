@@ -22,12 +22,14 @@ import subprocess
 import argparse
 # import pyproj
 import time
+import typing
 
 # Use config file to get the encrypted credentials.
 import utils.pyproj_funcs
 import utils.configfile as configfile
-ivert_config = configfile.config()
+import utils.query_yes_no as yes_no
 
+ivert_config = configfile.config()
 gdal.UseExceptions()
 
 
@@ -41,17 +43,17 @@ def is_this_run_in_ipython():
 
 
 def create_coastline_mask(input_dem,
-                          return_bounds_step_epsg=False,
-                          mask_out_lakes=True,
-                          include_gmrt=False, # include_gmrt will include more minor outlying islands, many of which copernicus leaves out but GMRT includes
-                          mask_out_buildings=False,
-                          mask_out_urban=False,
-                          mask_out_nhd=True,
-                          use_osm_planet=False,
-                          output_file=None,
-                          run_in_tempdir=False,
-                          horizontal_datum_only=True,
-                          verbose=True):
+                          return_bounds_step_epsg: bool = False,
+                          mask_out_lakes: bool = True,
+                          include_gmrt: bool = False, # include_gmrt will include more minor outlying islands, many of which copernicus leaves out but GMRT includes
+                          mask_osm_buildings: bool = True,
+                          mask_bing_buildings: bool = True,
+                          mask_wsf_urban: bool = False,
+                          mask_out_nhd: bool = True,
+                          output_file: bool = None,
+                          run_in_tempdir: bool = False,
+                          horizontal_datum_only: bool = True,
+                          verbose: bool = True):
     """From a given DEM (.tif or otherwise), generate a coastline mask at the same grid and resolution.
 
     Uses the cudem waffles utility, which is handy for this.
@@ -97,13 +99,13 @@ def create_coastline_mask(input_dem,
     # If we round up half a pixel on each file extent size, it can ensure we include everything.
 
     waffle_args = ["waffles",
-                   "-M","coastline:polygonize=False" + \
-                       (":want_gmrt=True" if include_gmrt else "") + \
-                       (":want_lakes=True" if mask_out_lakes else "") + \
-                       (":want_nhd_plus=" + str(mask_out_nhd)) + \
-                       (":want_buildings=True" if mask_out_buildings else "") + \
-                       (":want_osm_planet=True" if use_osm_planet else "") + \
-                       (":want_wsf=True" if mask_out_urban else ""),
+                   "-M", "coastline:polygonize=False" +
+                   (":want_gmrt=True" if include_gmrt else "") +
+                   (":want_lakes=True" if mask_out_lakes else "") +
+                   (":want_nhd_plus=" + str(mask_out_nhd)) +
+                   (":want_osm_buildings=True" if mask_osm_buildings else "") +
+                   (":want_bing_buildings=True" if mask_bing_buildings else "") +
+                   (":want_wsf_urban=True" if mask_wsf_urban else ""),
                    "-R", "{0}/{1}/{2}/{3}".format(*bbox),
                    "-O", os.path.abspath(output_filepath_base),
                    "-P", "epsg:{0:d}".format(epsg),
@@ -161,7 +163,8 @@ def create_coastline_mask(input_dem,
     # b) Check existing files to see what we already have.
     # c) Download additional files of ATL03/ATL06/ATL08 data, where applicable.
 
-def create_coastal_mask_filename(dem_name, target_dir=None):
+def create_coastal_mask_filename(dem_name: str,
+                                 target_dir: typing.Union[str, None]=None):
     """If given a DEM name, create a filename for the coastal mask."""
     if type(target_dir) == str and (len(target_dir.strip()) == 0):
         target_dir = None
@@ -173,10 +176,10 @@ def create_coastal_mask_filename(dem_name, target_dir=None):
 
 
 def get_coastline_mask_and_other_dem_data(dem_name,
-                                          mask_out_lakes=True,
-                                          mask_out_buildings=False,
-                                          mask_out_urban=False,
-                                          use_osm_planet=True,
+                                          mask_out_lakes: bool = True,
+                                          mask_osm_buildings: bool = True,
+                                          mask_bing_buildings: bool = True,
+                                          mask_wsf_urban: bool = False,
                                           include_gmrt=False,
                                           target_fname_or_dir=None,
                                           run_in_tempdir=False,
@@ -217,9 +220,9 @@ def get_coastline_mask_and_other_dem_data(dem_name,
             coastline_mask_file_out = create_coastline_mask(dem_name,
                                                             mask_out_lakes=mask_out_lakes,
                                                             mask_out_nhd=mask_out_lakes,
-                                                            mask_out_buildings=mask_out_buildings,
-                                                            mask_out_urban=mask_out_urban,
-                                                            use_osm_planet=use_osm_planet,
+                                                            mask_osm_buildings=mask_osm_buildings,
+                                                            mask_bing_buildings=mask_bing_buildings,
+                                                            mask_wsf_urban=mask_wsf_urban,
                                                             include_gmrt=include_gmrt,
                                                             return_bounds_step_epsg=False,
                                                             output_file=coastline_mask_file,
@@ -257,31 +260,51 @@ def get_coastline_mask_and_other_dem_data(dem_name,
 
     raise FileNotFoundError("Could not generate", os.path.basename(coastline_mask_file_out))
 
-def read_and_parse_args():
+
+def read_and_parse_args() -> argparse.Namespace:
+    """Read and parse the command line arguments."""
     parser = argparse.ArgumentParser(
-        description="A script for creating coastline water masks from a DEM file. Return array is (0,1) for (water,land).")
+        description="A script for creating coastline water masks from a DEM file. "
+                    "Return array is (0,1) for (water,land).")
     parser.add_argument("dem_filename", type=str, help="Input DEM.")
     parser.add_argument("dest", nargs="?", default="",
-                        help="Destination file name, or file directory. If name is omitted: adds '_coastline_mask' to the input file name in the same directory.")
-    parser.add_argument("--dont_mask_out_buildings", default=False, action="store_true",
-                        help="DO NOT Mask out areas that are covered by building polygons in the OpenStreetMap dataset. Masking out buildings is useful when using this for IceSat-2 validation.")
-    parser.add_argument("--dont_mask_out_lakes", default=False, action="store_true",
-                        help="DO NOT Mask out areas that are covered by lake polygons in the global HydroLakes dataset. Masking out lakes is useful when using this for IceSat-2 validation.")
+                        help="Destination file name, or file directory. If name is omitted: adds '_coastline_mask' "
+                             "to the input file name in the same directory.")
+    parser.add_argument("-mob", "--mask_osm_buildings", dest="mask_osm_buildings",
+                        type=yes_no.interpret_yes_no, default=True,
+                        help="Whether to mask out OSM-derived building footprints in the coastline mask. "
+                             "Must be followed by 'True', 'False', 'Yes', 'No', or any abbreviation thereof "
+                             "(case-insensitive). (Default: True)")
+    parser.add_argument("-mbb", "--mask_bing_buildings", dest="mask_bing_buildings",
+                        type=yes_no.interpret_yes_no, default=True,
+                        help="Whether to mask out Bing-derived building footprints in the coastline mask. "
+                             "Must be followed by 'True', 'False', 'Yes', 'No', or any abbreviation thereof "
+                             "(case-insensitive). (Default: True)")
+    parser.add_argument("-mwsf", "--mask_wsf_urban", dest="mask_wsf_urban",
+                        type=yes_no.interpret_yes_no, default=False,
+                        help="Whether to mask out World-Settlement-Footprint heavy urban areas in the "
+                             "coastline mask. Typically used instead of building footprints for coarse DEMs "
+                             "with grid cells larger than typical buildings (~20-ish m). Must be followed by "
+                             "'True', 'False', 'Yes', 'No', or any abbreviation thereof (case-insensitive). "
+                             "(Default: False)")
     parser.add_argument("--use_gmrt", default=False, action="store_true",
-                        help="Include land areas covered by the GMRT land-cover dataset. Including GMRT is useful for including many small outlying islands that Copernicus may exclude.")
+                        help="Include land areas covered by the GMRT land-cover dataset. Including GMRT is useful for "
+                             "including many small outlying islands that Copernicus may exclude.")
     parser.add_argument("--quiet", "-q", action="store_true", default=False,
                         help="Run quietly.")
 
     args = parser.parse_args()
     return args
 
+
 if __name__ == "__main__":
     args = read_and_parse_args()
 
     create_coastline_mask(args.dem_filename,
                           return_bounds_step_epsg=False,
-                          mask_out_buildings = not args.dont_mask_out_buildings,
-                          mask_out_lakes = not args.dont_mask_out_lakes,
-                          include_gmrt = args.use_gmrt,
+                          mask_osm_buildings=args.mask_osm_buildings,
+                          mask_bing_buildings=args.mask_bing_buildings,
+                          mask_wsf_urban=args.mask_wsf_urban,
+                          include_gmrt=args.use_gmrt,
                           output_file=None if (args.dest.strip() == "") else args.dest,
                           verbose=not args.quiet)
