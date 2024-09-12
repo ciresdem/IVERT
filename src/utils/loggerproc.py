@@ -1,6 +1,7 @@
 
-import sys
+import io
 import multiprocessing as mp
+import sys
 import typing
 
 if vars(sys.modules[__name__])['__package__'] == 'ivert_utils':
@@ -66,7 +67,7 @@ class LoggerProc(mp.Process):
         return
 
 
-class Logger:
+class Logger(io.TextIOWrapper):
     """A class for logging stdout to a file. Used by LoggerProc.
 
     Contains a "write" method that can act as an output stream/file.
@@ -98,6 +99,10 @@ class Logger:
     def isatty():
         """Return True if the log is a terminal."""
         return False
+
+    def fileno(self):
+        """Return the file descriptor for the log."""
+        return self.log.fileno()
 
     def write(self, message):
         """Write a message to both the terminal (if selected) and the log.
