@@ -84,7 +84,12 @@ class Logger:
 
         self.log = open(filename, "a", buffering=1)
         # Apparently this should have a flush attribute to be compatible with stdout print(flush=True) statements.
-        self.flush = True
+
+    def flush(self):
+        """Flush the log and stdout."""
+        if self.terminal_stdout:
+            self.terminal_stdout.flush()
+        self.log.flush()
 
     def write(self, message):
         """Write a message to both the terminal (if selected) and the log.
@@ -95,7 +100,6 @@ class Logger:
 
         # Write the message to the log. Flush the output.
         self.log.write(ut.unformat_and_delete_cr_lines(message))
-        self.log.flush()
 
 
 def dummy_test():
