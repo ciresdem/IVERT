@@ -99,7 +99,9 @@ def run_job_status_command(args: argparse.Namespace) -> None:
 
         if len(input_files) > 0:
             input_files_finished = input_files["status"].isin(("processed", "timeout", "error", "quarantined")).sum()
-            print(f"{input_files_finished} of {len(input_files)} input files {'(detected so far) ' if (job_df['status'].values[0] == 'started') else ''}are finished.")
+            print(f"{input_files_finished} of {len(input_files)} input files "
+                  f"{'(detected so far) ' if (job_df['status'].values[0] == 'started') else ''}are finished.",
+                  "Other files may still be downloading from secure ingest." if (job_df['status'].values[0] == 'started') else "")
             print()
 
             print("Input file statuses:")
