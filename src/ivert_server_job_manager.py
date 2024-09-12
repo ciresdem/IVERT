@@ -392,8 +392,10 @@ class IvertJobManager:
         # Clean up the local files.
         job_obj.delete_local_job_folders()
         # Remove the log file if it exists.
-        if os.path.exists(job_obj.logfile):
-            os.remove(job_obj.logfile)
+        # TODO: REMOVED FOR DEBUGGING PURPOSES.
+        #   WHEN READY, RE-ENABLE THESE LINES.
+        # if os.path.exists(job_obj.logfile):
+        #     os.remove(job_obj.logfile)
 
         return
 
