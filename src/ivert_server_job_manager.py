@@ -31,6 +31,7 @@ import utils.sizeof_format as sizeof
 import utils.version
 import utils.version_check_server
 import utils.loggerproc as loggerproc
+import utils.unformat_text as ut
 
 
 def is_another_manager_running() -> typing.Union[bool, psutil.Process]:
@@ -1208,6 +1209,13 @@ class IvertJob:
         Also add an entry to the jobs_database for this logfile export."""
         if not os.path.exists(self.logfile):
             return
+
+        # Filter out any ASCII control characters or carriage returns.
+        # Some may have still gotten in there from sub-processes that hadn't used the Logger class.
+        logfile_text = open(self.logfile, "r").read()
+        filtered_text = ut.unformat_and_delete_cr_lines(logfile_text)
+        with open(self.logfile, 'w') as f:
+            f.write(filtered_text)
 
         # Upload the logfile to the export bucket.
         # This usess the exporter's upload_file_to_export_bucket method, which also updates the database.
