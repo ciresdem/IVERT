@@ -1573,7 +1573,9 @@ def validate_dem_parallel(dem_name: str,
         if total_time_s >= 100:
             total_time_m = int(total_time_s / 60)
             partial_time_s = total_time_s % 60
-            print("{0:d} minute".format(total_time_m) + ("s" if total_time_m > 1 else "") + " {0:0.1f} seconds total, ({1:0.4f} s/iteration)".format(partial_time_s, ( (total_time_s/N) if N>0 else 0)))
+            print("{0:d} minute".format(total_time_m) + ("s" if total_time_m > 1 else "")
+                  + " {0:0.1f} seconds total, ({1:0.4f} s/iteration)".format(partial_time_s,
+                                                                             ((total_time_s/N) if N>0 else 0)))
         else:
             print("{0:0.1f} seconds total, ({1:0.4f} s/iteration)".format(total_time_s,
                                                                           ((total_time_s / N) if N > 0 else 0)))
@@ -1587,8 +1589,12 @@ def validate_dem_parallel(dem_name: str,
         return files_to_export
 
     results_dataframe = pandas.concat(results_dataframes_list)
-    # Subset for only valid results out. Eliminate useless nodata values.
-    results_dataframe = results_dataframe[results_dataframe["mean"] != EMPTY_VAL].copy()
+    # Subset for only valid results out. Eliminate useless nodata values and any cell with not enough photons,
+    # or any nan values. DO NOT YET filter out cells outside the outlier threshold range. That's done later.
+    results_dataframe = results_dataframe[results_dataframe["mean"] != EMPTY_VAL
+                                          & ~numpy.isnan(results_dataframe["mean"])
+                                          & (results_dataframe["numphotons_intd"] >= 3)].copy()
+
     if verbose:
         print("{0:,} valid interdecile photon records in {1:,} DEM cells.".format(results_dataframe["numphotons_intd"].sum(), len(results_dataframe)))
 
@@ -1735,7 +1741,7 @@ def write_summary_stats_file(results_df: pandas.DataFrame,
     lines.append("RMSE (m): {0}".format(numpy.sqrt(numpy.mean(numpy.power(mean_diff, 2)))))
     lines.append("== Decile ranges of errors (ICESat-2 - DEM) (m) (Look for long-tails, indicating possible artifacts.) ===")
 
-    percentile_levels = [0, 1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 99, 100]
+    percentile_levels = [0, 1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 99, 100]
     percentile_values = numpy.percentile(mean_diff, percentile_levels)
     for l, v in zip(percentile_levels, percentile_values):
         lines.append("    {0:>3d} percentile error level (m): {1}".format(l, v))

@@ -67,23 +67,23 @@ def get_data_from_h5_or_list(h5_name_or_list: typing.Union[str, typing.List[str]
         raise TypeError("Non-iterable value for parameter 'results_h5_name_or_list':", h5_name_or_list)
     # print(data)
 
-    meddiff         = data['diff_median']
-    cellstd         = data['stddev'].astype(float)
-    meandiff        = data['diff_mean']
-    # numphotons      = data['numphotons']
-    numphotons_intd = data['numphotons_intd']
-    canopy_fraction = data["canopy_fraction"]
+    # cellstd         = data['stddev'].astype(float)
+    # meandiff        = data['diff_mean']
+    # # numphotons      = data['numphotons']
+    # numphotons_intd = data['numphotons_intd']
+    # canopy_fraction = data["canopy_fraction"]
     # Plot some histograms
 
     # Get rid of data with 3 or less ground photons in the inter-decile range, and all nans.
     # If empty_val means something, return it.
-    good_data_mask = (numphotons_intd > 3) & ~numpy.isnan(meandiff) & ~numpy.isnan(meddiff) & ~numpy.isnan(canopy_fraction) \
-                     & (meandiff != empty_val) & (meddiff != empty_val) & (canopy_fraction != empty_val) & (cellstd != empty_val)
+    # good_data_mask = (numphotons_intd > 3) & ~numpy.isnan(meandiff) & ~numpy.isnan(meddiff) & ~numpy.isnan(canopy_fraction) \
+    #                  & (meandiff != empty_val) & (canopy_fraction != empty_val) & (cellstd != empty_val)
 
-    data_subset = data[good_data_mask].copy()
-    if (len(data_subset) == 0) and verbose:
+    # data_subset = data[good_data_mask].copy()
+    if (len(data) == 0) and verbose:
         print("No reliable results contained in list of results h5 files.")
-    return data_subset
+
+    return data
 
 def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
                                             output_figure_name,
@@ -124,24 +124,23 @@ def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
     dem_elev        = data["dem_elev"]
     mean_elev       = data["mean"]
 
+    # TODO: Get rid of these comments after testing. We already filtered data out after validation, don't need to do it
+    #   again here.
     # Get rid of data with 3 or less ground photons in the inter-decile range, and all nans.
-    good_data_mask = numphotons_intd > 3 & ~numpy.isnan(meandiff) & ~numpy.isnan(canopy_fraction)
+    # good_data_mask = numphotons_intd > 3 & ~numpy.isnan(meandiff) & ~numpy.isnan(canopy_fraction)
 
     # Filter out errors that are above a certain threshold, if provided (presumed to be ICESat-2 anomalies, such as in the CUDEM tiles.)
-    if error_max_cutoff is not None:
-        good_data_mask = good_data_mask & (numpy.abs(meandiff) <= error_max_cutoff)
+    # if error_max_cutoff is not None:
+    #     good_data_mask = good_data_mask & (numpy.abs(meandiff) <= error_max_cutoff)
 
-    # TEMP: FOR CUDEM PLOT ONLY:
-
-
-    meandiff           =        meandiff[good_data_mask]
-    # meddiff            =         meddiff[good_data_mask]
-    # cellstd            =         cellstd[good_data_mask]
-    canopy_fraction    = canopy_fraction[good_data_mask]
-    # numphotons         =      numphotons[good_data_mask]
-    numphotons_intd    = numphotons_intd[good_data_mask]
-    dem_elev           =        dem_elev[good_data_mask]
-    mean_elev          =       mean_elev[good_data_mask]
+    # meandiff           =        meandiff[good_data_mask]
+    # # meddiff            =         meddiff[good_data_mask]
+    # # cellstd            =         cellstd[good_data_mask]
+    # canopy_fraction    = canopy_fraction[good_data_mask]
+    # # numphotons         =      numphotons[good_data_mask]
+    # numphotons_intd    = numphotons_intd[good_data_mask]
+    # dem_elev           =        dem_elev[good_data_mask]
+    # mean_elev          =       mean_elev[good_data_mask]
 
 
     if len(meandiff) < 3:
@@ -356,82 +355,82 @@ def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
     return
 
 
-def plot_error_stats(results_h5_name_or_list, empty_val = ivert_config.dem_default_ndv):
-    # print(fname)
-    data = get_data_from_h5_or_list(results_h5_name_or_list, empty_val = empty_val)
+# def plot_error_stats(results_h5_name_or_list, empty_val = ivert_config.dem_default_ndv):
+#     # print(fname)
+#     data = get_data_from_h5_or_list(results_h5_name_or_list, empty_val = empty_val)
+#
+#     meddiff         = data['diff_median']
+#     cellstd         = data['stddev'].astype(float)
+#     meandiff        = data['diff_mean']
+#     numphotons      = data['numphotons']
+#     numphotons_intd = data['numphotons_intd']
+#     canopy_fraction = data["canopy_fraction"]
+#     dem_elev        = data["dem_elev"]
+#     mean_elev       = data["mean"]
+#     # Plot some histograms
+#
+#     # Get rid of data with 3 or less ground photons in the inter-decile range, and all nans.
+#     good_data_mask = numphotons_intd > 3 & ~numpy.isnan(meandiff) & ~numpy.isnan(meddiff) & ~numpy.isnan(canopy_fraction)
+#     meandiff           =        meandiff[good_data_mask]
+#     meddiff            =         meddiff[good_data_mask]
+#     cellstd            =         cellstd[good_data_mask]
+#     canopy_fraction    = canopy_fraction[good_data_mask]
+#     numphotons         =      numphotons[good_data_mask]
+#     numphotons_intd    = numphotons_intd[good_data_mask]
+#     dem_elev           =        dem_elev[good_data_mask]
+#     mean_elev          =       mean_elev[good_data_mask]
+#
+#     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2,2, dpi=600, tight_layout=True) #, sharey=True)
+#
+#     dotsize=1
+#
+#     #############################################################################
+#     # Subplot 1, elev-elev correlation line
+#     ax1.scatter(mean_elev, dem_elev, s=dotsize)
+#     ax1.set_ylabel("DEM elevation (m)")
+#     ax1.set_xlabel("ICESat-2 elevation (m)")
+#     xlim = ax1.get_xlim()
+#     ax1.autoscale(False) # Keep the line-plotting from expanding the x,y-axes
+#     ax1.plot(xlim, xlim, ls="--", c=".3", lw=1)
+#
+#     #############################################################################
+#     # Subplot 2, error vs icesat-2 elevation
+#     ax2.scatter(dem_elev, meandiff, s=dotsize, color="darkred")
+#     ax2.axhline(y=0, ls="--", c=".3", lw=1)
+#     ax2.set_xlabel("ICESat-2 elev (m)")
+#     ax2.set_ylabel("DEM error (m)")
+#
+#     ax3.scatter(canopy_fraction*100, meandiff, s=dotsize, color="darkgreen")
+#     ax3.axhline(y=0, ls="--", c=".3", lw=1)
+#     ax3.set_xlabel("Canopy Cover (%)")
+#     ax3.set_ylabel("DEM error (m)")
+#
+#     ax4.scatter(numphotons_intd, meandiff, s=dotsize, color="purple")
+#     ax4.axhline(y=0, ls="--", c=".3", lw=1)
+#     ax4.set_xlabel("# photons per cell")
+#     ax4.set_ylabel("DEM errors (m)")
+#
+#
+#     # fig.suptitle(figure_titles_dict[fname] + " Error Stats")
+#     fig.suptitle("NE DEM Error Stats\n(N = {0:,} cells)".format(len(data)))
+#     fig.tight_layout()
+#
+#
+#     # figname = os.path.splitext(fname)[0] + "_stats.png"
+#     figname = os.path.join(os.path.split(results_h5_name_or_list[0])[0], os.path.split(os.path.split(results_h5_name_or_list[0])[0])[1]) + "_stats.png"
+#     fig.savefig(figname)
+#     print(figname, "written.")
+#
+#     plt.clf()
 
-    meddiff         = data['diff_median']
-    cellstd         = data['stddev'].astype(float)
-    meandiff        = data['diff_mean']
-    numphotons      = data['numphotons']
-    numphotons_intd = data['numphotons_intd']
-    canopy_fraction = data["canopy_fraction"]
-    dem_elev        = data["dem_elev"]
-    mean_elev       = data["mean"]
-    # Plot some histograms
-
-    # Get rid of data with 3 or less ground photons in the inter-decile range, and all nans.
-    good_data_mask = numphotons_intd > 3 & ~numpy.isnan(meandiff) & ~numpy.isnan(meddiff) & ~numpy.isnan(canopy_fraction)
-    meandiff           =        meandiff[good_data_mask]
-    meddiff            =         meddiff[good_data_mask]
-    cellstd            =         cellstd[good_data_mask]
-    canopy_fraction    = canopy_fraction[good_data_mask]
-    numphotons         =      numphotons[good_data_mask]
-    numphotons_intd    = numphotons_intd[good_data_mask]
-    dem_elev           =        dem_elev[good_data_mask]
-    mean_elev          =       mean_elev[good_data_mask]
-
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2,2, dpi=600, tight_layout=True) #, sharey=True)
-
-    dotsize=1
-
-    #############################################################################
-    # Subplot 1, elev-elev correlation line
-    ax1.scatter(mean_elev, dem_elev, s=dotsize)
-    ax1.set_ylabel("DEM elevation (m)")
-    ax1.set_xlabel("ICESat-2 elevation (m)")
-    xlim = ax1.get_xlim()
-    ax1.autoscale(False) # Keep the line-plotting from expanding the x,y-axes
-    ax1.plot(xlim, xlim, ls="--", c=".3", lw=1)
-
-    #############################################################################
-    # Subplot 2, error vs icesat-2 elevation
-    ax2.scatter(dem_elev, meandiff, s=dotsize, color="darkred")
-    ax2.axhline(y=0, ls="--", c=".3", lw=1)
-    ax2.set_xlabel("ICESat-2 elev (m)")
-    ax2.set_ylabel("DEM error (m)")
-
-    ax3.scatter(canopy_fraction*100, meandiff, s=dotsize, color="darkgreen")
-    ax3.axhline(y=0, ls="--", c=".3", lw=1)
-    ax3.set_xlabel("Canopy Cover (%)")
-    ax3.set_ylabel("DEM error (m)")
-
-    ax4.scatter(numphotons_intd, meandiff, s=dotsize, color="purple")
-    ax4.axhline(y=0, ls="--", c=".3", lw=1)
-    ax4.set_xlabel("# photons per cell")
-    ax4.set_ylabel("DEM errors (m)")
-
-
-    # fig.suptitle(figure_titles_dict[fname] + " Error Stats")
-    fig.suptitle("NE DEM Error Stats\n(N = {0:,} cells)".format(len(data)))
-    fig.tight_layout()
-
-
-    # figname = os.path.splitext(fname)[0] + "_stats.png"
-    figname = os.path.join(os.path.split(results_h5_name_or_list[0])[0], os.path.split(os.path.split(results_h5_name_or_list[0])[0])[1]) + "_stats.png"
-    fig.savefig(figname)
-    print(figname, "written.")
-
-    plt.clf()
-
-if __name__ == '__main__':
-
-    for h5 in [os.path.join('/home/mmacferrin/Research/DATA/ETOPO/data/validation_results/15s/2022.09.29/plots/', fn) for fn in
-               ["total_results_gt{0}.h5".format(i) for i in (list(range(40,48)) + [50])]]:
-        #, "total_results_gt42.h5", "total_results_gt43.h5", "total_results_gt44.h5", "total_results_gt46.h5"]]:
-        plotname = os.path.splitext(h5)[0] + "_plot.png"
-
-        plot_histogram_and_error_stats_4_panels(h5, plotname, place_name="ETOPO 2022")
+# if __name__ == '__main__':
+#
+#     for h5 in [os.path.join('/home/mmacferrin/Research/DATA/ETOPO/data/validation_results/15s/2022.09.29/plots/', fn) for fn in
+#                ["total_results_gt{0}.h5".format(i) for i in (list(range(40,48)) + [50])]]:
+#         #, "total_results_gt42.h5", "total_results_gt43.h5", "total_results_gt44.h5", "total_results_gt46.h5"]]:
+#         plotname = os.path.splitext(h5)[0] + "_plot.png"
+#
+#         plot_histogram_and_error_stats_4_panels(h5, plotname, place_name="ETOPO 2022")
 
     # plot_histograms(h5_names)
     # plot_error_stats(h5_names)
