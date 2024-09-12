@@ -105,7 +105,7 @@ def run_job_status_command(args: argparse.Namespace) -> None:
             print("Input file statuses:")
             for i, frow in input_files.iterrows():
                 status = frow["status"]
-                if status in ("downloaded", "unprocessed"):
+                if status in ("downloaded", "unprocessed", "unknown"):
                     status = f"standing by {bcolors.ITALIC}(not yet processed){bcolors.ENDC}"
                 elif status == "processing":
                     status = f"{bcolors.ITALIC}{bcolors.BOLD}{bcolors.OKGREEN}processing{bcolors.ENDC}{bcolors.ENDC}{bcolors.ENDC}"
@@ -117,8 +117,8 @@ def run_job_status_command(args: argparse.Namespace) -> None:
                     status = f"{bcolors.FAIL}error{bcolors.ENDC}"
                 elif status == "quarantined":
                     status = f"{bcolors.FAIL}quarantined{bcolors.ENDC}"
-                elif status == "unknown":
-                    status = f"{bcolors.WARNING}unknown{bcolors.ENDC}"
+                # elif status == "unknown":
+                #     status = f"{bcolors.WARNING}unknown{bcolors.ENDC}"
                 print(f"    {frow['filename']}: {status}", end="")
                 if frow['filename'].endswith(".ini"):
                     print(f" (<-{bcolors.ITALIC}job config file{bcolors.ENDC})")
