@@ -85,8 +85,8 @@ class IvertExporter:
 
         # Add an export file entry into the database for this job.
         if self.jobs_db.file_exists(username, job_id, fname):
-            self.jobs_db.update_file_status(username, job_id, fname, "uploaded",
-                                            upload_to_s3=upload_to_s3)
+            self.jobs_db.update_file_statistics(username, job_id, fname, new_status="uploaded",
+                                                upload_to_s3=upload_to_s3)
         else:
             self.jobs_db.create_new_file_record(fname, job_id, username, 1, status="uploaded",
                                                 upload_to_s3=upload_to_s3)
