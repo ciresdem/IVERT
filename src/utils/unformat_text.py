@@ -17,7 +17,8 @@ ansi_escape = re.compile(r'''
 ''', re.VERBOSE)
 
 # Matches any lines that end in a carriage return.
-cr_line_regex = re.compile(r'((?<=[\n\r]).*?\r)|(^.*?\r)')
+# Unless they're immediately follwed by a newline character, at which point that'll be displayed to the screen.
+cr_line_regex = re.compile(r'(((?<=[\n\r]).*?\r)|(^.*?\r))(?!\n)')
 
 
 def unformat(text: str) -> str:
@@ -26,8 +27,10 @@ def unformat(text: str) -> str:
 
 
 def delete_cr_lines(text: str) -> str:
-    """Remove carriage returns and the lines preceding them from text."""
-    return cr_line_regex.sub("", text)
+    """Remove carriage returns and the lines preceding them if they were overwritten by new lines.
+
+    And then get rid of any remaining carriage returns."""
+    return cr_line_regex.sub("", text).replace("\r", "")
 
 
 def unformat_and_delete_cr_lines (text: str) -> str:
