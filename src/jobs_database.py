@@ -1374,7 +1374,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
             s3_key = os.path.join(s3_directory, os.path.basename(db_fname))
             self.s3m.upload(db_fname,
                             s3_key,
-                            bucket_type="export",
+                            bucket_type="export_server",
                             delete_original=True,
                             recursive=False,
                             other_metadata={

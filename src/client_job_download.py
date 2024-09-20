@@ -58,6 +58,7 @@ def run_download_command(args: argparse.Namespace) -> list[str]:
 
     return d_files
 
+
 def find_most_recent_job_dir_from_this_machine() -> str:
     """Find the most recent job directory on this machine."""
     # Get the base IVERT jobs directory.
