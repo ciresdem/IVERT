@@ -131,7 +131,8 @@ def define_and_parse_args(return_parser: bool = False):
                       "Run once before using IVERT on a new machine, or when updating the credentials file.")
     # Use the parent parser from client_user_setup.py to define the arguments for the subparser
     subparsers.add_parser("setup",
-                          parents=[client_user_setup.define_and_parse_args(just_return_parser=True)],
+                          parents=[client_user_setup.define_and_parse_args(just_return_parser=True,
+                                                                           ignore_config_errors=True)],
                           add_help=False,
                           help=setup_help_msg, description=setup_help_msg)
 

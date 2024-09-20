@@ -22,17 +22,20 @@ if vars(sys.modules[__name__])['__package__'] in ('ivert', 'ivert_utils'):
     import ivert_utils.bcolors as bcolors
     import ivert_utils.configfile as configfile
     import ivert_utils.progress_bar as progress_bar
+    import ivert_utils.is_aws as is_aws
 else:
     try:
         import utils.query_yes_no as query_yes_no
         import utils.bcolors as bcolors
         import utils.configfile as configfile
         import utils.progress_bar as progress_bar
+        import utils.is_aws as is_aws
     except ModuleNotFoundError:
         import ivert_utils.query_yes_no as query_yes_no
         import ivert_utils.bcolors as bcolors
         import ivert_utils.configfile as configfile
         import ivert_utils.progress_bar as progress_bar
+        import ivert_utils.is_aws as is_aws
 
 ivert_config = None
 
@@ -40,16 +43,16 @@ ivert_config = None
 class S3Manager:
     """Class for copying files into and out-of the IVERT AWS S3 buckets, as needed."""
 
-    global ivert_config
-    if ivert_config is None:
-        ivert_config = configfile.config()
-
     available_bucket_types = ("database", "untrusted", "trusted", "export_server", "export_client", "quarantine")
     available_bucket_aliases = ("d", "u", "t", "s", "xs", "c", "xc", "q",
                                 "D", "U", "T", "S", "XS", "C", "XC", "Q")
-    default_bucket_type = "database" if ivert_config.is_aws else "untrusted"
+    default_bucket_type = "database" if is_aws.is_aws() else "untrusted"
 
     def __init__(self):
+        global ivert_config
+        if ivert_config is None:
+            ivert_config = configfile.config()
+
         self.config = ivert_config
 
         # Different buckets for each type.

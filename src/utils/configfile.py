@@ -27,6 +27,7 @@ if not os.path.exists(ivert_default_configfile):
                                                             "..", "..", "..", "..",
                                                             "ivert_data", "config", "ivert_config.ini"))
 
+
 class config:
     """A subclass implementation of configparser.ConfigParser(), expect that config attributes are referenced as object
     attributes rather than in a dictionary.

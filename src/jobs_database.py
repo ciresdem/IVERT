@@ -33,7 +33,7 @@ else:
         import ivert_utils.version as version
         import ivert.s3 as s3
 
-ivert_config = configfile.config()
+ivert_config = None
 
 
 class JobsDatabaseClient:
@@ -54,6 +54,10 @@ class JobsDatabaseClient:
             None
         """
         # The IVERT configfile object. Get the paths from here.
+        global ivert_config
+        if ivert_config is None:
+            ivert_config = configfile.config()
+
         self.ivert_config = ivert_config
         self.ivert_jobs_dir = self.ivert_config.ivert_jobs_directory_local
         self.db_fname = self.ivert_config.ivert_jobs_database_local_fname

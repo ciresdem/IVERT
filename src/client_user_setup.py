@@ -53,6 +53,7 @@ def setup_new_user(args: argparse.Namespace) -> None:
     # Update the IVERT config file, since the credentials fields should now be populated. They weren't before this.
     global ivert_config
     ivert_config = configfile.config()
+
     # Gotta do this in the client_job_upload module too, or else these new variables won't be there either.
     # This is a bit of a hack but it works.
     client_job_upload.reset_ivert_config()
@@ -731,8 +732,17 @@ def get_region_name_from_bucket_name(bucket_name: str) -> str:
     return "us-east-1"
 
 
-def define_and_parse_args(just_return_parser: bool=False):
+def define_and_parse_args(just_return_parser: bool = False,
+                          ignore_config_errors: bool = False):
     """Define and parse command-line arguments."""
+
+    global ivert_config
+    global ivert_user_config_template
+
+    if not ivert_config:
+        ivert_config = configfile.config(ignore_errors=ignore_config_errors)
+    if not ivert_user_config_template:
+        ivert_user_config_template = configfile.config(ivert_config.ivert_user_config_template)
 
     parser = argparse.ArgumentParser(description="Set up a new IVERT user on the local machine.")
     parser.add_argument("email", type=is_email.return_email,
@@ -803,11 +813,13 @@ def define_and_parse_args(just_return_parser: bool=False):
                                                       "either of these names are already used and you want to avoid "
                                                       "conflicts. It's recommended to just use the default settings "
                                                       "here and skip these options.")
+
     aws_group.add_argument("-ip", "--ivert_import_profile", dest="ivert_import_profile",
                            default=ivert_user_config_template.aws_profile_ivert_import_untrusted,
                            type=str, required=False,
                            help="Manually set the name of the AWS profile for IVERT import. "
                                 f" Default: '{ivert_user_config_template.aws_profile_ivert_import_untrusted}'.")
+
     aws_group.add_argument("-xp", "--ivert_export_profile", dest="ivert_export_profile",
                            default=ivert_user_config_template.aws_profile_ivert_export_client,
                            type=str, required=False,
@@ -821,7 +833,7 @@ def define_and_parse_args(just_return_parser: bool=False):
 
 
 if __name__ == "__main__":
-    input_args = define_and_parse_args()
+    input_args = define_and_parse_args(ignore_config_errors=True)
 
     # Just for local testing. Normally this is run as a subset menu of client.py, not standalone. But it can be run standalone.
     setup_new_user(input_args)
