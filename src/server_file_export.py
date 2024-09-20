@@ -80,8 +80,8 @@ class IvertExporter:
         f_key = export_prefix + ("" if export_prefix.endswith("/") else "/") + os.path.basename(fname)
 
         # Upload the file, only if it doesn't already exist in the export bucket.
-        if overwrite or not self.s3m.exists(f_key, bucket_type="export", return_head=False):
-            self.s3m.upload(fname, f_key, bucket_type="export")
+        if overwrite or not self.s3m.exists(f_key, bucket_type="export_server", return_head=False):
+            self.s3m.upload(fname, f_key, bucket_type="export_server")
 
         # Add an export file entry into the database for this job.
         if self.jobs_db.file_exists(username, job_id, fname):
