@@ -327,15 +327,16 @@ class config:
                     self.s3_import_untrusted_endpoint_url = s3_credentials.s3_import_untrusted_endpoint_url
                     self.s3_bucket_export_client = s3_credentials.s3_bucket_export_client
                     self.s3_export_client_endpoint_url = s3_credentials.s3_export_client_endpoint_url
-            except AttributeError:
+            except AttributeError as e:
                 if ignore_errors:
                     pass
                 else:
-                    print("ERROR: The user config file and/or the IVERT S3 credentials do not contain the correct "
-                          "fields.\nIf you recently upgraded IVERT, please run the 'ivert setup' script again with "
-                          "your new credentials.\nIf the problem persists, contact your IVERT administrator.",
-                          file=sys.stderr)
-
-                    sys.exit(0)
+                    raise e
+                    # print("ERROR: The user config file and/or the IVERT S3 credentials do not contain the correct "
+                    #       "fields.\nIf you recently upgraded IVERT, please run the 'ivert setup' script again with "
+                    #       "your new credentials.\nIf the problem persists, contact your IVERT administrator.",
+                    #       file=sys.stderr)
+                    #
+                    # sys.exit(0)
 
         return
