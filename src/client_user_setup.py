@@ -569,9 +569,9 @@ def update_local_aws_credentials(aws_credentials_file: str,
             old_ivert_profile_string = new_ivert_profile_string
 
         # Create a new profile string for that profile.
-        new_ivert_profile = ("\n".join([new_ivert_profile_string,
-                                        f"aws_access_key_id = {access_key_id}",
-                                        f"aws_secret_access_key = {secret_access_key}"]) +
+        new_ivert_profile = ("\n\n" + "\n".join([new_ivert_profile_string,
+                                                 f"aws_access_key_id = {access_key_id}",
+                                                 f"aws_secret_access_key = {secret_access_key}"]) +
                              (f"\nendpoint_url = {endpoint_url}" if endpoint_url else "") + "\n\n")
 
         # Create a search regex for the complete text of the previous profile.
