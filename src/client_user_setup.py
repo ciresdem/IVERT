@@ -505,8 +505,7 @@ def update_local_aws_config(aws_config_file: str,
         new_ivert_profile = ("\n".join([f"[profile {profile_id_string}]",
                                         "output = json",
                                         f"region = {get_region_name_from_bucket_name(bname)}"]) +
-                             f"\nendpoint_url = {endpoint_url}" if endpoint_url else "" +
-                                                                                     "\n\n")
+                             (f"\nendpoint_url = {endpoint_url}" if endpoint_url else "") + "\n\n")
 
         if old_ivert_profile_string in config_text:
             # Try to find the entire profile string with all options, until either the end of the file or the next profile string.
