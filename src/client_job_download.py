@@ -103,7 +103,7 @@ def download_job(job_name: str,
     # Download the results
     s3m = s3.S3Manager()
     try:
-        return s3m.download(export_glob_str, dest, bucket_type="export", show_progress_bar=True)
+        return s3m.download(export_glob_str, dest, bucket_type="export_client", show_progress_bar=True)
     except FileNotFoundError:
         return []
 

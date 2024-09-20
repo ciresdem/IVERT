@@ -65,8 +65,12 @@ class JobsDatabaseClient:
         self.conn = None
 
         # Where the jobs database sits in the S3 bucket
-        self.s3_bucket_type = self.ivert_config.s3_ivert_jobs_database_bucket_type
-        self.s3_database_key = self.ivert_config.s3_ivert_jobs_database_key
+        if ivert_config.is_aws:
+            self.s3_bucket_type = self.ivert_config.s3_ivert_jobs_database_bucket_type_server
+            self.s3_database_key = self.ivert_config.s3_ivert_jobs_database_server_key
+        else:
+            self.s3_bucket_type = self.ivert_config.s3_ivert_jobs_database_bucket_type_client
+            self.s3_database_key = self.ivert_config.s3_ivert_jobs_database_client_key
 
         # The S3Manager instance, for uploading and downloading files to the S3 buckets
         self.s3m = s3.S3Manager()
