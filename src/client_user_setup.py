@@ -24,7 +24,7 @@ else:
     import utils.is_email as is_email
     import utils.fetch_text as fetch_text
 
-ivert_config = configfile.config()
+ivert_config = configfile.config(ignore_errors=True)
 ivert_user_config_template = configfile.config(ivert_config.ivert_user_config_template)
 
 

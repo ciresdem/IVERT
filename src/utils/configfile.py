@@ -52,7 +52,8 @@ class config:
     """
 
     def __init__(self,
-                 configfile=ivert_default_configfile):
+                 configfile: str = ivert_default_configfile,
+                 ignore_errors: bool = False):
         """Initializes a new instance of the config class."""
 
         self._configfile = os.path.abspath(os.path.realpath(configfile))
@@ -71,7 +72,7 @@ class config:
 
         # If we're importing the primary IVERT config file, add the user variables and S3 creds to the config as well.
         if os.path.basename(self._configfile) == os.path.basename(ivert_default_configfile):
-            self._add_user_variables_and_s3_creds_to_config_obj()
+            self._add_user_variables_and_s3_creds_to_config_obj(ignore_errors=ignore_errors)
 
         # If 'ivert_version' is present and not already set, set it.
         if hasattr(self, "ivert_version") and self.ivert_version is None:
@@ -283,7 +284,7 @@ class config:
 
         return
 
-    def _add_user_variables_and_s3_creds_to_config_obj(self):
+    def _add_user_variables_and_s3_creds_to_config_obj(self, ignore_errors: bool = False):
         """Add the names of the S3 buckets to the configfile.config object.
 
         On a client instance, src setup needs to be run to flesh out the user configfile, before this will work."""
@@ -298,8 +299,11 @@ class config:
             assert hasattr(self, "username")
             assert hasattr(self, "aws_profile_ivert_import_untrusted")
             assert hasattr(self, "aws_profile_ivert_export_client")
-        except AssertionError:
-            print("")
+        except AssertionError as e:
+            if ignore_errors:
+                pass
+            else:
+                raise e
 
         # If we're on the server side (in the AWS), get these from the "ivert_setup" repository under /setup/paths.sh.
         #    In this case, only the s3_bucket_import_trusted, s3_bucket_database, and s3_bucket_export are needed.
@@ -324,11 +328,14 @@ class config:
                     self.s3_bucket_export_client = s3_credentials.s3_bucket_export_client
                     self.s3_export_client_endpoint_url = s3_credentials.s3_export_client_endpoint_url
             except AttributeError:
-                print("ERROR: The user config file and/or the IVERT S3 credentials do not contain the correct fields."
-                      "\nIf you recently upgraded IVERT, please run the 'ivert setup' script again with your new credentials."
-                      "\nIf the problem persists, contact your IVERT administrator.",
-                      file=sys.stderr)
+                if ignore_errors:
+                    pass
+                else:
+                    print("ERROR: The user config file and/or the IVERT S3 credentials do not contain the correct "
+                          "fields.\nIf you recently upgraded IVERT, please run the 'ivert setup' script again with "
+                          "your new credentials.\nIf the problem persists, contact your IVERT administrator.",
+                          file=sys.stderr)
 
-                sys.exit(0)
+                    sys.exit(0)
 
         return
