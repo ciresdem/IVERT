@@ -77,7 +77,8 @@ class S3Manager:
 
         # Only the 'untrusted' bucket and 'export' bucket need AWS profiles, and only on the client side.
         # Grab them here.
-        self.bucket_profile_dict["untrusted"] = None if self.config.is_aws else self.config.aws_profile_ivert_ingest
+        self.bucket_profile_dict["untrusted"] = \
+            None if self.config.is_aws else self.config.aws_profile_ivert_import_untrusted
         self.bucket_profile_dict["export_client"] = \
             None if self.config.is_aws else self.config.aws_profile_ivert_export_client
 
