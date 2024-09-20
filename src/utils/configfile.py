@@ -175,11 +175,16 @@ class config:
         If we're server-side, we need to fill in [s3_bucket_database], [s3_bucket_trusted], and [s3_bucket_export],
         and [s3_bucket_quarantine].
         These can be found in the ivert_setup/setup/paths.sh file from the ivert_setup repository."""
-        assert hasattr(self, "s3_bucket_database")
-        assert hasattr(self, "s3_bucket_import_untrusted")
-        assert hasattr(self, "s3_bucket_import_trusted")
-        assert hasattr(self, "s3_bucket_export_server")
-        assert hasattr(self, "s3_bucket_quarantine")
+        try:
+            assert hasattr(self, "s3_bucket_database")
+            assert hasattr(self, "s3_bucket_import_trusted")
+            assert hasattr(self, "s3_bucket_export_server")
+            assert hasattr(self, "s3_bucket_quarantine")
+        except AssertionError:
+            print("Error: Not all required bucket names are present in the ivert_setup 'paths.sh' file.",
+                  file=sys.stderr)
+            sys.exit(0)
+
         if include_sns_arn:
             assert hasattr(self, "sns_topic_arn")
 
@@ -284,14 +289,17 @@ class config:
         On a client instance, src setup needs to be run to flesh out the user configfile, before this will work."""
         # Make sure all these are defined in here. They may be assigned to None but they should exist. This is
         # a sanity check in case we changed the bucket variables names in the configfile.
-        assert hasattr(self, "s3_bucket_import_untrusted")
-        assert hasattr(self, "s3_bucket_export_client")
-        assert hasattr(self, "s3_export_client_endpoint_url")
-        assert hasattr(self, "s3_import_untrusted_endpoint_url")
-        assert hasattr(self, "user_email")
-        assert hasattr(self, "username")
-        assert hasattr(self, "aws_profile_ivert_import_untrusted")
-        assert hasattr(self, "aws_profile_ivert_export_client")
+        try:
+            assert hasattr(self, "s3_bucket_import_untrusted")
+            assert hasattr(self, "s3_bucket_export_client")
+            assert hasattr(self, "s3_export_client_endpoint_url")
+            assert hasattr(self, "s3_import_untrusted_endpoint_url")
+            assert hasattr(self, "user_email")
+            assert hasattr(self, "username")
+            assert hasattr(self, "aws_profile_ivert_import_untrusted")
+            assert hasattr(self, "aws_profile_ivert_export_client")
+        except AssertionError:
+            print("")
 
         # If we're on the server side (in the AWS), get these from the "ivert_setup" repository under /setup/paths.sh.
         #    In this case, only the s3_bucket_import_trusted, s3_bucket_database, and s3_bucket_export are needed.
@@ -300,19 +308,27 @@ class config:
 
         # If we're on the client side (not in an AWS instance), get these from the user configfile.
         else:
-            if os.path.exists(self.user_configfile):
-                user_config = config(self.user_configfile)
-                self.user_email = user_config.user_email
-                self.username = user_config.username
-                self.aws_profile_ivert_import_untrusted = user_config.aws_profile_ivert_import_untrusted
-                self.aws_profile_ivert_export_client = user_config.aws_profile_ivert_export_client
+            try:
+                if os.path.exists(self.user_configfile):
+                    user_config = config(self.user_configfile)
+                    self.user_email = user_config.user_email
+                    self.username = user_config.username
+                    self.aws_profile_ivert_import_untrusted = user_config.aws_profile_ivert_import_untrusted
+                    self.aws_profile_ivert_export_client = user_config.aws_profile_ivert_export_client
 
-            # Now try to read the s3 credentials file.
-            if os.path.exists(os.path.abspath(self.ivert_s3_credentials_file)):
-                s3_credentials = config(self.ivert_s3_credentials_file)
-                self.s3_bucket_import_untrusted = s3_credentials.s3_bucket_import_untrusted
-                self.s3_import_untrusted_endpoint_url = s3_credentials.s3_import_untrusted_endpoint_url
-                self.s3_bucket_export_client = s3_credentials.s3_bucket_export_client
-                self.s3_export_client_endpoint_url = s3_credentials.s3_export_client_endpoint_url
+                # Now try to read the s3 credentials file.
+                if os.path.exists(os.path.abspath(self.ivert_s3_credentials_file)):
+                    s3_credentials = config(self.ivert_s3_credentials_file)
+                    self.s3_bucket_import_untrusted = s3_credentials.s3_bucket_import_untrusted
+                    self.s3_import_untrusted_endpoint_url = s3_credentials.s3_import_untrusted_endpoint_url
+                    self.s3_bucket_export_client = s3_credentials.s3_bucket_export_client
+                    self.s3_export_client_endpoint_url = s3_credentials.s3_export_client_endpoint_url
+            except AttributeError:
+                print("ERROR: The user config file and/or the IVERT S3 credentials do not contain the correct fields."
+                      "\nIf you recently upgraded IVERT, please run the 'ivert setup' script again with your new credentials."
+                      "\nIf the problem persists, contact your IVERT administrator.",
+                      file=sys.stderr)
+
+                sys.exit(0)
 
         return
