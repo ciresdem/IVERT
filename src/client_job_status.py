@@ -18,7 +18,7 @@ else:
     import jobs_database
     from utils.bcolors import bcolors
 
-ivert_config = configfile.config()
+ivert_config = None
 
 
 def find_latest_job_submitted(username,
@@ -61,6 +61,11 @@ def find_latest_job_submitted(username,
 
 
 def get_latest_job_name_from_local_dirs():
+    """Find the most recent job submitted by this user on this machine, from the local jobs directory."""
+    global ivert_config
+    if ivert_config is None:
+        ivert_config = configfile.config()
+
     # Now look in the local jobs folder to see if there's a more recent job there that was submitted, but isn't yet in
     # the server's jobs database. (Perhaps it just hasn't been picked up by the server yet.)
     local_jobs_dir = ivert_config.ivert_jobs_directory_local
@@ -76,6 +81,10 @@ def get_latest_job_name_from_local_dirs():
 
 def run_job_status_command(args: argparse.Namespace) -> None:
     """Run the job status command from the ivert_client."""
+    global ivert_config
+    if ivert_config is None:
+        ivert_config = configfile.config()
+
     assert hasattr(args, "job_name")
     assert hasattr(args, "command") and args.command == "status"
     assert hasattr(args, "detailed") is isinstance(args.detailed, bool)

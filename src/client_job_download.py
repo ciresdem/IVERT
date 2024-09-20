@@ -17,13 +17,17 @@ else:
     import s3
     import utils.configfile as configfile
 
-ivert_config = configfile.config()
+ivert_config = None
 
 
 def run_download_command(args: argparse.Namespace) -> list[str]:
     """Run the ivert_client download command."""
     assert hasattr(args, "job_id_or_name")
     assert hasattr(args, "output_dir")
+
+    global ivert_config
+    if ivert_config is None:
+        ivert_config = configfile.config()
 
     # If we set it (by default) to just get the last job from the user, go find what the last job was.
     if args.job_id_or_name.lower() == "latest":
@@ -61,6 +65,10 @@ def run_download_command(args: argparse.Namespace) -> list[str]:
 
 def find_most_recent_job_dir_from_this_machine() -> str:
     """Find the most recent job directory on this machine."""
+    global ivert_config
+    if ivert_config is None:
+        ivert_config = configfile.config()
+
     # Get the base IVERT jobs directory.
     ivert_jobs_dir = ivert_config.ivert_jobs_directory_local
     sub_folders = [fn for fn in os.listdir(ivert_jobs_dir) if os.path.isdir(os.path.join(ivert_jobs_dir, fn))]
@@ -70,6 +78,10 @@ def find_most_recent_job_dir_from_this_machine() -> str:
 
 def find_matching_job_dir(job_name: str) -> str:
     """Find the IVERT job directory with the given name."""
+    global ivert_config
+    if ivert_config is None:
+        ivert_config = configfile.config()
+
     dirname = os.path.join(ivert_config.ivert_jobs_directory_local, job_name)
     if not os.path.exists(dirname):
         raise FileNotFoundError(f"Could not find directory with name {job_name} in {ivert_config.ivert_jobs_directory_local}")
@@ -113,9 +125,11 @@ def define_and_parse_args() -> argparse.Namespace:
     """Define and parse the command line arguments for this script."""
     parser = argparse.ArgumentParser(description="Download job results files from IVERT.")
     parser.add_argument("-n", "--job_name", dest="job_name", default=None,
-                        help="The name of the job to download results for. Usually in the format 'username_jobid'. Default: Download whatever the latest job was that you submitted from this machine.")
+                        help="The name of the job to download results for. Usually in the format 'username_jobid'. "
+                             "Default: Download whatever the latest job was that you submitted from this machine.")
     parser.add_argument("-o" "--output_dir", dest="output_dir", default=None,
-                        help="The directory to download the results to. Default: Download to the .src/jobs sub-directory where the job was submitted.")
+                        help="The directory to download the results to. Default: Download to the .src/jobs "
+                             "sub-directory where the job was submitted.")
 
     return parser.parse_args()
 

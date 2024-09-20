@@ -823,5 +823,5 @@ def define_and_parse_args(just_return_parser: bool=False):
 if __name__ == "__main__":
     input_args = define_and_parse_args()
 
-    # Just for local testing. Normally this is run as a subset menu of ivert_client.py, not standalone. But it can be run standalone.
+    # Just for local testing. Normally this is run as a subset menu of client.py, not standalone. But it can be run standalone.
     setup_new_user(input_args)

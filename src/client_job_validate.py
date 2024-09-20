@@ -25,8 +25,7 @@ else:
     from utils.bcolors import bcolors as bcolors
     import utils.configfile as configfile
 
-
-ivert_config = configfile.config()
+ivert_config = None
 
 
 def run_validate_command(args: argparse.Namespace) -> None:
@@ -45,6 +44,10 @@ def run_validate_command(args: argparse.Namespace) -> None:
     assert hasattr(args, "mask_bing_buildings")
     assert hasattr(args, "mask_wsf_urban")
     assert hasattr(args, "outlier_sd_threshold")
+
+    global ivert_config
+    if ivert_config is None:
+        ivert_config = configfile.config()
 
     # Make a copy we can modify to generate a config file for the job.
     args_to_send = argparse.Namespace(**vars(args))

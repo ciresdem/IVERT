@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""ivert_client.py -- The front-facing interfact to IVERT code for cloud computing."""
+"""client.py -- The front-facing interfact to IVERT code for cloud computing."""
 import argparse
 import sys
 
@@ -145,8 +145,8 @@ def define_and_parse_args(return_parser: bool = False):
                              help="Whether to send SNS notifications. Must be followed by 'True', 'False'. Default 'True'")
     parser_test.add_argument("-w", "--wait", dest="wait", default=False, action="store_true",
                              help="Wait to exit until the results are finished and downloaded. If False,"
-                                  " just upload the data and exit. You can run 'ivert_client.py check <job_id>' to check the status"
-                                  " of the job and 'ivert_client.py download <job_id> --local_dir <dirname>' to download results."
+                                  " just upload the data and exit. You can run 'client.py check <job_id>' to check the status"
+                                  " of the job and 'client.py download <job_id> --local_dir <dirname>' to download results."
                                   " Default: False")
 
     ###############################################################
