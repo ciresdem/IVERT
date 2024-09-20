@@ -1517,6 +1517,9 @@ def define_and_parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
+    if not ivert_config:
+        ivert_config = configfile.config()
+
     args = define_and_parse_args()
 
     if ivert_config.is_aws:
