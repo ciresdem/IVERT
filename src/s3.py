@@ -34,11 +34,15 @@ else:
         import ivert_utils.configfile as configfile
         import ivert_utils.progress_bar as progress_bar
 
-ivert_config = configfile.config()
+ivert_config = None
 
 
 class S3Manager:
     """Class for copying files into and out-of the IVERT AWS S3 buckets, as needed."""
+
+    global ivert_config
+    if ivert_config is None:
+        ivert_config = configfile.config()
 
     available_bucket_types = ("database", "untrusted", "trusted", "export_server", "export_client", "quarantine")
     available_bucket_aliases = ("d", "u", "t", "s", "xs", "c", "xc", "q",
@@ -771,6 +775,9 @@ def pretty_print_bucket_list(use_formatting=True):
 
     This is formatted for printing to a bash command shell.
     """
+    global ivert_config
+    if ivert_config is None:
+        ivert_config = configfile.config()
 
     aliases = S3Manager.available_bucket_types
 
