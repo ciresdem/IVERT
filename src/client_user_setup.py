@@ -509,19 +509,19 @@ def update_local_aws_config(aws_config_file: str,
 
         if old_ivert_profile_string in config_text:
             # Try to find the entire profile string with all options, until either the end of the file or the next profile string.
-            ivert_profile_search_regex = old_ivert_profile_string.replace("[", r"\[").replace("]", r"\]") + \
+            old_ivert_profile_search_regex = old_ivert_profile_string.replace("[", r"\[").replace("]", r"\]") + \
                                          r"[\w\s\d\=\-\"\']*(?=(\s\[profile )|\Z)"
 
             m = re.search(ivert_profile_search_regex, config_text)
         else:
-            ivert_profile_search_regex = None
+            old_ivert_profile_search_regex = None
             m = None
 
         # If we found the profile, replace it. If not, add it.
         if m is None:
             config_text = str(config_text.rstrip("\n\r ")) + "\n\n" + new_ivert_profile
         else:
-            config_text = re.sub(ivert_profile_search_regex, new_ivert_profile, config_text, count=1)
+            config_text = re.sub(old_ivert_profile_search_regex, new_ivert_profile, config_text, count=1)
 
         print(config_text, "\n")
 
@@ -585,16 +585,16 @@ def update_local_aws_credentials(aws_credentials_file: str,
             old_ivert_profile_search_regex = old_ivert_profile_string.replace(
                 "[", r"\[").replace("]", r"\]") + r"[\w\s\d\=\-\"\'\+/]*(?=(\s\[)|\Z)"
 
-            m = re.search(ivert_profile_search_regex, credentials_text)
+            m = re.search(old_ivert_profile_search_regex, credentials_text)
         else:
-            ivert_profile_search_regex = None
+            old_ivert_profile_search_regex = None
             m = None
 
         # If we found the profile, replace it. If not, add it.
         if m is None:
             credentials_text = str(credentials_text.rstrip()) + "\n\n" + new_ivert_profile
         else:
-            credentials_text = re.sub(ivert_profile_search_regex, new_ivert_profile, credentials_text, count=1)
+            credentials_text = re.sub(old_ivert_profile_search_regex, new_ivert_profile, credentials_text, count=1)
 
     # Overwrite the credentials file.
     with open(aws_credentials_file, "w") as f:
