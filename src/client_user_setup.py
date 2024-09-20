@@ -509,7 +509,7 @@ def update_local_aws_config(aws_config_file: str,
         if old_ivert_profile_string in config_text:
             # Try to find the entire profile string with all options, until either the end of the file or the next profile string.
             ivert_profile_search_regex = old_ivert_profile_string.replace("[", r"\[").replace("]", r"\]") + \
-                                         r"[\w\s\d\=\-\"\']*(?=(\[profile )|\Z)"
+                                         r"[\w\s\d\=\-\"\']*(?=(\s\[profile )|\Z)"
 
             m = re.search(ivert_profile_search_regex, config_text)
         else:
@@ -557,6 +557,7 @@ def update_local_aws_credentials(aws_credentials_file: str,
 
              (args.ivert_export_profile, args.export_access_key_id,
               args.export_secret_access_key, args.export_endpoint_url)]:
+
         new_ivert_profile_string = f"[{profile_id_string}]"
 
         # Old IVERT versions (<0.5.0) used "ivert_ingest" instead of "ivert_import_untrusted"
@@ -569,17 +570,17 @@ def update_local_aws_credentials(aws_credentials_file: str,
             old_ivert_profile_string = new_ivert_profile_string
 
         # Create a new profile string for that profile.
-        new_ivert_profile = ("\n\n" + "\n".join([new_ivert_profile_string,
-                                                 f"aws_access_key_id = {access_key_id}",
-                                                 f"aws_secret_access_key = {secret_access_key}"]) +
+        new_ivert_profile = ("\n".join([new_ivert_profile_string,
+                                        f"aws_access_key_id = {access_key_id}",
+                                        f"aws_secret_access_key = {secret_access_key}"]) +
                              (f"\nendpoint_url = {endpoint_url}" if endpoint_url else "") + "\n\n")
 
         # Create a search regex for the complete text of the previous profile.
         if old_ivert_profile_string in credentials_text:
             # Try to find the entire profile string with all options, until either the end of the file or the next
             # profile string.
-            ivert_profile_search_regex = old_ivert_profile_string.replace("[", r"\[").replace("]", r"\]") + \
-                                         r"[\w\s\d\=\-\"\'\+/]*(?=(\[[a-zA-Z0-9_]+\])|\Z)"
+            old_ivert_profile_search_regex = old_ivert_profile_string.replace(
+                "[", r"\[").replace("]", r"\]") + r"[\w\s\d\=\-\"\'\+/]*(?=(\s\[)|\Z)"
 
             m = re.search(ivert_profile_search_regex, credentials_text)
         else:
