@@ -492,7 +492,7 @@ def update_local_aws_config(aws_config_file: str,
             [(args.ivert_import_profile, args.untrusted_bucket_name, args.untrusted_endpoint_url),
              (args.ivert_export_profile, args.export_bucket_name, args.export_endpoint_url)]:
 
-        print(f"Updating profile {profile_id_string}...")
+        print(f"Updating profile {profile_id_string}...\n")
 
         # Identify if old IVERT profile names are being used here.
         if '[profile ivert_ingest]' in config_text and profile_id_string == args.ivert_import_profile:
@@ -523,6 +523,8 @@ def update_local_aws_config(aws_config_file: str,
             config_text = str(config_text.rstrip("\n\r ")) + "\n\n" + new_ivert_profile
         else:
             config_text = re.sub(ivert_profile_search_regex, new_ivert_profile, config_text, count=1)
+
+        print(config_text, "\n")
 
     # Overwrite the config file.
     with open(aws_config_file, "w") as f:
