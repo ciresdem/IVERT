@@ -510,7 +510,7 @@ def update_local_aws_config(aws_config_file: str,
         if old_ivert_profile_string in config_text:
             # Try to find the entire profile string with all options, until either the end of the file or the next profile string.
             old_ivert_profile_search_regex = old_ivert_profile_string.replace("[", r"\[").replace("]", r"\]") + \
-                                         r"[\w\s\d\=\-\"\']*(?=(\s\[profile )|\Z)"
+                                         r"[\w\s\d\=\-\"\':]*(?=(\s\[profile )|\Z)"
 
             m = re.search(old_ivert_profile_search_regex, config_text)
         else:
@@ -583,7 +583,7 @@ def update_local_aws_credentials(aws_credentials_file: str,
             # Try to find the entire profile string with all options, until either the end of the file or the next
             # profile string.
             old_ivert_profile_search_regex = old_ivert_profile_string.replace(
-                "[", r"\[").replace("]", r"\]") + r"[\w\s\d\=\-\"\'\+/]*(?=(\s\[)|\Z)"
+                "[", r"\[").replace("]", r"\]") + r"[\w\s\d\=\-\"\'\+/:]*(?=(\s\[)|\Z)"
 
             m = re.search(old_ivert_profile_search_regex, credentials_text)
         else:
