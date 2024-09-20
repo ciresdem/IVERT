@@ -1530,9 +1530,9 @@ if __name__ == "__main__":
     if args.command == "create":
         idb.create_new_database(only_if_not_exists_in_s3=True, overwrite=args.overwrite)
     elif args.command == "upload":
-        idb.upload_to_s3()
+        idb.upload_to_s3(only_if_newer=False)
     elif args.command == "download":
-        idb.download_from_s3()
+        idb.download_from_s3(only_if_newer=False)
     elif args.command == "delete":
         idb.delete_database()
     elif args.command == "archive":
