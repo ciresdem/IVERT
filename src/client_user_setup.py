@@ -79,12 +79,11 @@ def read_ivert_s3_credentials(creds_file: str = "", error_if_not_found: bool = T
     """Read the IVERT S3 credentials file.
 
     If we're given a path, move it first into the default credentials location."""
-    if os.path.exists(creds_file):
-        if not os.path.exists(creds_file):
-            raise FileNotFoundError(f"IVERT S3 credentials file '{creds_file}' not found.")
-
+    if os.path.exists(creds_file) and \
+            (os.path.normcase(os.path.realpath(creds_file)) !=
+             os.path.normcase(os.path.realpath(ivert_config.ivert_s3_credentials_file))):
         # Move the old creds file to the new location
-        print("Moving", os.path.basename(creds_file), "to", os.path.dirname(ivert_config.ivert_s3_credentials_file))
+        print("Moving", os.path.basename(creds_file), "to", ivert_config.ivert_s3_credentials_file)
         # Create the directory if it doesn't exist yet.
         if not os.path.exists(os.path.dirname(ivert_config.ivert_s3_credentials_file)):
             os.makedirs(os.path.dirname(ivert_config.ivert_s3_credentials_file))
@@ -96,6 +95,31 @@ def read_ivert_s3_credentials(creds_file: str = "", error_if_not_found: bool = T
     else:
         if error_if_not_found:
             raise FileNotFoundError(f"IVERT S3 credentials file '{ivert_config.ivert_s3_credentials_file}' not found.")
+        else:
+            return None
+
+
+def read_ivert_personal_credentials(creds_file: str = "", error_if_not_found: bool = True):
+    """Read the IVERT personal credentials file.
+
+    If we're given a path, move it first into the default credentials location."""
+    if os.path.exists(creds_file) and \
+            (os.path.normcase(os.path.realpath(creds_file)) !=
+             os.path.normcase(os.path.realpath(ivert_config.ivert_personal_credentials_file))):
+        # Move the old creds file to the new location
+        print("Moving", os.path.basename(creds_file), "to", ivert_config.ivert_personal_credentials_file)
+
+        # Create the directory if it doesn't exist yet.
+        if not os.path.exists(os.path.dirname(ivert_config.ivert_personal_credentials_file)):
+            os.makedirs(os.path.dirname(ivert_config.ivert_personal_credentials_file))
+
+        shutil.move(creds_file, ivert_config.ivert_personal_credentials_file)
+
+    if os.path.exists(ivert_config.ivert_personal_credentials_file):
+        return open(ivert_config.ivert_personal_credentials_file, 'r').read()
+    else:
+        if error_if_not_found:
+            raise FileNotFoundError(f"IVERT S3 credentials file '{ivert_config.ivert_personal_credentials_file}' not found.")
         else:
             return None
 
@@ -267,31 +291,27 @@ def collect_inputs(args: argparse.Namespace, only_if_not_provided: bool = True) 
     pcreds_text = None
 
     if args.untrusted_access_key_id == "[USE_PERSONAL_ACCESS_KEY_ID]":
-        if (not pcreds_text) and os.path.exists(args.personal_creds):
-            with open(args.personal_creds, "r") as f:
-                pcreds_text = f.read()
-        if pcreds_text is not None:
+        if not pcreds_text or not only_if_not_provided:
+            pcreds_text = read_ivert_personal_credentials(args.personal_creds)
+        if pcreds_text:
             args.untrusted_access_key_id = fetch_text.fetch_access_key_id(pcreds_text)
 
     if args.export_access_key_id == "[USE_PERSONAL_ACCESS_KEY_ID]":
-        if (not pcreds_text) and os.path.exists(args.personal_creds):
-            with open(args.personal_creds, "r") as f:
-                pcreds_text = f.read()
-        if pcreds_text is not None:
+        if not pcreds_text or not only_if_not_provided:
+            pcreds_text = read_ivert_personal_credentials(args.personal_creds)
+        if pcreds_text:
             args.export_access_key_id = fetch_text.fetch_access_key_id(pcreds_text)
 
     if args.untrusted_secret_access_key == "[USE_PERSONAL_SECRET_ACCESS_KEY]":
-        if (not pcreds_text) and os.path.exists(args.personal_creds):
-            with open(args.personal_creds, "r") as f:
-                pcreds_text = f.read()
-        if pcreds_text is not None:
+        if not pcreds_text or not only_if_not_provided:
+            pcreds_text = read_ivert_personal_credentials(args.personal_creds)
+        if pcreds_text:
             args.untrusted_secret_access_key = fetch_text.fetch_secret_access_key(pcreds_text)
 
     if args.export_secret_access_key == "[USE_PERSONAL_SECRET_ACCESS_KEY]":
-        if (not pcreds_text) and os.path.exists(args.personal_creds):
-            with open(args.personal_creds, "r") as f:
-                pcreds_text = f.read()
-        if pcreds_text is not None:
+        if not pcreds_text or not only_if_not_provided:
+            pcreds_text = read_ivert_personal_credentials(args.personal_creds)
+        if pcreds_text:
             args.export_secret_access_key = fetch_text.fetch_secret_access_key(pcreds_text)
 
     ##############################################################################################################
