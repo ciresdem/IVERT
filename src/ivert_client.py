@@ -32,9 +32,10 @@ else:
     import utils.version as version
     import utils.version_check_client as version_check_client
 
+
 def define_and_parse_args(return_parser: bool = False):
     parser = argparse.ArgumentParser(description="The ICESat-2 Validation of Elevations Reporting Tool (IVERT)."
-                                     f"\nRun 'ivert <command> --help' for more info about any specific command.")
+                                     "\nRun 'ivert <command> --help' for more info about any specific command.")
     parser.add_argument("-v", "--version", action="version", version=f"ivert {version.__version__}")
 
     # The first argument in the command. The other sub-parsers depend upon which command was used here.

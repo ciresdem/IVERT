@@ -24,8 +24,8 @@ else:
     import utils.is_email as is_email
     import utils.fetch_text as fetch_text
 
-ivert_config = configfile.config(ignore_errors=True)
-ivert_user_config_template = configfile.config(ivert_config.ivert_user_config_template)
+ivert_config = None
+ivert_user_config_template = None
 
 
 def setup_new_user(args: argparse.Namespace) -> None:
@@ -79,6 +79,10 @@ def read_ivert_s3_credentials(creds_file: str = "", error_if_not_found: bool = T
     """Read the IVERT S3 credentials file.
 
     If we're given a path, move it first into the default credentials location."""
+    global ivert_config
+    if not ivert_config:
+        ivert_config = configfile.config(ignore_errors=True)
+
     if os.path.exists(creds_file) and \
             (os.path.normcase(os.path.realpath(creds_file)) !=
              os.path.normcase(os.path.realpath(ivert_config.ivert_s3_credentials_file))):
@@ -103,6 +107,10 @@ def read_ivert_personal_credentials(creds_file: str = "", error_if_not_found: bo
     """Read the IVERT personal credentials file.
 
     If we're given a path, move it first into the default credentials location."""
+    global ivert_config
+    if not ivert_config:
+        ivert_config = configfile.config(ignore_errors=True)
+
     if os.path.exists(creds_file) and \
             (os.path.normcase(os.path.realpath(creds_file)) !=
              os.path.normcase(os.path.realpath(ivert_config.ivert_personal_credentials_file))):
@@ -201,6 +209,14 @@ def collect_inputs(args: argparse.Namespace, only_if_not_provided: bool = True) 
 
     # Make sure the username is lowercase.
     args.username = args.username.lower()
+
+    global ivert_config
+    if not ivert_config:
+        ivert_config = configfile.config()
+
+    global ivert_user_config_template
+    if not ivert_user_config_template:
+        ivert_user_config_template = configfile.config(ivert_config.ivert_user_config_template)
 
     # Check for valid AWS profile names (they can basically be anyting except empty strings)
     # If we weren't provided a profile name or we aren't using the defaults, prompt for them.
@@ -586,6 +602,10 @@ def update_local_aws_credentials(aws_credentials_file: str,
 
 def create_local_dirs() -> None:
     """Create the local directories needed to store IVERT user data."""
+    global ivert_config
+    if not ivert_config:
+        ivert_config = configfile.config(ignore_errors=True)
+
     creds_folder = ivert_config.user_data_creds_directory
     jobs_folder = ivert_config.ivert_jobs_directory_local
 
@@ -600,6 +620,10 @@ def create_local_dirs() -> None:
 def update_ivert_user_config(args: argparse.Namespace) -> None:
     """Create or overwrite the ivert_user_config_[name].ini file."""
     # First, find all instances of existing user config files in the config/ directory.
+    global ivert_config
+    if not ivert_config:
+        ivert_config = configfile.config(ignore_errors=True)
+
     user_config_file = ivert_config.user_configfile
 
     # Get the text from the user config template.
