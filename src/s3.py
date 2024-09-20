@@ -64,7 +64,7 @@ class S3Manager:
                             "export_client": self.config.s3_bucket_export_client,
                             "quarantine": self.config.s3_bucket_quarantine}
 
-        self.endpoint_urls = {"untrusted": self.config.s3_untrusted_endpoint_url,
+        self.endpoint_urls = {"untrusted": self.config.s3_import_untrusted_endpoint_url,
                               "export_client": self.config.s3_export_client_endpoint_url,
                               "database": None,
                               "trusted": None,
