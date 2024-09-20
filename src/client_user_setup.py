@@ -697,7 +697,6 @@ def get_region_name_from_bucket_name(bucket_name: str) -> str:
     str
         The region name for the bucket.
     """
-    """Get the region name from a bucket name. The NCCF bucket names include the region name in them."""
     region_names = boto3.Session().get_available_regions("s3")
     for region_name in region_names:
         if region_name in bucket_name:
