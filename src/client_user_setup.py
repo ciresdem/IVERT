@@ -336,6 +336,7 @@ def collect_inputs(args: argparse.Namespace, only_if_not_provided: bool = True) 
             print("Missing untrusted bucket secret access key.")
         if not args.export_secret_access_key or args.export_secret_access_key == "[USE_PERSONAL_SECRET_ACCESS_KEY]":
             print("Missing export bucket secret access key.")
+
         print("Check your credentials file and/or your personal credentials file, and try again."
               "\nIf the problem persists, contact your IVERT administrator.")
         sys.exit(0)
@@ -606,10 +607,10 @@ def update_ivert_user_config(args: argparse.Namespace) -> None:
         user_config_text = f.read()
 
     # Update the user config text with the new values.
-    user_config_text = re.sub(r"user_email\s*=\s*[\w\[\]\.@\-]+", f"user_email = {args.email}", user_config_text)
+    user_config_text = re.sub(r"user_email\s*[=]\s*[\w\[\].@-]+", f"user_email = {args.email}", user_config_text)
 
     # Update the username in the user config text.
-    user_config_text = re.sub(r"username\s*\=\s*[\w\[\]\.\-]+", f"username = {args.username}", user_config_text)
+    user_config_text = re.sub(r"username\s*[=]\s*[\w\[\].-]+", f"username = {args.username}", user_config_text)
 
     # In previous IVERT versions (<0.5.0) these were called "aws_profile_ivert_ingest" and "aws_profile_ivert_export".
     # If those exist in the user config, change them to the new field names here.
@@ -622,18 +623,18 @@ def update_ivert_user_config(args: argparse.Namespace) -> None:
 
     # Update the aws_profile_ivert_import_untrusted in the user config text, if needed.
     # If it's using a different profile name, then update it.
-    user_config_text = re.sub(r"aws_profile_ivert_import_untrusted\s*\=\s*[\w\[\]\.\-]+",
+    user_config_text = re.sub(r"aws_profile_ivert_import_untrusted\s*[=]\s*[\w\[\].-]+",
                               f"aws_profile_ivert_import_untrusted = {args.ivert_import_profile}",
                               user_config_text)
-    user_config_text = re.sub(r"aws_profile_ivert_export_client\s*\=\s*[\w\[\]\.\-]+",
+    user_config_text = re.sub(r"aws_profile_ivert_export_client\s*[=]\s*[\w\[\].-]+",
                               f"aws_profile_ivert_export_client = {args.ivert_export_profile}",
                               user_config_text)
 
     # Write the boolean flags for the user config file. Overwrite any old ones.
-    user_config_text = re.sub(r"subscribe_to_sns\s*\=\s*[\w\[\]\.\-]+",
+    user_config_text = re.sub(r"subscribe_to_sns\s*[=]\s*[\w\[\].-]+",
                               f"subscribe_to_sns = {str(args.subscribe_to_sns)}",
                               user_config_text)
-    user_config_text = re.sub(r"filter_sns_by_username\s*\=\s*[\w\[\]\.\-]+",
+    user_config_text = re.sub(r"filter_sns_by_username\s*[=]\s*[\w\[\].-]+",
                               f"filter_sns_by_username = {str(args.filter_sns)}",
                               user_config_text)
 
