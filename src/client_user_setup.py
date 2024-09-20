@@ -512,7 +512,7 @@ def update_local_aws_config(aws_config_file: str,
             old_ivert_profile_search_regex = old_ivert_profile_string.replace("[", r"\[").replace("]", r"\]") + \
                                          r"[\w\s\d\=\-\"\']*(?=(\s\[profile )|\Z)"
 
-            m = re.search(ivert_profile_search_regex, config_text)
+            m = re.search(old_ivert_profile_search_regex, config_text)
         else:
             old_ivert_profile_search_regex = None
             m = None
