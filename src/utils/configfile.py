@@ -203,7 +203,7 @@ class config:
         # Read the database bucket from paths.sh
         try:
             db_line = [line for line in paths_text_lines
-                       if line.lstrip().lower().startswith("s3_bucket_database")][0]
+                       if re.match(r"^s3_bucket_database(?!\w)", line.lstrip().lower())][0]
             self.s3_bucket_database = db_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
             if self.s3_bucket_database == '':
                 self.s3_bucket_database = None
@@ -213,7 +213,7 @@ class config:
         # Read the import bucket from paths.sh
         try:
             trusted_line = [line for line in paths_text_lines
-                            if line.lstrip().lower().startswith("s3_bucket_import_trusted")][0]
+                            if re.match(r"^s3_bucket_import_trusted(?!\w)", line.lstrip().lower())][0]
             self.s3_bucket_import_trusted = trusted_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
             if self.s3_bucket_import_trusted == '':
                 self.s3_bucket_import_trusted = None
@@ -224,7 +224,7 @@ class config:
         # It usually shouldn't, but it'll read it if it's there.)
         try:
             untrusted_line = [line for line in paths_text_lines
-                              if line.lower().startswith("s3_bucket_import_untrusted")][0]
+                              if re.match(r"^s3_bucket_import_untrusted(?!\w)", line.lstrip().lower())][0]
             self.s3_bucket_import_untrusted = untrusted_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
             if self.s3_bucket_import_untrusted == '':
                 self.s3_bucket_import_untrusted = None
@@ -234,17 +234,17 @@ class config:
         # Read the export_server bucket from paths.sh
         try:
             export_line = [line for line in paths_text_lines
-                           if line.lower().startswith("s3_bucket_export_server")][0]
+                           if re.match(r"^s3_bucket_export_server(?!\w)", line.lstrip().lower())][0]
             self.s3_bucket_export_server = export_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
             if self.s3_bucket_export_server == '':
                 self.s3_bucket_export_server = None
         except IndexError:
             self.s3_bucket_export_server = None
 
-        # Read the export_client bucket from paths.sh. Should be empty.
+        # Read the export_client bucket from paths.sh. Should be empty or not there at all.
         try:
             export_line = [line for line in paths_text_lines
-                           if line.lower().startswith("s3_bucket_export_client")][0]
+                           if re.match(r"^s3_bucket_export_client(?!\w)", line.lstrip().lower())][0]
             self.s3_bucket_export_client = export_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
             if self.s3_bucket_export_client == '':
                 self.s3_bucket_export_client = None
@@ -254,7 +254,7 @@ class config:
         # Read the quarantine bucket from paths.sh
         try:
             quarantine_line = [line for line in paths_text_lines
-                               if line.lower().startswith("s3_bucket_import_quarantine")][0]
+                               if re.match(r"^s3_bucket_quarantine(?!\w)", line.lstrip().lower())][0]
             self.s3_bucket_quarantine = quarantine_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
         except IndexError:
             self.s3_bucket_quarantine = None
@@ -262,7 +262,7 @@ class config:
         if include_sns_arn:
             try:
                 sns_line = [line for line in paths_text_lines
-                            if line.lower().startswith("cudem_sns_arn")][0]
+                            if re.match(r"^sns_topic_arn(?!\w)", line.lstrip().lower())][0]
                 self.sns_topic_arn = sns_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
             except IndexError:
                 self.sns_topic_arn = None
