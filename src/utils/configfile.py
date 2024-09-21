@@ -25,6 +25,7 @@ if not os.path.exists(ivert_default_configfile):
     ivert_default_configfile = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                                             "..", "..", "..", "..", "ivert_data", "config", "ivert_config.ini"))
 
+
 class config:
     """A subclass implementation of configparser.ConfigParser(), expect that config attributes are referenced as object
     attributes rather than in a dictionary.
@@ -192,42 +193,49 @@ class config:
 
         # Read the database bucket from paths.sh
         try:
-            db_line = [line for line in paths_text_lines if line.lower().startswith("s3_bucket_database")][0]
+            db_line = [line for line in paths_text_lines if re.match(r"^s3_bucket_database(?!\w)",
+                                                                     line.lower().lstrip())][0]
             self.s3_bucket_database = db_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
         except IndexError:
             self.s3_bucket_database = None
 
         # Read the import bucket from paths.sh
         try:
-            trusted_line = [line for line in paths_text_lines if line.lower().startswith("s3_bucket_import_trusted")][0]
+            trusted_line = [line for line in paths_text_lines if re.match(r"^s3_bucket_import_trusted(?!\w)",
+                                                                          line.lower().lstrip())][0]
             self.s3_bucket_import_trusted = trusted_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
         except IndexError:
             self.s3_bucket_import_trusted = None
 
-        # Read the untrusted bucket from paths.sh (if it exists there. It usually shouldn't, but it'll read it if it's there.)
+        # Read the untrusted bucket from paths.sh (if it exists there.
+        # It usually shouldn't, but it'll read it if it's there.)
         try:
-            untrusted_line = [line for line in paths_text_lines if line.lower().startswith("s3_bucket_import_untrusted")][0]
+            untrusted_line = [line for line in paths_text_lines if re.match(r"^s3_bucket_import_untrusted(?!\w)",
+                                                                            line.lower().lstrip())][0]
             self.s3_bucket_import_untrusted = untrusted_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
         except IndexError:
             self.s3_bucket_import_untrusted = None
 
         # Read the export bucket from paths.sh
         try:
-            export_line = [line for line in paths_text_lines if line.lower().startswith("s3_bucket_export")][0]
+            export_line = [line for line in paths_text_lines if re.match(r"^s3_bucket_export(?!\w)",
+                                                                         line.lower().lstrip())][0]
             self.s3_bucket_export = export_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
         except IndexError:
             self.s3_bucket_export = None
 
         # Read the quarantine bucket from paths.sh
         try:
-            quarantine_line = [line for line in paths_text_lines if line.lower().startswith("s3_bucket_import_quarantine")][0]
+            quarantine_line = [line for line in paths_text_lines if re.match(r"^s3_bucket_import_quarantine(?!\w)",
+                                                                             line.lower().lstrip())][0]
             self.s3_bucket_quarantine = quarantine_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
         except IndexError:
             self.s3_bucket_quarantine = None
 
         if include_sns_arn:
             try:
-                sns_line = [line for line in paths_text_lines if line.lower().startswith("cudem_sns_arn")][0]
+                sns_line = [line for line in paths_text_lines if re.match(r"^cudem_sns_arn(?!\w)",
+                                                                          line.lower().lstrip())][0]
                 self.sns_topic_arn = sns_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
             except IndexError:
                 self.sns_topic_arn = None
@@ -244,7 +252,6 @@ class config:
                 setattr(self, varname, getattr(self, varname_from))
 
         return
-
 
     def _add_user_variables_and_s3_creds_to_config_obj(self):
         """Add the names of the S3 buckets to the configfile.config object.
