@@ -298,8 +298,13 @@ class JobsDatabaseClient:
         """
         if self.s3m.exists(self.s3_database_key, bucket_type=self.s3_bucket_type):
             md = self.s3m.get_metadata(self.s3_database_key, bucket_type=self.s3_bucket_type)
-            if md is not None and self.s3_vnum_metadata_key in md.keys():
-                return int(md[self.s3_vnum_metadata_key])
+            if md is not None:
+                if self.s3_vnum_metadata_key in md.keys():
+                    return int(md[self.s3_vnum_metadata_key])
+                elif "vnum" in md.keys(): # For now, maintain backward compatibility with old metadata keys.
+                    return int(md["vnum"])
+                else:
+                    return None
             else:
                 return None
         # If the database doesn't exist in the S3 bucket, just return None.
