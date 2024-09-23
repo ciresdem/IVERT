@@ -25,12 +25,14 @@ def fetch_min_client_from_server(ivert_config=None):
 
     # Initiate a boto3 session and client.
     client = boto3.Session(profile_name=str(ivert_config.aws_profile_ivert_export)).client('s3')
-    return client.head_object(Bucket=str(ivert_config.s3_bucket_export), Key=jobs_db_s3_key)['Metadata'][ivert_config.s3_jobs_db_min_client_version_metadata_key]
+    return client.head_object(Bucket=str(ivert_config.s3_bucket_export),
+                              Key=jobs_db_s3_key)['Metadata'][ivert_config.s3_jobs_db_min_client_version_metadata_key]
 
 
 def is_this_client_compatible():
     if is_aws.is_aws():
-        raise NotImplementedError("is_this_client_compatible is supported only on the AWS client. Use is_compatible instead.")
+        raise NotImplementedError("is_this_client_compatible is supported only on the AWS client. "
+                                  "Use version_check_server.is_compatible() instead.")
 
     ivert_config = configfile.config()
     min_client_key = fetch_min_client_from_server(ivert_config=ivert_config)

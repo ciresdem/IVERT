@@ -289,7 +289,9 @@ def define_and_parse_args(return_parser: bool = False):
 
 def prompt_for_latest_version():
     """Prompt the user to upgrade the IVERT client."""
-    return yes_no.query_yes_no(f"Your IVERT client (v{version.__version__}) is out of date with the IVERT server that requires v{version_check_client.fetch_min_client_from_server()} or higher. Would you like to upgrade?",
+    return yes_no.query_yes_no(f"Your IVERT client (v{version.__version__}) is out of date with the IVERT server "
+                               f"that requires v{version_check_client.fetch_min_client_from_server()} or higher. "
+                               f"Would you like to upgrade?",
                                default="y")
 
 
