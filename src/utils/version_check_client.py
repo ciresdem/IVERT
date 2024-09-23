@@ -25,8 +25,18 @@ def fetch_min_client_from_server(ivert_config=None):
 
     # Initiate a boto3 session and client.
     client = boto3.Session(profile_name=str(ivert_config.aws_profile_ivert_export)).client('s3')
-    return client.head_object(Bucket=str(ivert_config.s3_bucket_export),
-                              Key=jobs_db_s3_key)['Metadata'][ivert_config.s3_jobs_db_min_client_version_metadata_key]
+    head_obj_metadata = client.head_object(Bucket=str(ivert_config.s3_bucket_export),
+                                           Key=jobs_db_s3_key)['Metadata']
+
+    if ivert_config.s3_jobs_db_min_client_version_metadata_key in head_obj_metadata:
+        return head_obj_metadata[ivert_config.s3_jobs_db_min_client_version_metadata_key]
+
+    # Backward compatibility with keys from older versions of IVERT.
+    elif "min_client_version" in head_obj_metadata:
+        return head_obj_metadata["min_client_version"]
+
+    else:
+        return None
 
 
 def is_this_client_compatible():
