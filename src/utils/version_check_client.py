@@ -34,6 +34,8 @@ def fetch_min_client_from_server(ivert_config=None):
     # Backward compatibility with keys from older versions of IVERT.
     elif "min_client_version" in head_obj_metadata:
         return head_obj_metadata["min_client_version"]
+    elif "ivert_min_client_version" in head_obj_metadata:
+        return head_obj_metadata["ivert_min_client_version"]
 
     else:
         return None

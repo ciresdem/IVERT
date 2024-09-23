@@ -267,8 +267,13 @@ class JobsDatabaseClient:
         # Else return the highest job number.
         if self.s3m.exists(self.s3_database_key, bucket_type=self.s3_bucket_type):
             md = self.s3m.get_metadata(self.s3_database_key, bucket_type=self.s3_bucket_type)
-            if md is not None and self.s3_latest_job_metadata_key in md.keys():
-                return int(md[self.s3_latest_job_metadata_key])
+            if md is not None:
+                if self.s3_latest_job_metadata_key in md.keys():
+                    return int(md[self.s3_latest_job_metadata_key])
+                elif "latest_job" in md.keys(): # For now, maintain backward compatibility with old metadata keys.
+                    return int(md["latest_job"])
+                elif "ivert_latest_job" in md.keys():
+                    return int(md["ivert_latest_job"])
             else:
                 return None
         # If the database doesn't exist in the S3 bucket, just return 0.
@@ -303,6 +308,8 @@ class JobsDatabaseClient:
                     return int(md[self.s3_vnum_metadata_key])
                 elif "vnum" in md.keys(): # For now, maintain backward compatibility with old metadata keys.
                     return int(md["vnum"])
+                elif "ivert_vnum" in md.keys():
+                    return int(md["ivert_vnum"])
                 else:
                     return None
             else:
@@ -320,8 +327,11 @@ class JobsDatabaseClient:
             None: If the 'ivert_version' metadata key doesn't exist in the S3 metadata."""
         if self.s3m.exists(self.s3_database_key, bucket_type=self.s3_bucket_type):
             md = self.s3m.get_metadata(self.s3_database_key, bucket_type=self.s3_bucket_type)
-            if md is not None and self.ivert_config.s3_jobs_db_ivert_version_metadata_key in md.keys():
-                return md[self.ivert_config.s3_jobs_db_ivert_version_metadata_key]
+            if md is not None:
+                if self.ivert_config.s3_jobs_db_ivert_version_metadata_key in md.keys():
+                    return md[self.ivert_config.s3_jobs_db_ivert_version_metadata_key]
+                elif "ivert_version" in md.keys(): # For now, maintain backward compatibility with old metadata keys.
+                    return md["ivert_version"]
             else:
                 return None
         # If the database doesn't exist in the S3 bucket, just return None.
@@ -341,6 +351,8 @@ class JobsDatabaseClient:
                     return int(md[self.s3_jobs_since_metadata_key])
                 elif "jobs_since" in md: # For now, maintain backward compatibility with old metadata keys.
                     return int(md["jobs_since"])
+                elif "ivert_jobs_since" in md:
+                    return int(md["ivert_jobs_since"])
             else:
                 return 0
         # If the database doesn't exist in the S3 bucket, just return None.
