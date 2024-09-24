@@ -112,7 +112,10 @@ class IvertJobManager:
             print("Another instance of ivert_server_job_manager.py is already running. Exiting.", flush=True)
             return
 
-        self.sync_database_with_s3()
+        # With the new egress solution the export bucket doesn't hold a copy of the database. Don't try to sync.
+        # TODO: Delete this line once the new egress solution is in production, or change this to sync with the database
+        #   bucket rather than the export bucket.
+        # self.sync_database_with_s3()
 
         while True:
             try:
@@ -637,7 +640,7 @@ class IvertJob:
             # self.export_stdout_if_exists(upload_db_to_s3=False)
 
             # If needed, upload the jobs database to the s3
-            self.jobs_db.upload_to_s3(only_if_newer=True)
+            self.jobs_db.upload_to_s3(only_if_newer=False)
 
         except KeyboardInterrupt as e:
             if self.verbose:
@@ -921,7 +924,7 @@ class IvertJob:
             # If no file has been downloaded in the last minute, go ahead and upload the jobs database to the s3 to
             # make sure it's giving an up-to-date status for the user.
             if upload_to_s3 and ((time.time() - time_since_last_download) >= 60.0):
-                self.jobs_db.upload_to_s3(only_if_newer=True)
+                self.jobs_db.upload_to_s3(only_if_newer=False)
                 time_since_last_download = time.time()
 
             # If we didn't manage to download the files on the first loop, sleep 3 seconds and try again.
@@ -954,7 +957,7 @@ class IvertJob:
         assert len(files_to_download) == 0
 
         if upload_to_s3:
-            self.jobs_db.upload_to_s3(only_if_newer=True)
+            self.jobs_db.upload_to_s3(only_if_newer=False)
 
         return
 
@@ -1571,7 +1574,7 @@ if __name__ == "__main__":
                              job_id=None if args.job_id == -1 else args.job_id)
 
         database = JM.jobs_db
-        database.download_from_s3(only_if_newer=True)
+        database.download_from_s3(only_if_newer=False)
         # Get the old vnumber, and make the new vnum one greater than that. This will ensure client copies get
         # overwritten with the newest database.
         old_vnum = database.fetch_latest_db_vnum_from_database()
