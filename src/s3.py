@@ -747,7 +747,7 @@ class S3Manager:
                      bucket_type: str = None,
                      recursive: bool = False,
                      return_entire_header: bool = False,
-                     use_tags: bool = False) -> typing.Dict:
+                     use_tags: typing.Union[bool, None] = None) -> typing.Dict:
         """Return the user-defined metadata of an S3 key.
 
         If wildcards are used, return it as a {key: metadata_dict}" dictionary, even if only one file is matched.
@@ -759,8 +759,10 @@ class S3Manager:
                                         wildcard flags are used.
             return_entire_header (bool, optional): Whether to return the entire header, or just the user-defined
                                                    'Metadata' portion of it. Defaults to False (return just 'Metadata').
+                                                   Only applies if use_tags is False.
             use_tags (bool, optional): Whether to return the user-defined 'Tags' portion of the header. Defaults to
-                                        False.
+                                       None. If None, only use tags on the export bucket if
+                                       ivert_config.ivert_export_client_use_aws_tags_instead_of_metadata is True.
 
         Returns:
             typing.Dict: The metadata of the S3 key.
@@ -777,7 +779,7 @@ class S3Manager:
             for key in key_names:
                 # If we're not recursing, directories can be returned as well. Ignore those.
                 # Otherwise, add the key to the dictionary by calling this function recursively on the non-globbed match.
-                if not self.is_existing_s3_directory(key):
+                if not self.is_existing_s3_directory(key, bucket_type=bucket_type):
                     keyvals[key] = self.get_metadata(key,
                                                      bucket_type=bucket_type,
                                                      recursive=False,
@@ -787,10 +789,21 @@ class S3Manager:
 
         else:
             bname = self.get_bucketname(bucket_type=bucket_type)
+            # If use_tags wasn't set, set it to the export_client bucket's setting in the ivert_config file.
+            # This is the only IVERT bucket in which this is applicable.
+            if use_tags is None:
+                if bucket_type == "export_client":
+                    use_tags = self.config.ivert_export_client_use_aws_tags_instead_of_metadata
+                else:
+                    use_tags = False
+
+            # If using tags, use the s3api "get-object-tagging" feature, under "TagSet".
+            # It returns a list of dicts with "Key" and "Value" keys... convert to a key-value pair single dictionary.
             if use_tags:
                 head = client.get_object_tagging(Bucket=bname, Key=s3_key)
                 return dict([(t["Key"], t["Value"]) for t in head["TagSet"]])
 
+            # Otherwise, use the s3api "head-object" feature, under "Metadata".
             else:
                 head = client.head_object(Bucket=bname, Key=s3_key)
 
@@ -811,16 +824,18 @@ def pretty_print_bucket_list(use_formatting=True):
 
     aliases = S3Manager.available_bucket_types
 
-    bname_dict = {"database" : ivert_config.s3_bucket_database,
-                  "trusted"  : ivert_config.s3_bucket_import_trusted,
-                  "untrusted": ivert_config.s3_bucket_import_untrusted,
-                  "export"   : ivert_config.s3_bucket_export,
-                  "quarantine": ivert_config.s3_bucket_quarantine}
+    bname_dict = {"database"     : ivert_config.s3_bucket_database,
+                  "trusted"      : ivert_config.s3_bucket_import_trusted,
+                  "untrusted"    : ivert_config.s3_bucket_import_untrusted,
+                  "export_client": ivert_config.s3_bucket_export_client,
+                  "export_server": ivert_config.s3_bucket_export_server,
+                  "quarantine"   : ivert_config.s3_bucket_quarantine}
 
     prefixes_dict = {"database" : "",
                      "trusted"  : ivert_config.s3_import_prefix_base if bname_dict["trusted"] else "",
                      "untrusted": ivert_config.s3_import_prefix_base if bname_dict["untrusted"] else "",
-                     "export"   : ivert_config.s3_export_prefix_base if bname_dict["export"] else "",
+                     "export_client": ivert_config.s3_export_prefix_base if bname_dict["export"] else "",
+                     "export_server": ivert_config.s3_export_prefix_base if bname_dict["export"] else "",
                      "quarantine": ivert_config.s3_quarantine_prefix_base if bname_dict["quarantine"] else ""}
 
     bc = bcolors.bcolors()
