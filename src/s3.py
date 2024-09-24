@@ -13,6 +13,7 @@ import sys
 import tempfile
 import types
 import tabulate
+import typing
 import warnings
 
 # Had to add an extra if condition because if other module entities import this.
@@ -707,7 +708,11 @@ class S3Manager:
                 md5.update(chunk)
         return md5.hexdigest()
 
-    def get_md5(self, s3_key, bucket_type=None):
+    def get_md5(self,
+                s3_key: str,
+                bucket_type: typing.Union[str, None] = None,
+                use_tags: bool = False):
+
         """Return the md5 hash of an S3 key, if it was provided when uploaded.
 
         NOTE: This is different from the AWS object.content_md5 key, which is computed differently and may not
@@ -715,24 +720,34 @@ class S3Manager:
 
         bucket_type = self.convert_btype(bucket_type)
 
-        client = self.get_client(bucket_type=bucket_type)
-        bname = self.get_bucketname(bucket_type=bucket_type)
-        head = client.head_object(Bucket=bname, Key=s3_key)
-        # TODO: Finish getting the metadata and then the md5 from there.
-        return head
+        metadata = self.get_metadata(s3_key,
+                                     bucket_type=bucket_type,
+                                     recursive=False,
+                                     return_entire_header=False,
+                                     use_tags=use_tags)[self.config.s3_md5_metadata_key]
+        return metadata
 
-    def compare_md5(self, filename, s3_key, bucket_type=None):
+    def compare_md5(self,
+                    filename: str,
+                    s3_key: str,
+                    bucket_type: bool = None,
+                    use_tags: bool = False) -> bool:
         """Return True if the local file's md5 matches the md5 in the S3 key.
 
         If the S3 key does not have an md5 in its metadata, return False."""
 
-        s3_md5 = self.get_md5(s3_key, bucket_type=bucket_type)
+        s3_md5 = self.get_md5(s3_key, bucket_type=bucket_type, use_tags=use_tags)
         if s3_md5 is None or s3_md5 == '':
             return False
         else:
             return self.compute_md5(filename) == s3_md5
 
-    def get_metadata(self, s3_key, bucket_type=None, recursive=False, return_entire_header=False):
+    def get_metadata(self,
+                     s3_key: str,
+                     bucket_type: str = None,
+                     recursive: bool = False,
+                     return_entire_header: bool = False,
+                     use_tags: bool = False) -> typing.Dict:
         """Return the user-defined metadata of an S3 key.
 
         If wildcards are used, return it as a {key: metadata_dict}" dictionary, even if only one file is matched.
@@ -743,7 +758,13 @@ class S3Manager:
             recursive (bool, optional): Whether to recurse into subdirectories. Defaults to False. Only applies if
                                         wildcard flags are used.
             return_entire_header (bool, optional): Whether to return the entire header, or just the user-defined
-                                                   'Metadata' portion of it. Defaults to False (return just 'Metadata')."""
+                                                   'Metadata' portion of it. Defaults to False (return just 'Metadata').
+            use_tags (bool, optional): Whether to return the user-defined 'Tags' portion of the header. Defaults to
+                                        False.
+
+        Returns:
+            typing.Dict: The metadata of the S3 key.
+        """
 
         bucket_type = self.convert_btype(bucket_type)
 
@@ -766,12 +787,17 @@ class S3Manager:
 
         else:
             bname = self.get_bucketname(bucket_type=bucket_type)
-            head = client.head_object(Bucket=bname, Key=s3_key)
+            if use_tags:
+                head = client.get_object_tagging(Bucket=bname, Key=s3_key)
+                return dict([(t["Key"], t["Value"]) for t in head["TagSet"]])
 
-            if return_entire_header:
-                return head
             else:
-                return head["Metadata"]
+                head = client.head_object(Bucket=bname, Key=s3_key)
+
+                if return_entire_header:
+                    return head
+                else:
+                    return head["Metadata"]
 
 
 def pretty_print_bucket_list(use_formatting=True):
@@ -1138,10 +1164,16 @@ def s3_cli():
             raise ValueError("One or more keys should refer to an S3 bucket prepended by 's3:' or 's3://'. Local"
                              "file transfers can be handled by os-supported command-line utilitys like cp and mv.")
 
+    ########################################################
+    ### 'buckets' and 'list_buckets' parser ################
+    ########################################################
     elif args.command in ("buckets", "list_buckets"):
         # Fetch the bucket data from the config file
         pretty_print_bucket_list()
 
+    ########################################################
+    ### 'metadata' and 'md5' parser ########################
+    ########################################################
     elif args.command in ("metadata", "m", "meta"):
         s3m = S3Manager()
 

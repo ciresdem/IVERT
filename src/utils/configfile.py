@@ -21,6 +21,7 @@ else:
 
 ivert_default_configfile = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                                         "..", "..", "config", "ivert_config.ini"))
+
 # When we build the ivert package, this is the location of the ivert_data directory. Look for it there.
 if not os.path.exists(ivert_default_configfile):
     ivert_default_configfile = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)),
