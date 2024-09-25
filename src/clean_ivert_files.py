@@ -204,7 +204,7 @@ def clean_export_dirs(ivert_config: typing.Union[utils.configfile.config, None] 
         job_id = int(result.group(0))
 
         if job_id < cutoff_job_number:
-            s3m.delete(key, bucket_type="export")
+            s3m.delete(key, bucket_type="export_server")
             numfiles_deleted += 1
 
     if verbose:

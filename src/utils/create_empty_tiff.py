@@ -16,11 +16,12 @@ else:
 import os
 from osgeo import gdal
 
-ivert_config = configfile.config()
-tiff_location = ivert_config.empty_tiff
-
 
 def create_empty_tiff():
+    """Create an empty one-cell TIFF file for IVERT to use for testing."""
+    ivert_config = configfile.config()
+    tiff_location = ivert_config.empty_tiff
+
     if not os.path.exists(tiff_location):
         ds = gdal.GetDriverByName('GTiff').Create(tiff_location, 1, 1, 1, gdal.GDT_Float32)
 

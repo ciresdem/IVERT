@@ -24,7 +24,7 @@ else:
     import utils.version as version
 
 # The ivert_config object loads user information from the user's config file if it exists.
-ivert_config = configfile.config()
+ivert_config = None
 
 
 def reset_ivert_config():
@@ -88,6 +88,10 @@ def create_new_job_params(username: str = None) -> tuple[str, int]:
     if last_job_nubmer_by_anyone is not None:
         last_job_number = max(last_job_nubmer_by_anyone, last_job_number)
 
+    global ivert_config
+    if not ivert_config:
+        ivert_config = configfile.config()
+
     # Get the username.
     if not username:
         username = ivert_config.username
@@ -122,8 +126,8 @@ def create_new_job_config(ivert_args: argparse.Namespace,
     Saves the config file locally and returns a path to it.
 
     Args:
-        ivert_args (argparse.Namespace): The parsed arguments from the command line given to ivert_client.py, or a slightly-modified version.
-            See ivert_client.py for listings of these arguments.
+        ivert_args (argparse.Namespace): The parsed arguments from the command line given to client.py, or a slightly-modified version.
+            See client.py for listings of these arguments.
         verbose (bool, optional): Whether to print the path to the new job config file. Defaults to True.
 
     Returns:
@@ -131,6 +135,10 @@ def create_new_job_config(ivert_args: argparse.Namespace,
         str: The upload prefix for the new job config file.
         list[str]: The list of other files to upload.
     """
+    global ivert_config
+    if not ivert_config:
+        ivert_config = configfile.config()
+
     # Make a copy of the namespace that we can modify for submission.
     args = argparse.Namespace(**vars(ivert_args))
     # Make sure there's a command args in there, and that it's one of the allowed commands.
@@ -141,7 +149,7 @@ def create_new_job_config(ivert_args: argparse.Namespace,
     username, new_job_number = create_new_job_params(ivert_config.username)
 
     # Genereate the full upload prefix for this new job.
-    upload_prefix = str(os.path.join(ivert_config.s3_import_prefix_base, args.command, username, str(new_job_number)))
+    upload_prefix = str(os.path.join(ivert_config.s3_import_untrusted_prefix_base, args.command, username, str(new_job_number)))
     # AWS S3 paths only use forward-slashes.
     upload_prefix = upload_prefix.replace(os.path.sep, "/")
 
@@ -218,6 +226,10 @@ def create_new_job_config(ivert_args: argparse.Namespace,
 
 
 def grab_job_config_template() -> str:
+    global ivert_config
+    if not ivert_config:
+        ivert_config = configfile.config()
+
     job_template_file = ivert_config.ivert_job_config_template
     assert os.path.exists(job_template_file)
     return open(job_template_file, 'r').read()

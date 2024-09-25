@@ -21,30 +21,24 @@ def fetch_min_client_from_server(ivert_config=None):
     if ivert_config is None:
         ivert_config = configfile.config()
 
-    jobs_db_s3_key = str(ivert_config.s3_ivert_jobs_database_key)
+    jobs_db_s3_key = str(ivert_config.s3_ivert_jobs_database_client_key)
 
-    # Initiate a boto3 session and client.
-    client = boto3.Session(profile_name=str(ivert_config.aws_profile_ivert_export)).client('s3')
-    head_obj_metadata = client.head_object(Bucket=str(ivert_config.s3_bucket_export),
-                                           Key=jobs_db_s3_key)['Metadata']
+    # Fetch the version from the server database. Not using s3.py to avoid circular imports.
+    client = boto3.Session(profile_name=str(ivert_config.aws_profile_ivert_export_client)).client('s3',
+                                                                                                  endpoint_url=ivert_config.s3_export_client_endpoint_url)
 
-    if ivert_config.s3_jobs_db_min_client_version_metadata_key in head_obj_metadata:
-        return head_obj_metadata[ivert_config.s3_jobs_db_min_client_version_metadata_key]
-
-    # Backward compatibility with keys from older versions of IVERT.
-    elif "min_client_version" in head_obj_metadata:
-        return head_obj_metadata["min_client_version"]
-    elif "ivert_min_client_version" in head_obj_metadata:
-        return head_obj_metadata["ivert_min_client_version"]
-
+    if ivert_config.ivert_export_client_use_aws_tags_instead_of_metadata:
+        tagset = client.get_object_tagging(Bucket=str(ivert_config.s3_bucket_export_client),
+                                           Key=jobs_db_s3_key)['TagSet']
+        tagdict = {tag['Key']: tag['Value'] for tag in tagset}
+        return tagdict[ivert_config.s3_jobs_db_min_client_version_metadata_key]
     else:
-        return None
+        return client.head_object(Bucket=str(ivert_config.s3_bucket_export_client), Key=jobs_db_s3_key)['Metadata'][ivert_config.s3_jobs_db_min_client_version_metadata_key]
 
 
 def is_this_client_compatible():
     if is_aws.is_aws():
-        raise NotImplementedError("is_this_client_compatible is supported only on the AWS client. "
-                                  "Use version_check_server.is_compatible() instead.")
+        raise NotImplementedError("is_this_client_compatible is supported only on the AWS client. Use is_compatible instead.")
 
     ivert_config = configfile.config()
     min_client_key = fetch_min_client_from_server(ivert_config=ivert_config)

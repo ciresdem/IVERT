@@ -14,6 +14,7 @@ import tempfile
 import types
 import typing
 import tabulate
+import typing
 import warnings
 
 # Had to add an extra if condition because if other module entities import this.
@@ -23,30 +24,37 @@ if vars(sys.modules[__name__])['__package__'] in ('ivert', 'ivert_utils'):
     import ivert_utils.bcolors as bcolors
     import ivert_utils.configfile as configfile
     import ivert_utils.progress_bar as progress_bar
+    import ivert_utils.is_aws as is_aws
 else:
     try:
         import utils.query_yes_no as query_yes_no
         import utils.bcolors as bcolors
         import utils.configfile as configfile
         import utils.progress_bar as progress_bar
+        import utils.is_aws as is_aws
     except ModuleNotFoundError:
         import ivert_utils.query_yes_no as query_yes_no
         import ivert_utils.bcolors as bcolors
         import ivert_utils.configfile as configfile
         import ivert_utils.progress_bar as progress_bar
+        import ivert_utils.is_aws as is_aws
 
-ivert_config = configfile.config()
+ivert_config = None
 
 
 class S3Manager:
     """Class for copying files into and out-of the IVERT AWS S3 buckets, as needed."""
 
-    available_bucket_types = ("database", "untrusted", "trusted", "export", "quarantine")
-    available_bucket_aliases = ("d", "t", "u", "e", "x", "q",
-                                "D", "T", "U", "E", "X", "Q")
-    default_bucket_type = "database" if ivert_config.is_aws else "untrusted"
+    available_bucket_types = ("database", "untrusted", "trusted", "export_server", "export_client", "quarantine")
+    available_bucket_aliases = ("d", "u", "t", "s", "xs", "c", "xc", "q",
+                                "D", "U", "T", "S", "XS", "C", "XC", "Q")
+    default_bucket_type = "database" if is_aws.is_aws() else "untrusted"
 
     def __init__(self):
+        global ivert_config
+        if ivert_config is None:
+            ivert_config = configfile.config()
+
         self.config = ivert_config
 
         # Different buckets for each type.
@@ -54,15 +62,27 @@ class S3Manager:
         self.bucket_dict = {"database": self.config.s3_bucket_database,
                             "untrusted": self.config.s3_bucket_import_untrusted,
                             "trusted": self.config.s3_bucket_import_trusted,
-                            "export": self.config.s3_bucket_export,
+                            "export_server": self.config.s3_bucket_export_server,
+                            "export_client": self.config.s3_bucket_export_client,
                             "quarantine": self.config.s3_bucket_quarantine}
+
+        self.endpoint_urls = {"untrusted": self.config.s3_import_untrusted_endpoint_url,
+                              "export_client": self.config.s3_export_client_endpoint_url,
+                              "database": None,
+                              "trusted": None,
+                              "export_server": None,
+                              "quarantine": None}
 
         # Different AWS profiles for each bucket. "None" indicates no profile is needed.
         # Profiles are usually needed on the user machine to use credentials for bucket access.
         self.bucket_profile_dict = dict([(dbtype, None) for dbtype in self.available_bucket_types])
-        # Only the 'untrusted' bucket and 'export' bucket need AWS profiles, and only on the client side, from the config.
-        self.bucket_profile_dict["untrusted"] = None if self.config.is_aws else self.config.aws_profile_ivert_ingest
-        self.bucket_profile_dict["export"] = None if self.config.is_aws else self.config.aws_profile_ivert_export
+
+        # Only the 'untrusted' bucket and 'export' bucket need AWS profiles, and only on the client side.
+        # Grab them here.
+        self.bucket_profile_dict["untrusted"] = \
+            None if self.config.is_aws else self.config.aws_profile_ivert_import_untrusted
+        self.bucket_profile_dict["export_client"] = \
+            None if self.config.is_aws else self.config.aws_profile_ivert_export_client
 
         # The s3 session. Session created on demand when needed by the :get_resource_bucket() and :get_client() methods.
         self.session_dict = dict([(dbtype, None) for dbtype in self.available_bucket_types])
@@ -108,8 +128,13 @@ class S3Manager:
 
         if self.client_dict[bucket_type] is None:
             if self.session_dict[bucket_type] is None:
-                self.session_dict[bucket_type] = boto3.Session(profile_name=self.bucket_profile_dict[bucket_type])
-            self.client_dict[bucket_type] = self.session_dict[bucket_type].client("s3")
+                session = boto3.Session(profile_name=self.bucket_profile_dict[bucket_type])
+                self.session_dict[bucket_type] = session
+            else:
+                session = self.session_dict[bucket_type]
+
+            self.client_dict[bucket_type] = session.client("s3",
+                                                           endpoint_url=self.endpoint_urls[bucket_type])
 
         return self.client_dict[bucket_type]
 
@@ -125,8 +150,10 @@ class S3Manager:
             bucket_type = 'trusted'
         elif bucket_type == 'u':
             bucket_type = 'untrusted'
-        elif bucket_type in ('e', 'x'):
-            bucket_type = 'export'
+        elif bucket_type in ('c', 'xc'):
+            bucket_type = 'export_client'
+        elif bucket_type in ('s', 'xs'):
+            bucket_type = 'export_server'
         elif bucket_type in ('q', 'quarantined'):
             bucket_type = 'quarantine'
 
@@ -212,12 +239,14 @@ class S3Manager:
             elif e.response["Error"]["Code"] == "403" and \
                     e.response["Error"]["Message"].lower() in ("access denied", "accessdenied", "forbidden"):
                 warnings.warn(f"Warning: Access denied to s3://{bucket_name}/{s3_key}. Response: {e.response}"
-                              "\nAre your credentials up to date? If not, try running 'ivert setup' again with the latest credentials file."
+                              "\nAre your credentials up to date? If not, try running 'ivert setup' again with the "
+                              "latest credentials file."
                               "\nIf that doesn't work, talk to your IVERT administrator for help.")
                 return False
 
             else:
-                warnings.warn(f"Warning: Unknown error fetching status of s3://{bucket_name}/{s3_key}. Response: {e.response}")
+                warnings.warn(f"Warning: Unknown error fetching status of s3://{bucket_name}/{s3_key}. "
+                              f"Response: {e.response}")
                 return False
 
     def is_existing_s3_directory(self, s3_key, bucket_type=None):
@@ -242,7 +271,8 @@ class S3Manager:
                 # Otherwise, the key should be the start of the object.
                 assert obj.key.find(s3_key) == 0
 
-                # If we match with an object and the character immediately after the prefix is a '/', then it's a directory.
+                # If we match with an object and the character immediately after the prefix is a '/', then it's a
+                # directory.
                 # If some other character is there, then we're not sure yet, move along to the next object.
                 if s3_key[-1] == "/" or obj.key[len(s3_key)] == "/":
                     return True
@@ -254,12 +284,15 @@ class S3Manager:
                 return False
             elif e.response["Error"]["Code"] == "403" and \
                      e.response["Error"]["Message"].lower() in ("access denied", "accessdenied", "forbidden"):
-                warnings.warn(f"Warning: Access denied to s3://{bucket_name}/{s3_key}. Response: {e.response}"
-                              "\nAre your credentials up to date? If not, try running 'ivert setup' again with the latest credentials file."
+                warnings.warn(f"Warning: Access denied to s3://{self.bucket_dict[bucket_type]}/{s3_key}. "
+                              f"Response: {e.response}"
+                              "\nAre your credentials up to date? If not, try running 'ivert setup' again with the "
+                              "latest credentials file."
                               "\nIf that doesn't work, talk to your IVERT administrator for help.")
                 return False
             else:
-                warnings.warn(f"Warning: Unknown error fetching status of s3://{bucket_name}/{s3_key}. Response: {e.response}")
+                warnings.warn("Warning: Unknown error fetching status of "
+                              f"s3://{self.bucket_dict[bucket_type]}/{s3_key}. Response: {e.response}")
                 return False
 
     def download(self,
@@ -283,7 +316,8 @@ class S3Manager:
             fail_quietly (bool): Whether to fail quietly if the file doesn't exist.
             show_progress_bar (bool): Whether to show a progress bar.
             use_tempfile (bool): Whether to use a temporary file and then copy over after the download is complete.
-            include_metadata (bool): Whether to include the metadata in the downloaded file. In this case, the list of files will be a list of (filename, metadata_dict) tuples."""
+            include_metadata (bool): Whether to include the metadata in the downloaded file. In this case, the list of
+                                     files will be a list of (filename, metadata_dict) tuples."""
         bucket_type = self.convert_btype(bucket_type)
 
         client = self.get_client(bucket_type=bucket_type)
@@ -357,9 +391,13 @@ class S3Manager:
             filename (str): The local file to upload.
             s3_key (str): The S3 key to upload to.
             bucket_type (str): The type of bucket to upload to. Default to 'database'.
-            delete_original (bool): Whether to delete the original file after uploading. This would be like the 'mv' command rather than 'cp'. Default to False.
-            fail_quietly (bool): How to fail if the upload fails. If fail_quietly is True, return False. Else, raise an error. Default to True.
-            recursive (bool): If using a wildcard to grab multiple files, whether to upload all matching files in the directory including recursively in subdirectories. Default to False (match only the base directory).
+            delete_original (bool): Whether to delete the original file after uploading. This would be like the 'mv'
+                                    command rather than 'cp'. Default to False.
+            fail_quietly (bool): How to fail if the upload fails. If fail_quietly is True, return False.
+                                 Else, raise an error. Default to True.
+            recursive (bool): If using a wildcard to grab multiple files, whether to upload all matching files in the
+                              directory including recursively in subdirectories. Default to False (match only the
+                              base directory).
             include_md5 (bool): Whether to include the md5 hash of the file in the metadata. Default to False.
             other_metadata (dict): Other metadata to include in the s3 object header. Default to {}."""
         bucket_type = self.convert_btype(bucket_type)
@@ -386,8 +424,8 @@ class S3Manager:
 
         files_uploaded = []
         for fname in matching_filenames:
-            # If the key is pointing to an S3 directory (prefix), then use the same filename as filename, and put it in that
-            # directory.
+            # If the key is pointing to an S3 directory (prefix), then use the same filename as filename, and put it
+            # in that directory.
             if self.is_existing_s3_directory(s3_key, bucket_type=bucket_type) or s3_key[-1] == "/":
                 s3_key = (s3_key + "/" + os.path.basename(fname)).replace("//", "/")
 
@@ -428,12 +466,16 @@ class S3Manager:
 
         Args:
             src_key (str): The S3 source key.
-            dst_key (str): The S3 destination key. If an existing directory, will transfer to that directory (same filename).
+            dst_key (str): The S3 destination key. If an existing directory, will transfer to that directory
+                           (same filename).
             dst_bucket_type (str): The destination bucket type.
-            src_bucket_type (str): The source bucket type. Default to 'database' if on the EC2 or 'untrusted' if on a client.
-            recursive (bool): If wildcards are used in s3_key1, whether to match filesname recursively in sub-directories.
-            delete_original (bool): Whether to delete the original file after uploading. This would be like the 'mv' command rather than 'cp'. Default to False.
-            fail_quietly (bool): How to fail if the upload fails. If fail_quietly is True, return False. Else, raise an error. Default to True.
+            src_bucket_type (str): The source bucket type. Default to 'database' if on the EC2 or 'untrusted' if on a
+                                   client.
+            recursive (bool): If wildcards are used in s3_key1, whether to match filesname recursively in subdirectories.
+            delete_original (bool): Whether to delete the original file after uploading. This would be like the 'mv'
+                                    command rather than 'cp'. Default to False.
+            fail_quietly (bool): How to fail if the upload fails. If fail_quietly is True, return False.
+                                 Else, raise an error. Default to True.
             include_metadata (bool): Whether to include the source metadata in the transfer.
 
         Returns:
@@ -447,7 +489,8 @@ class S3Manager:
         if self.contains_glob_flags(src_key):
             matching_source_keys = self.listdir(src_key, bucket_type=src_bucket_type, recursive=recursive)
             # Check to make sure it's a directory.
-            if len(matching_source_keys) > 1 and not self.is_existing_s3_directory(dst_key, bucket_type=dst_bucket_type):
+            if len(matching_source_keys) > 1 and not self.is_existing_s3_directory(dst_key,
+                                                                                   bucket_type=dst_bucket_type):
                 raise ValueError(
                     "The destination key must be a directory if the source key refers to more than one file.")
         else:
@@ -461,9 +504,9 @@ class S3Manager:
             else:
                 d_key = dst_key
 
-            # If we are accessing two different buckets with two different sets of AWS credentials, then we need to transfer
-            # using a temporary file on this machine. Download, then upload. This only applies if the source bucket uses
-            # an AWS profile at all.
+            # If we are accessing two different buckets with two different sets of AWS credentials, then we need to
+            # transfer using a temporary file on this machine. Download, then upload. This only applies if the source
+            # bucket uses an AWS profile at all.
             if (self.bucket_profile_dict[src_bucket_type] is not None
                     and
                     self.bucket_profile_dict[src_bucket_type] != self.bucket_profile_dict[dst_bucket_type]):
@@ -496,7 +539,8 @@ class S3Manager:
                         return False
                     else:
                         raise RuntimeError(
-                            f"Error: S3Manager.transfer() failed to transfer file {d_key} to the '{dst_bucket_type}' bucket.")
+                            f"Error: S3Manager.transfer() failed to transfer file {d_key} to the '{dst_bucket_type}' "
+                            "bucket.")
 
                 # Closing a tempfile deletes it.
                 temp_file.close()
@@ -556,13 +600,15 @@ class S3Manager:
                              for m in s3_matches if m[len(s3_base_key):].lstrip("/").find("/") > -1])))
                 return dirmatches + fmatches
 
-        # If no glob flags, make sure it's actually a directory (or existing file) we're looking at, not just a partial substring.
+        # If no glob flags, make sure it's actually a directory (or existing file) we're looking at, not just a partial
+        # substring.
         if not self.is_existing_s3_directory(s3_key, bucket_type=bucket_type):
             if self.exists(s3_key):
                 return [s3_key]
             else:
                 raise FileNotFoundError(
-                    f"Error: '{s3_key}' is not a file or directory in bucket '{self.get_bucketname(bucket_type=bucket_type)}'.")
+                    f"Error: '{s3_key}' is not a file or directory in bucket "
+                    f"'{self.get_bucketname(bucket_type=bucket_type)}'.")
 
         # Make sure the directory ends with a '/'.
         if len(s3_key) > 0 and not s3_key.endswith("/"):
@@ -674,10 +720,12 @@ class S3Manager:
 
         bucket_type = self.convert_btype(bucket_type)
 
-        metadata = self.get_metadata(s3_key, bucket_type=bucket_type, recursive=False,
-                                     return_entire_header=False, use_tags=use_tags)
-        # TODO: Finish getting the metadata and then the md5 from there.
-        return head
+        metadata = self.get_metadata(s3_key,
+                                     bucket_type=bucket_type,
+                                     recursive=False,
+                                     return_entire_header=False,
+                                     use_tags=use_tags)[self.config.s3_md5_metadata_key]
+        return metadata
 
     def compare_md5(self,
                     filename: str,
@@ -688,7 +736,7 @@ class S3Manager:
 
         If the S3 key does not have an md5 in its metadata, return False."""
 
-        s3_md5 = self.get_md5(s3_key, bucket_type=bucket_type)
+        s3_md5 = self.get_md5(s3_key, bucket_type=bucket_type, use_tags=use_tags)
         if s3_md5 is None or s3_md5 == '':
             return False
         else:
@@ -699,7 +747,7 @@ class S3Manager:
                      bucket_type: str = None,
                      recursive: bool = False,
                      return_entire_header: bool = False,
-                     use_tags: bool = False) -> typing.Dict:
+                     use_tags: typing.Union[bool, None] = None) -> typing.Dict:
         """Return the user-defined metadata of an S3 key.
 
         If wildcards are used, return it as a {key: metadata_dict}" dictionary, even if only one file is matched.
@@ -707,11 +755,14 @@ class S3Manager:
         Args:
             s3_key (str): The S3 key to get the metadata of.
             bucket_type (str, optional): The type of bucket to use. Defaults to None.
-            recursive (bool, optional): Whether to recurse into subdirectories. Defaults to False. Only applies if wildcard flags are used.
+            recursive (bool, optional): Whether to recurse into subdirectories. Defaults to False. Only applies if
+                                        wildcard flags are used.
             return_entire_header (bool, optional): Whether to return the entire header, or just the user-defined
                                                    'Metadata' portion of it. Defaults to False (return just 'Metadata').
-                                                   Only applies if use_tags is False and recursive is False.
-            use_tags (bool, optional): Use object_tags rather than the Metadata field of the header directly.
+                                                   Only applies if use_tags is False.
+            use_tags (bool, optional): Whether to return the user-defined 'Tags' portion of the header. Defaults to
+                                       None. If None, only use tags on the export bucket if
+                                       ivert_config.ivert_export_client_use_aws_tags_instead_of_metadata is True.
 
         Returns:
             typing.Dict: The metadata of the S3 key.
@@ -728,7 +779,7 @@ class S3Manager:
             for key in key_names:
                 # If we're not recursing, directories can be returned as well. Ignore those.
                 # Otherwise, add the key to the dictionary by calling this function recursively on the non-globbed match.
-                if not self.is_existing_s3_directory(key):
+                if not self.is_existing_s3_directory(key, bucket_type=bucket_type):
                     keyvals[key] = self.get_metadata(key,
                                                      bucket_type=bucket_type,
                                                      recursive=False,
@@ -738,17 +789,21 @@ class S3Manager:
 
         else:
             bname = self.get_bucketname(bucket_type=bucket_type)
+            # If use_tags wasn't set, set it to the export_client bucket's setting in the ivert_config file.
+            # This is the only IVERT bucket in which this is applicable.
+            if use_tags is None:
+                if bucket_type == "export_client":
+                    use_tags = self.config.ivert_export_client_use_aws_tags_instead_of_metadata
+                else:
+                    use_tags = False
+
+            # If using tags, use the s3api "get-object-tagging" feature, under "TagSet".
+            # It returns a list of dicts with "Key" and "Value" keys... convert to a key-value pair single dictionary.
             if use_tags:
                 head = client.get_object_tagging(Bucket=bname, Key=s3_key)
                 return dict([(t["Key"], t["Value"]) for t in head["TagSet"]])
 
-            else:
-                head = client.head_object(Bucket=bname, Key=s3_key)
-
-                if return_entire_header:
-                    return head
-                else:
-                    return head["Metadata"]
+            # Otherwise, use the s3api "head-object" feature, under "Metadata".
 
 
 def pretty_print_bucket_list(use_formatting=True):
@@ -756,19 +811,24 @@ def pretty_print_bucket_list(use_formatting=True):
 
     This is formatted for printing to a bash command shell.
     """
+    global ivert_config
+    if ivert_config is None:
+        ivert_config = configfile.config()
 
     aliases = S3Manager.available_bucket_types
 
-    bname_dict = {"database" : ivert_config.s3_bucket_database,
-                  "trusted"  : ivert_config.s3_bucket_import_trusted,
-                  "untrusted": ivert_config.s3_bucket_import_untrusted,
-                  "export"   : ivert_config.s3_bucket_export,
-                  "quarantine": ivert_config.s3_bucket_quarantine}
+    bname_dict = {"database"     : ivert_config.s3_bucket_database,
+                  "trusted"      : ivert_config.s3_bucket_import_trusted,
+                  "untrusted"    : ivert_config.s3_bucket_import_untrusted,
+                  "export_client": ivert_config.s3_bucket_export_client,
+                  "export_server": ivert_config.s3_bucket_export_server,
+                  "quarantine"   : ivert_config.s3_bucket_quarantine}
 
     prefixes_dict = {"database" : "",
                      "trusted"  : ivert_config.s3_import_prefix_base if bname_dict["trusted"] else "",
                      "untrusted": ivert_config.s3_import_prefix_base if bname_dict["untrusted"] else "",
-                     "export"   : ivert_config.s3_export_prefix_base if bname_dict["export"] else "",
+                     "export_client": ivert_config.s3_export_prefix_base if bname_dict["export"] else "",
+                     "export_server": ivert_config.s3_export_prefix_base if bname_dict["export"] else "",
                      "quarantine": ivert_config.s3_quarantine_prefix_base if bname_dict["quarantine"] else ""}
 
     bc = bcolors.bcolors()
@@ -1111,7 +1171,6 @@ def s3_cli():
         else:
             raise ValueError("One or more keys should refer to an S3 bucket prepended by 's3:' or 's3://'. Local"
                              "file transfers can be handled by os-supported command-line utilitys like cp and mv.")
-
 
     ########################################################
     ### 'buckets' and 'list_buckets' parser ################

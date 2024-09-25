@@ -72,7 +72,7 @@ setuptools.setup(
     ],
     entry_points = {
         'console_scripts': [
-            'ivert = ivert.ivert_client:ivert_client_cli'
+            'ivert = ivert.client:ivert_client_cli'
         ]
     },
     py_modules = [

@@ -33,7 +33,7 @@ else:
         import ivert_utils.version as version
         import ivert.s3 as s3
 
-ivert_config = configfile.config()
+ivert_config = None
 
 
 class JobsDatabaseClient:
@@ -54,6 +54,10 @@ class JobsDatabaseClient:
             None
         """
         # The IVERT configfile object. Get the paths from here.
+        global ivert_config
+        if ivert_config is None:
+            ivert_config = configfile.config()
+
         self.ivert_config = ivert_config
         self.ivert_jobs_dir = self.ivert_config.ivert_jobs_directory_local
         self.db_fname = self.ivert_config.ivert_jobs_database_local_fname
@@ -65,8 +69,12 @@ class JobsDatabaseClient:
         self.conn = None
 
         # Where the jobs database sits in the S3 bucket
-        self.s3_bucket_type = self.ivert_config.s3_ivert_jobs_database_bucket_type
-        self.s3_database_key = self.ivert_config.s3_ivert_jobs_database_key
+        if ivert_config.is_aws:
+            self.s3_bucket_type = self.ivert_config.s3_ivert_jobs_database_bucket_type_server
+            self.s3_database_key = self.ivert_config.s3_ivert_jobs_database_server_key
+        else:
+            self.s3_bucket_type = self.ivert_config.s3_ivert_jobs_database_bucket_type_client
+            self.s3_database_key = self.ivert_config.s3_ivert_jobs_database_client_key
 
         # The S3Manager instance, for uploading and downloading files to the S3 buckets
         self.s3m = s3.S3Manager()
@@ -1390,7 +1398,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
             s3_key = os.path.join(s3_directory, os.path.basename(db_fname))
             self.s3m.upload(db_fname,
                             s3_key,
-                            bucket_type="export",
+                            bucket_type="export_server",
                             delete_original=True,
                             recursive=False,
                             other_metadata={
@@ -1529,6 +1537,9 @@ def define_and_parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
+    if not ivert_config:
+        ivert_config = configfile.config()
+
     args = define_and_parse_args()
 
     if ivert_config.is_aws:
@@ -1539,9 +1550,9 @@ if __name__ == "__main__":
     if args.command == "create":
         idb.create_new_database(only_if_not_exists_in_s3=True, overwrite=args.overwrite)
     elif args.command == "upload":
-        idb.upload_to_s3()
+        idb.upload_to_s3(only_if_newer=False)
     elif args.command == "download":
-        idb.download_from_s3()
+        idb.download_from_s3(only_if_newer=False)
     elif args.command == "delete":
         idb.delete_database()
     elif args.command == "archive":

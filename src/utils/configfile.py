@@ -15,15 +15,19 @@ else:
         import is_aws
         import version
     except ModuleNotFoundError:
+        # If this is imported from a module in the parent directory, look in the utils/ sub-dir.
         import utils.is_aws as is_aws
         import utils.version as version
 
 ivert_default_configfile = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                                         "..", "..", "config", "ivert_config.ini"))
+
 # When we build the ivert package, this is the location of the ivert_data directory. Look for it there.
 if not os.path.exists(ivert_default_configfile):
     ivert_default_configfile = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                                                            "..", "..", "..", "..", "ivert_data", "config", "ivert_config.ini"))
+                                                            "..", "..", "..", "..",
+                                                            "ivert_data", "config", "ivert_config.ini"))
+
 
 
 class config:
@@ -51,7 +55,8 @@ class config:
     """
 
     def __init__(self,
-                 configfile=ivert_default_configfile):
+                 configfile: str = ivert_default_configfile,
+                 ignore_errors: bool = False):
         """Initializes a new instance of the config class."""
 
         self._configfile = os.path.abspath(os.path.realpath(configfile))
@@ -70,7 +75,7 @@ class config:
 
         # If we're importing the primary IVERT config file, add the user variables and S3 creds to the config as well.
         if os.path.basename(self._configfile) == os.path.basename(ivert_default_configfile):
-            self._add_user_variables_and_s3_creds_to_config_obj()
+            self._add_user_variables_and_s3_creds_to_config_obj(ignore_errors=ignore_errors)
 
         # If 'ivert_version' is present and not already set, set it.
         if hasattr(self, "ivert_version") and self.ivert_version is None:
@@ -152,7 +157,7 @@ class config:
             elif sys.platform in ('win32', 'win64') and value.find("\\") > -1:
                 # If it's an absolute path or it already exists where it is, just use it as-is
                 # For a base path, look for the "C:\" drive-name pattern at the start (upper- or lower-case).
-                if re.search(r'\A[A-Za-z]\:\\', value.strip()) is not None:
+                if re.search(r'\A[A-Za-z]:\\', value.strip()) is not None:
                     setattr(self, key, os.path.abspath(value))
                 # If it references the home directory, expand that on the local machine.
                 elif value.find("~") > -1:
@@ -174,11 +179,16 @@ class config:
         If we're server-side, we need to fill in [s3_bucket_database], [s3_bucket_trusted], and [s3_bucket_export],
         and [s3_bucket_quarantine].
         These can be found in the ivert_setup/setup/paths.sh file from the ivert_setup repository."""
-        assert hasattr(self, "s3_bucket_database")
-        assert hasattr(self, "s3_bucket_import_untrusted")
-        assert hasattr(self, "s3_bucket_import_trusted")
-        assert hasattr(self, "s3_bucket_export")
-        assert hasattr(self, "s3_bucket_quarantine")
+        try:
+            assert hasattr(self, "s3_bucket_database")
+            assert hasattr(self, "s3_bucket_import_trusted")
+            assert hasattr(self, "s3_bucket_export_server")
+            assert hasattr(self, "s3_bucket_quarantine")
+        except AssertionError:
+            print("Error: Not all required bucket names are present in the ivert_setup 'paths.sh' file.",
+                  file=sys.stderr)
+            sys.exit(0)
+
         if include_sns_arn:
             assert hasattr(self, "sns_topic_arn")
 
@@ -189,60 +199,84 @@ class config:
             paths_text_lines = [line.strip() for line in f.readlines()]
 
         # Get the S3 bucket names from the paths.sh file
-        # For each variable, look for the line that starts with it, extract the value after the =, and strip off any comments.
+        # For each variable, look for the line that starts with it, extract the value after the =,
+        # and strip off any comments.
 
         # Read the database bucket from paths.sh
         try:
-            db_line = [line for line in paths_text_lines if re.match(r"^s3_bucket_database(?!\w)",
-                                                                     line.lower().lstrip())][0]
+            db_line = [line for line in paths_text_lines
+                       if re.match(r"^s3_bucket_database(?!\w)", line.lstrip().lower())][0]
             self.s3_bucket_database = db_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
+            if self.s3_bucket_database == '':
+                self.s3_bucket_database = None
         except IndexError:
             self.s3_bucket_database = None
 
         # Read the import bucket from paths.sh
         try:
-            trusted_line = [line for line in paths_text_lines if re.match(r"^s3_bucket_import_trusted(?!\w)",
-                                                                          line.lower().lstrip())][0]
+            trusted_line = [line for line in paths_text_lines
+                            if re.match(r"^s3_bucket_import_trusted(?!\w)", line.lstrip().lower())][0]
             self.s3_bucket_import_trusted = trusted_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
+            if self.s3_bucket_import_trusted == '':
+                self.s3_bucket_import_trusted = None
         except IndexError:
             self.s3_bucket_import_trusted = None
 
         # Read the untrusted bucket from paths.sh (if it exists there.
         # It usually shouldn't, but it'll read it if it's there.)
         try:
-            untrusted_line = [line for line in paths_text_lines if re.match(r"^s3_bucket_import_untrusted(?!\w)",
-                                                                            line.lower().lstrip())][0]
+            untrusted_line = [line for line in paths_text_lines
+                              if re.match(r"^s3_bucket_import_untrusted(?!\w)", line.lstrip().lower())][0]
             self.s3_bucket_import_untrusted = untrusted_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
+            if self.s3_bucket_import_untrusted == '':
+                self.s3_bucket_import_untrusted = None
         except IndexError:
             self.s3_bucket_import_untrusted = None
 
-        # Read the export bucket from paths.sh
+        # Read the export_server bucket from paths.sh
         try:
-            export_line = [line for line in paths_text_lines if re.match(r"^s3_bucket_export(?!\w)",
-                                                                         line.lower().lstrip())][0]
-            self.s3_bucket_export = export_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
+            export_server_line = [line for line in paths_text_lines
+                                  if re.match(r"^s3_bucket_export_server(?!\w)", line.lstrip().lower())][0]
+            self.s3_bucket_export_server = export_server_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
+            if self.s3_bucket_export_server == '':
+                self.s3_bucket_export_server = None
         except IndexError:
-            self.s3_bucket_export = None
+            self.s3_bucket_export_server = None
+
+        # Read the export_client bucket from paths.sh. Should be empty or not there at all.
+        try:
+            export_client_line = [line for line in paths_text_lines
+                                  if re.match(r"^s3_bucket_export_client(?!\w)", line.lstrip().lower())][0]
+            self.s3_bucket_export_client = export_client_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
+            if self.s3_bucket_export_client == '':
+                self.s3_bucket_export_client = None
+        except IndexError:
+            self.s3_bucket_export_client = None
 
         # Read the quarantine bucket from paths.sh
         try:
-            quarantine_line = [line for line in paths_text_lines if re.match(r"^s3_bucket_import_quarantine(?!\w)",
-                                                                             line.lower().lstrip())][0]
+            quarantine_line = [line for line in paths_text_lines
+                               if re.match(r"^s3_bucket_quarantine(?!\w)", line.lstrip().lower())][0]
             self.s3_bucket_quarantine = quarantine_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
         except IndexError:
             self.s3_bucket_quarantine = None
 
         if include_sns_arn:
             try:
-                sns_line = [line for line in paths_text_lines if re.match(r"^cudem_sns_arn(?!\w)",
-                                                                          line.lower().lstrip())][0]
+                sns_line = [line for line in paths_text_lines
+                            if re.match(r"^cudem_sns_arn(?!\w)", line.lstrip().lower())][0]
                 self.sns_topic_arn = sns_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
             except IndexError:
                 self.sns_topic_arn = None
 
         # Check to see if any of these just reference other variables. If so, fill them in. This could just point
         # to another variable, so keep looping until we've gotten an actual value.
-        for varname in ["s3_bucket_database", "s3_bucket_import_untrusted", "s3_bucket_import_trusted", "s3_bucket_export"]:
+        for varname in ["s3_bucket_database",
+                        "s3_bucket_import_untrusted",
+                        "s3_bucket_import_trusted",
+                        "s3_bucket_export_server",
+                        "s3_bucket_export_client",
+                        "s3_bucket_quarantine"]:
             if getattr(self, varname) is None:
                 continue
 
@@ -253,18 +287,26 @@ class config:
 
         return
 
-    def _add_user_variables_and_s3_creds_to_config_obj(self):
+    def _add_user_variables_and_s3_creds_to_config_obj(self, ignore_errors: bool = False):
         """Add the names of the S3 buckets to the configfile.config object.
 
         On a client instance, src setup needs to be run to flesh out the user configfile, before this will work."""
         # Make sure all these are defined in here. They may be assigned to None but they should exist. This is
         # a sanity check in case we changed the bucket variables names in the configfile.
-        assert hasattr(self, "s3_bucket_import_untrusted")
-        assert hasattr(self, "s3_bucket_export")
-        assert hasattr(self, "user_email")
-        assert hasattr(self, "username")
-        assert hasattr(self, "aws_profile_ivert_ingest")
-        assert hasattr(self, "aws_profile_ivert_export")
+        try:
+            assert hasattr(self, "s3_bucket_import_untrusted")
+            assert hasattr(self, "s3_bucket_export_client")
+            assert hasattr(self, "s3_export_client_endpoint_url")
+            assert hasattr(self, "s3_import_untrusted_endpoint_url")
+            assert hasattr(self, "user_email")
+            assert hasattr(self, "username")
+            assert hasattr(self, "aws_profile_ivert_import_untrusted")
+            assert hasattr(self, "aws_profile_ivert_export_client")
+        except AssertionError as e:
+            if ignore_errors:
+                pass
+            else:
+                raise e
 
         # If we're on the server side (in the AWS), get these from the "ivert_setup" repository under /setup/paths.sh.
         #    In this case, only the s3_bucket_import_trusted, s3_bucket_database, and s3_bucket_export are needed.
@@ -273,21 +315,31 @@ class config:
 
         # If we're on the client side (not in an AWS instance), get these from the user configfile.
         else:
-            if os.path.exists(self.user_configfile):
-                user_config = config(self.user_configfile)
-                self.user_email = user_config.user_email
-                self.username = user_config.username
-                self.aws_profile_ivert_ingest = user_config.aws_profile_ivert_ingest
-                self.aws_profile_ivert_export = user_config.aws_profile_ivert_export
-            else:
-                pass
+            try:
+                if os.path.exists(self.user_configfile):
+                    user_config = config(self.user_configfile)
+                    self.user_email = user_config.user_email
+                    self.username = user_config.username
+                    self.aws_profile_ivert_import_untrusted = user_config.aws_profile_ivert_import_untrusted
+                    self.aws_profile_ivert_export_client = user_config.aws_profile_ivert_export_client
 
-            # Now try to read the s3 credentials file.
-            if not os.path.exists(os.path.abspath(self.ivert_s3_credentials_file)):
-                return
-            else:
-                s3_credentials = config(self.ivert_s3_credentials_file)
-                self.s3_bucket_import_untrusted = s3_credentials.s3_untrusted_bucket_name
-                self.s3_bucket_export = s3_credentials.s3_export_bucket_name
+                # Now try to read the s3 credentials file.
+                if os.path.exists(os.path.abspath(self.ivert_s3_credentials_file)):
+                    s3_credentials = config(self.ivert_s3_credentials_file)
+                    self.s3_bucket_import_untrusted = s3_credentials.s3_bucket_import_untrusted
+                    self.s3_import_untrusted_endpoint_url = s3_credentials.s3_import_untrusted_endpoint_url
+                    self.s3_bucket_export_client = s3_credentials.s3_bucket_export_client
+                    self.s3_export_client_endpoint_url = s3_credentials.s3_export_client_endpoint_url
+            except AttributeError as e:
+                if ignore_errors:
+                    pass
+                else:
+                    raise e
+                    # print("ERROR: The user config file and/or the IVERT S3 credentials do not contain the correct "
+                    #       "fields.\nIf you recently upgraded IVERT, please run the 'ivert setup' script again with "
+                    #       "your new credentials.\nIf the problem persists, contact your IVERT administrator.",
+                    #       file=sys.stderr)
+                    #
+                    # sys.exit(0)
 
         return

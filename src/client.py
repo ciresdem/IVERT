@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""ivert_client.py -- The front-facing interfact to IVERT code for cloud computing."""
+"""client.py -- The front-facing interfact to IVERT code for cloud computing."""
 import argparse
 import sys
 
@@ -32,9 +32,10 @@ else:
     import utils.version as version
     import utils.version_check_client as version_check_client
 
+
 def define_and_parse_args(return_parser: bool = False):
     parser = argparse.ArgumentParser(description="The ICESat-2 Validation of Elevations Reporting Tool (IVERT)."
-                                     f"\nRun 'ivert <command> --help' for more info about any specific command.")
+                                     "\nRun 'ivert <command> --help' for more info about any specific command.")
     parser.add_argument("-v", "--version", action="version", version=f"ivert {version.__version__}")
 
     # The first argument in the command. The other sub-parsers depend upon which command was used here.
@@ -130,7 +131,8 @@ def define_and_parse_args(return_parser: bool = False):
                       "Run once before using IVERT on a new machine, or when updating the credentials file.")
     # Use the parent parser from client_user_setup.py to define the arguments for the subparser
     subparsers.add_parser("setup",
-                          parents=[client_user_setup.define_and_parse_args(just_return_parser=True)],
+                          parents=[client_user_setup.define_and_parse_args(just_return_parser=True,
+                                                                           ignore_config_errors=True)],
                           add_help=False,
                           help=setup_help_msg, description=setup_help_msg)
 
@@ -144,8 +146,8 @@ def define_and_parse_args(return_parser: bool = False):
                              help="Whether to send SNS notifications. Must be followed by 'True', 'False'. Default 'True'")
     parser_test.add_argument("-w", "--wait", dest="wait", default=False, action="store_true",
                              help="Wait to exit until the results are finished and downloaded. If False,"
-                                  " just upload the data and exit. You can run 'ivert_client.py check <job_id>' to check the status"
-                                  " of the job and 'ivert_client.py download <job_id> --local_dir <dirname>' to download results."
+                                  " just upload the data and exit. You can run 'client.py check <job_id>' to check the status"
+                                  " of the job and 'client.py download <job_id> --local_dir <dirname>' to download results."
                                   " Default: False")
 
     ###############################################################
