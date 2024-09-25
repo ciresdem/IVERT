@@ -825,10 +825,10 @@ def pretty_print_bucket_list(use_formatting=True):
                   "quarantine"   : ivert_config.s3_bucket_quarantine}
 
     prefixes_dict = {"database" : "",
-                     "trusted"  : ivert_config.s3_import_prefix_base if bname_dict["trusted"] else "",
-                     "untrusted": ivert_config.s3_import_prefix_base if bname_dict["untrusted"] else "",
-                     "export_client": ivert_config.s3_export_prefix_base if bname_dict["export"] else "",
-                     "export_server": ivert_config.s3_export_prefix_base if bname_dict["export"] else "",
+                     "trusted"  : ivert_config.s3_import_trusted_prefix_base if bname_dict["trusted"] else "",
+                     "untrusted": ivert_config.s3_import_untrusted_prefix_base if bname_dict["untrusted"] else "",
+                     "export_client": ivert_config.s3_export_client_prefix_base if bname_dict["export_client"] else "",
+                     "export_server": ivert_config.s3_export_server_prefix_base if bname_dict["export_server"] else "",
                      "quarantine": ivert_config.s3_quarantine_prefix_base if bname_dict["quarantine"] else ""}
 
     bc = bcolors.bcolors()
