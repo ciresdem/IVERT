@@ -521,8 +521,8 @@ def update_local_aws_config(aws_config_file: str,
         else:
             config_text = re.sub(old_ivert_profile_search_regex, new_ivert_profile, config_text, count=1)
 
-    # Get rid of excess newlines that may have accidentally been added in the config file.
-    config_text = config_text.rstrip("\n\r ").lstrip("\n\r ")
+    # Get rid of excess newlines that may have accidentally been added in the config file, which sometimes happens.
+    config_text = config_text.rstrip("\n\r ").lstrip("\n\r ") + "\n"
     while "\n\n\n" in config_text:
         config_text = config_text.replace("\n\n\n", "\n\n")
 
@@ -598,7 +598,7 @@ def update_local_aws_credentials(aws_credentials_file: str,
             credentials_text = re.sub(old_ivert_profile_search_regex, new_ivert_profile, credentials_text, count=1)
 
     # Get rid of excess newlines that may have accidentally been added in the config file.
-    credentials_text = credentials_text.rstrip("\n\r ").lstrip("\n\r ")
+    credentials_text = credentials_text.rstrip("\n\r ").lstrip("\n\r ") + "\n"
     while "\n\n\n" in credentials_text:
         credentials_text = credentials_text.replace("\n\n\n", "\n\n")
 
