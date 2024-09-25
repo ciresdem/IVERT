@@ -310,10 +310,11 @@ class IvertJobManager:
     def start_new_job(self, ini_s3_key: str):
         """Start a new job."""
         subproc = IvertJob
+        proc_stdout_file = self.job_stdout_file(ini_s3_key)
 
         # Create a job record for the job in the database before starting the subprocess.
         # This will help ensure that new jobs don't get run twice, which was occasionally happening.
-        job_obj_init = subproc(ini_s3_key, stdout_file=subprocess.DEVNULL, auto_start=False, verbose=False)
+        job_obj_init = subproc(ini_s3_key, stdout_file=proc_stdout_file, auto_start=False, verbose=False)
         job_obj_init.create_local_job_folders()
         # 2. Download the job configuration file from the S3 bucket.
         job_obj_init.download_job_config_file()
@@ -324,7 +325,6 @@ class IvertJobManager:
         job_obj_init.create_new_job_entry(upload_to_s3=False)
 
         # Set up the parameters for the IvertJob subprocess.
-        proc_stdout_file = self.job_stdout_file(ini_s3_key)
         proc_args = (ini_s3_key, self.input_bucket_type)
         proc_kwargs = {'auto_start': True, 'stdout_file': proc_stdout_file, 'verbose': self.verbose}
 
