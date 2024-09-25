@@ -23,9 +23,17 @@ def fetch_min_client_from_server(ivert_config=None):
 
     jobs_db_s3_key = str(ivert_config.s3_ivert_jobs_database_client_key)
 
-    # Initiate a boto3 session and client.
-    client = boto3.Session(profile_name=str(ivert_config.aws_profile_ivert_export_client)).client('s3')
-    return client.head_object(Bucket=str(ivert_config.s3_bucket_export_client), Key=jobs_db_s3_key)['Metadata'][ivert_config.s3_jobs_db_min_client_version_metadata_key]
+    # Fetch the version from the server database. Not using s3.py to avoid circular imports.
+    client = boto3.Session(profile_name=str(ivert_config.aws_profile_ivert_export_client)).client('s3',
+                                                                                                  endpoint_url=ivert_config.s3_export_client_endpoint_url)
+
+    if ivert_config.ivert_export_client_use_aws_tags_instead_of_metadata:
+        tagset = client.get_object_tagging(Bucket=str(ivert_config.s3_bucket_export_client),
+                                           Key=jobs_db_s3_key)['TagSet']
+        tagdict = {tag['Key']: tag['Value'] for tag in tagset}
+        return tagdict[ivert_config.s3_jobs_db_min_client_version_metadata_key]
+    else:
+        return client.head_object(Bucket=str(ivert_config.s3_bucket_export_client), Key=jobs_db_s3_key)['Metadata'][ivert_config.s3_jobs_db_min_client_version_metadata_key]
 
 
 def is_this_client_compatible():
