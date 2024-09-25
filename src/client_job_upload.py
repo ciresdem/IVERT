@@ -149,7 +149,7 @@ def create_new_job_config(ivert_args: argparse.Namespace,
     username, new_job_number = create_new_job_params(ivert_config.username)
 
     # Genereate the full upload prefix for this new job.
-    upload_prefix = str(os.path.join(ivert_config.s3_import_prefix_base, args.command, username, str(new_job_number)))
+    upload_prefix = str(os.path.join(ivert_config.s3_import_untrusted_prefix_base, args.command, username, str(new_job_number)))
     # AWS S3 paths only use forward-slashes.
     upload_prefix = upload_prefix.replace(os.path.sep, "/")
 

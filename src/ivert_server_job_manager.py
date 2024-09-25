@@ -87,7 +87,7 @@ class IvertJobManager:
             self.time_interval_s = time_interval_s
 
         self.input_bucket_type = input_bucket_type
-        self.input_prefix = self.ivert_config.s3_import_prefix_base
+        self.input_prefix = self.ivert_config.s3_import_trusted_prefix_base
         self.specific_job_id = job_id
 
         # The jobs database object. We assume this is running on the S3 server (it doesn't make sense otherwise).
@@ -310,9 +310,23 @@ class IvertJobManager:
     def start_new_job(self, ini_s3_key: str):
         """Start a new job."""
         subproc = IvertJob
+
+        # Create a job record for the job in the database before starting the subprocess.
+        # This will help ensure that new jobs don't get run twice, which was occasionally happening.
+        job_obj_init = subproc(ini_s3_key, stdout_file=subprocess.DEVNULL, auto_start=False, verbose=False)
+        job_obj_init.create_local_job_folders()
+        # 2. Download the job configuration file from the S3 bucket.
+        job_obj_init.download_job_config_file()
+        # 3. Parse the job configuration file.
+        job_obj_init.parse_job_config_ini(dry_run_only=True)
+        # 4. Create a new job entry in the jobs database.
+        # -- also creates an ivert_files entry for the logfile, and uploads the new database version.
+        job_obj_init.create_new_job_entry(upload_to_s3=False)
+
+        # Set up the parameters for the IvertJob subprocess.
         proc_stdout_file = self.job_stdout_file(ini_s3_key)
         proc_args = (ini_s3_key, self.input_bucket_type)
-        proc_kwargs = {'auto_start': True, 'stdout_file': proc_stdout_file, 'verbose': True}
+        proc_kwargs = {'auto_start': True, 'stdout_file': proc_stdout_file, 'verbose': self.verbose}
 
         if self.verbose:
             print(f"Starting job {ini_s3_key[ini_s3_key.rfind('/') + 1: ini_s3_key.rfind('.')]}.", flush=True)
@@ -530,14 +544,14 @@ class IvertJob:
         self.job_config_object: typing.Union[utils.configfile.config, None] = None
         self.output_dir = os.path.join(self.job_dir, "outputs")
         # Define the export prefix.
-        self.import_prefix = self.ivert_config.s3_import_prefix_base + \
-                             ("" if self.ivert_config.s3_import_prefix_base[-1] == "/" else "") + \
+        self.import_prefix = self.ivert_config.s3_import_trusted_prefix_base + \
+                             ("" if self.ivert_config.s3_import_trusted_prefix_base[-1] == "/" else "") + \
                              self.ivert_config.s3_ivert_job_subdirs_template \
                                               .replace('[command]', self.command) \
                                               .replace('[username]', self.username) \
                                               .replace('[job_id]', self.job_id)
-        self.export_prefix = self.ivert_config.s3_export_prefix_base + \
-                             ("" if self.ivert_config.s3_export_prefix_base[-1] == "/" else "") + \
+        self.export_prefix = self.ivert_config.s3_export_server_prefix_base + \
+                             ("" if self.ivert_config.s3_export_server_prefix_base[-1] == "/" else "") + \
                              (self.ivert_config.s3_ivert_job_subdirs_template
                                   .replace('[command]', self.command)
                                   .replace('[username]', self.username)
@@ -699,9 +713,6 @@ class IvertJob:
             os.makedirs(self.job_dir)
 
         # Create the output directory if it doesn't exist.
-        if not os.path.exists(self.job_dir):
-            os.makedirs(self.job_dir)
-
         if not os.path.exists(self.output_dir):
             os.mkdir(self.output_dir)
 
@@ -731,10 +742,11 @@ class IvertJob:
 
     def download_job_config_file(self):
         """Download the job configuration file from the S3 bucket."""
-        if self.verbose:
-            print(f"Downloading {os.path.basename(self.job_config_local)}", flush=True)
+        if not os.path.exists(self.job_config_local):
+            if self.verbose:
+                print(f"Downloading {os.path.basename(self.job_config_local)}", flush=True)
 
-        self.s3m.download(self.job_config_s3_key, self.job_config_local, bucket_type=self.job_config_s3_bucket_type)
+            self.s3m.download(self.job_config_s3_key, self.job_config_local, bucket_type=self.job_config_s3_bucket_type)
 
     def parse_job_config_ini(self, dry_run_only: bool = False):
         """Parse the job configuration file, defining the IVERT job parameters."""
@@ -786,27 +798,33 @@ class IvertJob:
     def create_new_job_entry(self, upload_to_s3: bool = True) -> None:
         """Create a new job entry in the jobs database.
 
-        The new version of the database will be immediately uploaded."""
+        If upload_t_s3 is True, then the new version of the database will be immediately uploaded."""
 
         # Create a new job entry in the jobs database.
         assert isinstance(self.job_config_object, utils.configfile.config)
-        self.jobs_db.create_new_job(self.job_config_object,
-                                    self.job_config_local,
-                                    self.logfile,
-                                    self.job_dir,
-                                    self.output_dir,
-                                    self.import_prefix,
-                                    self.export_prefix,
-                                    job_status="started",
-                                    upload_to_s3=upload_to_s3)
 
-        # Generate a new file record for the config file of this job.
-        self.jobs_db.create_new_file_record(self.job_config_local,
-                                            self.job_id,
-                                            self.username,
-                                            import_or_export=0,
-                                            status="processed",
-                                            upload_to_s3=upload_to_s3)
+        # If the job number already exists, then just update it here:
+        if self.jobs_db.job_exists(self.username, self.job_id):
+            self.jobs_db.update_job_status(self.username, self.job_id, "started", upload_to_s3=upload_to_s3)
+        else:
+            self.jobs_db.create_new_job(self.job_config_object,
+                                        self.job_config_local,
+                                        self.logfile,
+                                        self.job_dir,
+                                        self.output_dir,
+                                        self.import_prefix,
+                                        self.export_prefix,
+                                        job_status="started",
+                                        upload_to_s3=upload_to_s3)
+
+        if not self.jobs_db.file_exists(self.job_config_local, self.username, self.job_id):
+            # Generate a new file record for the config file of this job.
+            self.jobs_db.create_new_file_record(self.job_config_local,
+                                                self.job_id,
+                                                self.username,
+                                                import_or_export=0,
+                                                status="processed",
+                                                upload_to_s3=upload_to_s3)
 
         return
 
