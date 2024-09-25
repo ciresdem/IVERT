@@ -12,6 +12,7 @@ import shutil
 import sys
 import tempfile
 import types
+import typing
 import tabulate
 import typing
 import warnings
@@ -712,7 +713,6 @@ class S3Manager:
                 s3_key: str,
                 bucket_type: typing.Union[str, None] = None,
                 use_tags: bool = False):
-
         """Return the md5 hash of an S3 key, if it was provided when uploaded.
 
         NOTE: This is different from the AWS object.content_md5 key, which is computed differently and may not
@@ -804,13 +804,6 @@ class S3Manager:
                 return dict([(t["Key"], t["Value"]) for t in head["TagSet"]])
 
             # Otherwise, use the s3api "head-object" feature, under "Metadata".
-            else:
-                head = client.head_object(Bucket=bname, Key=s3_key)
-
-                if return_entire_header:
-                    return head
-                else:
-                    return head["Metadata"]
 
 
 def pretty_print_bucket_list(use_formatting=True):
