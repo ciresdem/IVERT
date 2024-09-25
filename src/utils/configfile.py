@@ -234,9 +234,9 @@ class config:
 
         # Read the export_server bucket from paths.sh
         try:
-            export_line = [line for line in paths_text_lines
-                           if re.match(r"^s3_bucket_export_server(?!\w)", line.lstrip().lower())][0]
-            self.s3_bucket_export_server = export_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
+            export_server_line = [line for line in paths_text_lines
+                                  if re.match(r"^s3_bucket_export_server(?!\w)", line.lstrip().lower())][0]
+            self.s3_bucket_export_server = export_server_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
             if self.s3_bucket_export_server == '':
                 self.s3_bucket_export_server = None
         except IndexError:
@@ -244,9 +244,9 @@ class config:
 
         # Read the export_client bucket from paths.sh. Should be empty or not there at all.
         try:
-            export_line = [line for line in paths_text_lines
-                           if re.match(r"^s3_bucket_export_client(?!\w)", line.lstrip().lower())][0]
-            self.s3_bucket_export_client = export_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
+            export_client_line = [line for line in paths_text_lines
+                                  if re.match(r"^s3_bucket_export_client(?!\w)", line.lstrip().lower())][0]
+            self.s3_bucket_export_client = export_client_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
             if self.s3_bucket_export_client == '':
                 self.s3_bucket_export_client = None
         except IndexError:
@@ -263,7 +263,7 @@ class config:
         if include_sns_arn:
             try:
                 sns_line = [line for line in paths_text_lines
-                            if re.match(r"^sns_topic_arn(?!\w)", line.lstrip().lower())][0]
+                            if re.match(r"^cudem_sns_arn(?!\w)", line.lstrip().lower())][0]
                 self.sns_topic_arn = sns_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
             except IndexError:
                 self.sns_topic_arn = None
