@@ -111,11 +111,23 @@ def download_job(job_name: str,
     if export_prefix is None:
         return []
 
+    global ivert_config
+    if ivert_config is None:
+        ivert_config = configfile.config()
+
+    # In the new egress implementation, the prefix applied when exporting may not be the same as the prefix on the
+    # client side after data egress. If that's the case, swap out the export_server prefix with the export_client
+    # prefix.
+    if ivert_config.s3_export_server_prefix_base in export_prefix:
+        export_prefix = export_prefix.replace(ivert_config.s3_export_server_prefix_base,
+                                              ivert_config.s3_export_client_prefix_base)
+
     export_glob_str = export_prefix + ("*" if export_prefix[-1] == "/" else "/*")
 
     # Download the results
     s3m = s3.S3Manager()
     try:
+        print("Downloading results from", export_glob_str, "to", dest)
         return s3m.download(export_glob_str, dest, bucket_type="export_client", show_progress_bar=True)
     except FileNotFoundError:
         return []
