@@ -116,6 +116,7 @@ class S3Manager:
 
         if self.bucket_dict[bucket_type] is None:
             raise ValueError(f"No bucket name assigned to '{bucket_type}'.")
+
         return (session.resource("s3", endpoint_url=self.endpoint_urls[bucket_type])
                 .Bucket(self.bucket_dict[bucket_type]))
 
