@@ -100,14 +100,12 @@ class S3Manager:
     def make_pickleable(self):
         """Make this object pickleable.
 
-        Reset the session and client dictionaries. Null them out."""
+        Reset the active session and client dictionaries. Null them out."""
         self.session_dict = dict([(dbtype, None) for dbtype in self.available_bucket_types])
         self.client_dict = dict([(dbtype, None) for dbtype in self.available_bucket_types])
 
     def get_resource_bucket(self, bucket_type: str = None) -> boto3.resource:
-        """Return the open resource.BAD_FILE_TO_TEST_QUARANTINE.foobar
-
-        If it doesn't exist yet, open one."""
+        """Return and open session.resource.Bucket object for the given bucket_type."""
         if bucket_type is None:
             bucket_type = self.default_bucket_type
         bucket_type = self.convert_btype(bucket_type)
