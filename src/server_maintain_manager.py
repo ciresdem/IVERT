@@ -1,8 +1,8 @@
-"""Code for a persistent process that checks to makes sure an ivert_server_job_manager.py is running.
+"""Code for a persistent process that checks to makes sure an server_job_manager.py is running.
 
 This module gets run as a "nohup" process by server_proc.sh."""
 
-import ivert_server_job_manager
+import server_job_manager
 import argparse
 import os
 import psutil
@@ -20,18 +20,18 @@ class PersistentIvertServer:
 
         while True:
             if self.subproc is None:
-                existing_proc = ivert_server_job_manager.is_another_manager_running()
+                existing_proc = server_job_manager.is_another_manager_running()
                 if existing_proc:
-                    # If another instance of ivert_server_job_manager.py is already running, keep it going.
+                    # If another instance of server_job_manager.py is already running, keep it going.
                     self.subproc = existing_proc
                     self.sub_pid = existing_proc.pid
                     if self.verbose:
-                        print(f"Another instance of ivert_server_job_manager.py (pid {self.sub_pid}) is already running. Will keep it going.")
+                        print(f"Another instance of server_job_manager.py (pid {self.sub_pid}) is already running. Will keep it going.")
                     continue
 
                 else:
-                    # If no other instance of ivert_server_job_manager.py is running, start one.
-                    iv_args = ["python3", "ivert_server_job_manager.py"]
+                    # If no other instance of server_job_manager.py is running, start one.
+                    iv_args = ["python3", "server_job_manager.py"]
                     if self.verbose:
                         iv_args.append("-v")
                         print(" ".join(iv_args))
@@ -51,7 +51,7 @@ class PersistentIvertServer:
 
             else:
                 if self.verbose:
-                    print(f"Subprocess {self.sub_pid} terminated. Restarting ivert_server_job_manager.py.")
+                    print(f"Subprocess {self.sub_pid} terminated. Restarting server_job_manager.py.")
                 self.subproc = None
 
             # Wait 5 seconds before checking again.

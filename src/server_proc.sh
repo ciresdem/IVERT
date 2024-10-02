@@ -28,7 +28,7 @@ do
       # Echo the command back to the user.
       echo "nohup python3 maintain_server_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &"
       # Start the server
-      nohup python3 maintain_server_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &
+      nohup python3 server_maintain_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &
       exit 0
       ;;
     h)
@@ -52,5 +52,5 @@ done
 # Echo the command back to the user.
 echo "nohup python3 maintain_server_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &"
 # Start the server
-nohup python3 maintain_server_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &
+nohup python3 server_maintain_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &
 

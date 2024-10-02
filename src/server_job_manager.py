@@ -1,7 +1,7 @@
-"""ivert_server_job_manager.py -- Code for managing and running IVERT jobs on an EC2 instance.
+"""server_job_manager.py -- Code for managing and running IVERT jobs on an EC2 instance.
 
 This should be always running, and there should only ever be ONE instance of it. When it kicks off it will test if
-there are any other ivert_server_job_manager.py instances running. If so, it will exit.
+there are any other server_job_manager.py instances running. If so, it will exit.
 
 Created by: Mike MacFerrin
 April 22, 2024
@@ -109,7 +109,7 @@ class IvertJobManager:
         """
         # Check to see if another instance of this script is already running
         if is_another_manager_running():
-            print("Another instance of ivert_server_job_manager.py is already running. Exiting.", flush=True)
+            print("Another instance of server_job_manager.py is already running. Exiting.", flush=True)
             return
 
         # With the new egress solution the export bucket doesn't hold a copy of the database. Don't try to sync.
