@@ -502,8 +502,10 @@ def export_lines(points_gdf_or_fname: typing.Union[geopandas.GeoDataFrame, str],
         assert isinstance(points_gdf_or_fname, geopandas.GeoDataFrame)
         points_gdf = points_gdf_or_fname
 
+    # Group by the points by each unique laser ID, sort them by y-coordinate, and export as LineStrings into a new GDF.
     lines_gdf = (points_gdf.groupby("unique_laser_id")["geometry"]
-                 .apply(lambda x: shapely.geometry.LineString(sorted(x.tolist())).simplify(tolerance=tolerance)))
+                 .apply(lambda x: shapely.geometry.LineString(sorted(x.tolist(),
+                                                                     key=lambda p: p.coords[0][1])).simplify(tolerance=tolerance)))
 
     export_as_vector(lines_gdf, outfile)
 
