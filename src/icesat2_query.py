@@ -489,18 +489,21 @@ def export_lines(points_gdf_or_fname: typing.Union[geopandas.GeoDataFrame, str],
 
     Export as a vector file."""
     if isinstance(points_gdf_or_fname, str):
+        print("Reading", os.path.basename(points_gdf_or_fname), end="...", flush=True)
         if os.path.splitext(points_gdf_or_fname)[-1].lower() in (".shp", ".gpkg"):
             points_gdf = geopandas.read_file(points_gdf_or_fname)
         elif os.path.splitext(points_gdf_or_fname)[-1].lower() in (".blosc", ".blosc2"):
             points_gdf = utils.pickle_blosc.read(points_gdf_or_fname)
         else:
             raise ValueError(f"Unrecognized file extension in {points_gdf_or_fname}.")
+
+        print(" Done.", flush=True)
     else:
         assert isinstance(points_gdf_or_fname, geopandas.GeoDataFrame)
         points_gdf = points_gdf_or_fname
 
     lines_gdf = (points_gdf.groupby("unique_laser_id")["geometry"]
-                 .apply(lambda x: shapely.geometry.LineString(x.tolist()).simplify(tolerance=tolerance)))
+                 .apply(lambda x: shapely.geometry.LineString(sorted(x.tolist())).simplify(tolerance=tolerance)))
 
     export_as_vector(lines_gdf, outfile)
 
