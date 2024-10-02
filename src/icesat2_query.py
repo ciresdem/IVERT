@@ -58,14 +58,13 @@ def get_photon_dataframe(polygon_bbox_or_dem_fname: typing.Union[shapely.geometr
         conf_levels_to_keep: A list of the photon confidence levels to keep.
             Default "4" (only keep highest-confidence photons). Can also be a set, tuple, or numpy.ndarray. If a string,
             values should be integers 0-4 seperated by forward slashes (no spaces).
-        merge_dataframes: Whether to merge the dataframes into a single dataframe. Default True.
 
     Raises:
         ValueError: if dem_horz_reference_frame is None, and no filename is provided in the
             parameter polygon_bbox_or_dem_fname. Or if the start_date is on or after the end_date.
 
     Returns:
-        A pandas.GeoDataFrame of all classified photons within the polygon/bounding-box and timeframe.
+        A geopandas.GeoDataFrame of all classified photons within the polygon/bounding-box and timeframe.
         None if no ICESat-2 data is returned. The x,y,z points will be in the horizontal and vertical reference frames
         specified in the parameters. If merge_dataframes is False, return a list of the resultant dataframes.
     """
@@ -115,7 +114,7 @@ def get_photon_dataframe(polygon_bbox_or_dem_fname: typing.Union[shapely.geometr
                              dst_srs=dem_srs_string,
                              classes=classes_str,
                              confidence_levels=conf_str,
-                             columns={} if other_columns is None else other_columns,
+                             columns=other_columns if other_columns else {},
                              classify_bathymetry=classify_bathymetry,
                              cshelph=classify_bathymetry,
                              classify_buildings=classify_buildings).initialize()
@@ -473,12 +472,37 @@ def _get_classifications_str(classifications: typing.Union[str, list, tuple, num
 def export_as_vector(gdf: geopandas.GeoDataFrame,
                      outfile: str):
     """Export a GeoDataFrame as a shapefile or geopackage."""
-    if os.path.splitext(outfile)[-1] == ".gpkg":
+    if os.path.splitext(outfile)[-1] in (".gpkg", ".shp"):
         gdf.to_file(outfile)
     elif os.path.splitext(outfile)[-1] in (".blosc", ".blosc2"):
         utils.pickle_blosc.write(gdf, outfile)
 
-    print(outfile, f"written with {len(gdf)} photons.")
+    print(outfile, f"written with {len(gdf)}",
+          f"{'photons' if isinstance(gdf.geometry.iloc[0], shapely.geometry.Point) else 'lines'}.")
+
+
+def export_lines(points_gdf_or_fname: typing.Union[geopandas.GeoDataFrame, str],
+                 outfile: str,
+                 tolerance=0.00001):
+    """Take a points file produced from the ICESat-2 photon data and export a simplified set of lines that follows
+    the path of each laser.
+
+    Export as a vector file."""
+    if isinstance(points_gdf_or_fname, str):
+        if os.path.splitext(points_gdf_or_fname)[-1].lower() in (".shp", ".gpkg"):
+            points_gdf = geopandas.read_file(points_gdf_or_fname)
+        elif os.path.splitext(points_gdf_or_fname)[-1].lower() in (".blosc", ".blosc2"):
+            points_gdf = utils.pickle_blosc.read(points_gdf_or_fname)
+        else:
+            raise ValueError(f"Unrecognized file extension in {points_gdf_or_fname}.")
+    else:
+        assert isinstance(points_gdf_or_fname, geopandas.GeoDataFrame)
+        points_gdf = points_gdf_or_fname
+
+    lines_gdf = (points_gdf.groupby("unique_laser_id")["geometry"]
+                 .apply(lambda x: shapely.geometry.LineString(x.tolist()).simplify(tolerance=tolerance)))
+
+    export_as_vector(lines_gdf, outfile)
 
 
 def define_and_parse_args():
@@ -525,6 +549,8 @@ def define_and_parse_args():
     parser.add_argument("-nobathy", "--no_bathymetry", dest="bathymetry", default=True, actions="store_false",
                         help="Do not include bathymetry classifications in the output. Default: "
                              "Use CShelph to classify bathymetry as class_code 4 (bathy floor) and 5 (bathy surface).")
+    parser.add_argument("-l", "--lines", dest="lines", default=None,
+                        help="The name of a vector file where simplified lines following the path of each laser will be exported.")
 
     args = parser.parse_args()
     return args
@@ -561,6 +587,9 @@ def main():
                                )
 
     export_as_vector(gdf, args.outfile)
+
+    if args.lines:
+        export_lines(gdf, args.lines)
 
 
 if __name__ == "__main__":
