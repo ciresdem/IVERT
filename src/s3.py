@@ -599,7 +599,9 @@ class S3Manager:
         Returns the full key path, since that's how S3's operate. But this make it a bit different than os.listdir().
         """
 
+        print("listdir bucket_type (before):", bucket_type)
         bucket_type = self.convert_btype(bucket_type)
+        print("listdir bucket_type (after):", bucket_type)
 
         # Directories should not start with '/'
         if len(s3_key) > 0 and s3_key[0] == "/":
