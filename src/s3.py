@@ -85,6 +85,8 @@ class S3Manager:
             None if self.config.is_aws else self.config.aws_profile_ivert_import_untrusted
         self.bucket_profile_dict["export_client"] = \
             None if self.config.is_aws else self.config.aws_profile_ivert_export_client
+        self.bucket_profile_dict["export_alt"] = \
+            None if self.config.is_aws else self.config.aws_profile_ivert_export_alt
 
         # The s3 session. Session created on demand when needed by the :get_resource_bucket() and :get_client() methods.
         self.session_dict = dict([(dbtype, None) for dbtype in self.available_bucket_types])
@@ -118,7 +120,8 @@ class S3Manager:
 
         if self.bucket_dict[bucket_type] is None:
             raise ValueError(f"No bucket name assigned to '{bucket_type}'.")
-        return session.resource("s3").Bucket(self.bucket_dict[bucket_type])
+        return (session.resource("s3", endpoint_url=self.endpoint_urls[bucket_type])
+                .Bucket(self.bucket_dict[bucket_type]))
 
     def get_client(self, bucket_type=None) -> boto3.client:
         """Return the open client.
@@ -598,10 +601,7 @@ class S3Manager:
 
         Returns the full key path, since that's how S3's operate. But this make it a bit different than os.listdir().
         """
-
-        print("listdir bucket_type (before):", bucket_type)
         bucket_type = self.convert_btype(bucket_type)
-        print("listdir bucket_type (after):", bucket_type)
 
         # Directories should not start with '/'
         if len(s3_key) > 0 and s3_key[0] == "/":
