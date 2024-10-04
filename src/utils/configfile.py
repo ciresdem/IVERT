@@ -297,6 +297,7 @@ class config:
                         "s3_bucket_import_untrusted",
                         "s3_bucket_import_trusted",
                         "s3_bucket_export_server",
+                        "s3_bucket_export_alt",
                         "s3_bucket_export_client",
                         "s3_bucket_quarantine"]:
             if getattr(self, varname) is None:
