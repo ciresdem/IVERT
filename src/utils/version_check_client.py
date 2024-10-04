@@ -23,7 +23,7 @@ def fetch_min_client_from_server(ivert_config=None):
 
     if ivert_config.use_export_alt_bucket:
         profile_name = str(ivert_config.aws_profile_ivert_export_alt)
-        jobs_db_s3_key = str(ivert_config.s3_ivert_jobs_database_alt_key)
+        jobs_db_s3_key = str(ivert_config.s3_ivert_jobs_database_alt_client_key)
         endpoint_url = str(ivert_config.s3_export_alt_endpoint_url)
         bucket_name = str(ivert_config.s3_bucket_export_alt)
     else:
