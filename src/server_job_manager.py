@@ -214,7 +214,12 @@ class IvertJobManager:
         # 1. Get a list of all files in the trusted bucket.
         # 2. Filter out any files already in the database.
         # 3. Return the remaining file list.
-        files_in_bucket = self.s3m.listdir(self.input_prefix, bucket_type=self.input_bucket_type, recursive=True)
+        try:
+            files_in_bucket = self.s3m.listdir(self.input_prefix, bucket_type=self.input_bucket_type, recursive=True)
+        except FileNotFoundError:
+            # If that directory didn't exist, this error will the thrown. If there's no files in the trusted bucket
+            # under that input prefix, return an empty list.
+            return []
 
         if not new_only and not skip_older_than_cutoff:
             return files_in_bucket
