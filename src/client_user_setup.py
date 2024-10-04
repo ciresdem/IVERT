@@ -747,6 +747,9 @@ def update_ivert_user_config(args: argparse.Namespace) -> None:
     user_config_text = re.sub(r"aws_profile_ivert_export_client\s*[=]\s*[\w\[\].-]+",
                               f"aws_profile_ivert_export_client = {args.ivert_export_client_profile}",
                               user_config_text)
+    user_config_text = re.sub(r"aws_profile_ivert_export_alt\s*[=]\s*[\w\[\].-]+",
+                              f"aws_profile_ivert_export_alt = {args.ivert_export_alt_profile}",
+                              user_config_text)
 
     # Write the boolean flags for the user config file. Overwrite any old ones.
     user_config_text = re.sub(r"subscribe_to_sns\s*[=]\s*[\w\[\].-]+",
@@ -933,6 +936,7 @@ def define_and_parse_args(just_return_parser: bool = False,
                                 f"Default: '{ivert_user_config_template.aws_profile_ivert_export_client}'.")
 
     aws_group.add_argument("-xap", "--ivert_export_alt_profile", dest="ivert_export_alt_profile",
+                           default=ivert_user_config_template.aws_profile_ivert_export_alt,
                            type=str, required=False,
                            help="Manually set the name of the AWS profile for IVERT export-alt. "
                                 f"Default: '{ivert_user_config_template.aws_profile_ivert_export_alt}'.")

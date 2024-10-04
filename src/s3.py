@@ -45,7 +45,7 @@ ivert_config = None
 class S3Manager:
     """Class for copying files into and out-of the IVERT AWS S3 buckets, as needed."""
 
-    available_bucket_types = ("database", "untrusted", "trusted", "export_server", "export_client", "quarantine")
+    available_bucket_types = ("database", "untrusted", "trusted", "export_server", "export_client", "export_alt", "quarantine")
     available_bucket_aliases = ("d", "u", "t", "s", "x", "xs", "c", "xc", "q", "export",
                                 "D", "U", "T", "S", "X", "XS", "C", "XC", "Q")
     default_bucket_type = "database" if is_aws.is_aws() else "untrusted"
@@ -64,6 +64,7 @@ class S3Manager:
                             "trusted": self.config.s3_bucket_import_trusted,
                             "export_server": self.config.s3_bucket_export_server,
                             "export_client": self.config.s3_bucket_export_client,
+                            "export_alt": self.config.s3_bucket_export_alt,
                             "quarantine": self.config.s3_bucket_quarantine}
 
         self.endpoint_urls = {"untrusted": self.config.s3_import_untrusted_endpoint_url,
@@ -71,6 +72,7 @@ class S3Manager:
                               "database": None,
                               "trusted": None,
                               "export_server": None,
+                              "export_alt": self.config.s3_export_alt_endpoint_url,
                               "quarantine": None}
 
         # Different AWS profiles for each bucket. "None" indicates no profile is needed.
@@ -146,19 +148,37 @@ class S3Manager:
         bucket_type = bucket_type.strip().lower()
         if bucket_type == 'd':
             bucket_type = 'database'
+
         elif bucket_type == 't':
             bucket_type = 'trusted'
+
         elif bucket_type == 'u':
             bucket_type = 'untrusted'
+
         elif bucket_type in ('c', 'xc'):
-            bucket_type = 'export_client'
-        elif bucket_type in ('s', 'xs'):
-            bucket_type = 'export_server'
-        elif bucket_type in ('x', 'export'):
-            if self.config.is_aws:
-                bucket_type = 'export_server'
+            if self.config.use_export_alt_bucket:
+                bucket_type = 'export_alt'
             else:
                 bucket_type = 'export_client'
+
+        elif bucket_type in ('s', 'xs'):
+            if self.config.s3_bucket_export_alt:
+                bucket_type = 'export_alt'
+            else:
+                bucket_type = 'export_server'
+
+        elif bucket_type in ('x', 'export'):
+            if self.config.is_aws:
+                if self.config.use_export_alt_bucket:
+                    bucket_type = 'export_alt'
+                else:
+                    bucket_type = 'export_server'
+            else:
+                if self.config.use_export_alt_bucket:
+                    bucket_type = 'export_alt'
+                else:
+                    bucket_type = 'export_client'
+
         elif bucket_type in ('q', 'quarantined'):
             bucket_type = 'quarantine'
 
@@ -827,6 +847,7 @@ def pretty_print_bucket_list(use_formatting=True):
                   "untrusted"    : ivert_config.s3_bucket_import_untrusted,
                   "export_client": ivert_config.s3_bucket_export_client,
                   "export_server": ivert_config.s3_bucket_export_server,
+                  "export_alt"   : ivert_config.s3_bucket_export_alt,
                   "quarantine"   : ivert_config.s3_bucket_quarantine}
 
     prefixes_dict = {"database" : "",
@@ -834,6 +855,7 @@ def pretty_print_bucket_list(use_formatting=True):
                      "untrusted": ivert_config.s3_import_untrusted_prefix_base if bname_dict["untrusted"] else "",
                      "export_client": ivert_config.s3_export_client_prefix_base if bname_dict["export_client"] else "",
                      "export_server": ivert_config.s3_export_server_prefix_base if bname_dict["export_server"] else "",
+                     "export_alt": ivert_config.s3_export_alt_prefix_base if bname_dict["export_alt"] else "",
                      "quarantine": ivert_config.s3_quarantine_prefix_base if bname_dict["quarantine"] else ""}
 
     bc = bcolors.bcolors()
