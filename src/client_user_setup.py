@@ -926,7 +926,7 @@ def define_and_parse_args(just_return_parser: bool = False,
                            help="Manually set the name of the AWS profile for IVERT import. "
                                 f" Default: '{ivert_user_config_template.aws_profile_ivert_import_untrusted}'.")
 
-    aws_group.add_argument("-xp", "--ivert_export_profile", dest="ivert_export_profile",
+    aws_group.add_argument("-xp", "--ivert_export_client_profile", dest="ivert_export_client_profile",
                            default=ivert_user_config_template.aws_profile_ivert_export_client,
                            type=str, required=False,
                            help="Manually set the name of the AWS profile for IVERT export. "
