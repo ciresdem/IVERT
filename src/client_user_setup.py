@@ -239,8 +239,8 @@ def collect_inputs(args: argparse.Namespace, only_if_not_provided: bool = True) 
                       f"[default: {ivert_user_config_template.aws_profile_ivert_import_untrusted}]: ").strip()
                 or ivert_user_config_template.aws_profile_ivert_import_untrusted.strip())
 
-    if not args.ivert_export_profile.strip() or not only_if_not_provided:
-        args.ivert_export_profile = (
+    if not args.ivert_export_client_profile.strip() or not only_if_not_provided:
+        args.ivert_export_client_profile = (
                 input("\nAWS profile name to use for export "
                       f"[default: {ivert_user_config_template.aws_profile_ivert_export_client}]: ").strip()
                 or ivert_user_config_template.aws_profile_ivert_export_client.strip())
@@ -574,7 +574,7 @@ def update_local_aws_config(aws_config_file: str,
         # Identify if old IVERT profile names are being used here.
         if '[profile ivert_ingest]' in config_text and profile_id_string == args.ivert_import_profile:
             old_ivert_profile_string = '[profile ivert_ingest]'
-        elif '[profile ivert_export]' in config_text and profile_id_string == args.ivert_export_profile:
+        elif '[profile ivert_export]' in config_text and profile_id_string == args.ivert_export_client_profile:
             old_ivert_profile_string = '[profile ivert_export]'
         else:
             old_ivert_profile_string = f"[profile {profile_id_string}]"
@@ -651,7 +651,7 @@ def update_local_aws_credentials(aws_credentials_file: str,
         # and "ivert_export" instead of "ivert_export_untrusted". Look for those.
         if "[ivert_ingest]" in credentials_text and profile_id_string == args.ivert_import_profile:
             old_ivert_profile_string = "[ivert_ingest]"
-        elif "[ivert_export]" in credentials_text and profile_id_string == args.ivert_export_profile:
+        elif "[ivert_export]" in credentials_text and profile_id_string == args.ivert_export_client_profile:
             old_ivert_profile_string = "[ivert_export]"
         else:
             old_ivert_profile_string = new_ivert_profile_string
@@ -745,7 +745,7 @@ def update_ivert_user_config(args: argparse.Namespace) -> None:
                               f"aws_profile_ivert_import_untrusted = {args.ivert_import_profile}",
                               user_config_text)
     user_config_text = re.sub(r"aws_profile_ivert_export_client\s*[=]\s*[\w\[\].-]+",
-                              f"aws_profile_ivert_export_client = {args.ivert_export_profile}",
+                              f"aws_profile_ivert_export_client = {args.ivert_export_client_profile}",
                               user_config_text)
 
     # Write the boolean flags for the user config file. Overwrite any old ones.
