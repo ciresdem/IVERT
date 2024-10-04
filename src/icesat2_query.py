@@ -95,18 +95,6 @@ def get_photon_dataframe(polygon_bbox_or_dem_fname: typing.Union[shapely.geometr
     # ICESat-2, by default using dlim, comes in WGS84 lat-lon coordinates and EGM2008 vertical reference frame.
     is2_srs_string = "EPSG:4326+3855"
 
-    # print(f"fn={fetches_module}")
-    # print(f"src_region=regions.Region().from_list({dem_wgs84_bbox})")
-    # print(f"classes={classes_str}")
-    # print(f"confidence_levels={conf_str}")
-    # print(f'columns={ {} if other_columns is None else other_columns}')
-    # print(f"classify_bathymetry={classify_bathymetry}")
-    # print(f"cshelph={classify_bathymetry}")
-    # print(f"classify_buildings={classify_buildings}")
-
-    # import sys
-    # sys.exit(0)
-
     # Initialize the icesat2 query.
     ds = dlim.IceSat2Fetcher(fn=fetches_module,
                              src_region=region,

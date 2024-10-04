@@ -235,8 +235,16 @@ class config:
 
         # Read the export_server bucket from paths.sh
         try:
+            if self.is_aws and self.use_export_alt_bucket:
+                search_str = r"^s3_bucket_export_alt(?!\w)"
+
+                # Also update the export_server prefix if we're using the alternate bucket
+                self.s3_ivert_jobs_database_server_key = self.s3_ivert_jobs_database_alt_client_key
+            else:
+                search_str = r"^s3_bucket_export_server(?!\w)"
+
             export_server_line = [line for line in paths_text_lines
-                                  if re.match(r"^s3_bucket_export_server(?!\w)", line.lstrip().lower())][0]
+                                  if re.match(search_str, line.lstrip().lower())][0]
             self.s3_bucket_export_server = export_server_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
             if self.s3_bucket_export_server == '':
                 self.s3_bucket_export_server = None
@@ -245,8 +253,16 @@ class config:
 
         # Read the export_client bucket from paths.sh. Should be empty or not there at all.
         try:
+            if self.is_aws and self.use_export_alt_bucket:
+                search_str = r"^s3_bucket_export_alt(?!\w)"
+
+                # Also update the export_server prefix if we're using the alternate bucket
+                self.s3_ivert_jobs_database_client_key = self.s3_ivert_jobs_database_alt_client_key
+            else:
+                search_str = r"^s3_bucket_export_client(?!\w)"
+
             export_client_line = [line for line in paths_text_lines
-                                  if re.match(r"^s3_bucket_export_client(?!\w)", line.lstrip().lower())][0]
+                                  if re.match(search_str, line.lstrip().lower())][0]
             self.s3_bucket_export_client = export_client_line.split("=")[1].split("#")[0].strip().strip("'").strip('"')
             if self.s3_bucket_export_client == '':
                 self.s3_bucket_export_client = None
@@ -302,6 +318,8 @@ class config:
             assert hasattr(self, "username")
             assert hasattr(self, "aws_profile_ivert_import_untrusted")
             assert hasattr(self, "aws_profile_ivert_export_client")
+            assert hasattr(self, "aws_profile_ivert_export_alt")
+            assert hasattr(self, "use_export_alt_bucket")
         except AssertionError as e:
             if ignore_errors:
                 pass
@@ -321,25 +339,35 @@ class config:
                     self.user_email = user_config.user_email
                     self.username = user_config.username
                     self.aws_profile_ivert_import_untrusted = user_config.aws_profile_ivert_import_untrusted
-                    self.aws_profile_ivert_export_client = user_config.aws_profile_ivert_export_client
+                    if self.use_export_alt_bucket:
+                        self.aws_profile_ivert_export_client = user_config.aws_profile_ivert_export_alt
+                    else:
+                        self.aws_profile_ivert_export_client = user_config.aws_profile_ivert_export_client
 
                 # Now try to read the s3 credentials file.
                 if os.path.exists(os.path.abspath(self.ivert_s3_credentials_file)):
                     s3_credentials = config(self.ivert_s3_credentials_file)
                     self.s3_bucket_import_untrusted = s3_credentials.s3_bucket_import_untrusted
                     self.s3_import_untrusted_endpoint_url = s3_credentials.s3_import_untrusted_endpoint_url
-                    self.s3_bucket_export_client = s3_credentials.s3_bucket_export_client
-                    self.s3_export_client_endpoint_url = s3_credentials.s3_export_client_endpoint_url
+
+                    # If the flag was set to use the export_alt bucket rather than the export_client bucket, use that
+                    # and put it in place of the export_client bucket.
+                    if self.use_export_alt_bucket:
+                        self.s3_bucket_export_client = s3_credentials.s3_bucket_export_alt
+                        self.s3_export_client_endpoint_url = s3_credentials.s3_export_alt_endpoint_url
+
+                        # Also make sure the database key is updated as well, overwrite these fields with the
+                        # "alt" value equivalent for the same file in the alternate export bucket.
+                        self.s3_ivert_jobs_database_bucket_type_client = self.s3_ivert_jobs_database_bucket_type_alt_client
+                        self.s3_ivert_jobs_database_client_key = self.s3_ivert_jobs_database_alt_client_key
+                    else:
+                        self.s3_bucket_export_client = s3_credentials.s3_bucket_export_client
+                        self.s3_export_client_endpoint_url = s3_credentials.s3_export_client_endpoint_url
+
             except AttributeError as e:
                 if ignore_errors:
                     pass
                 else:
                     raise e
-                    # print("ERROR: The user config file and/or the IVERT S3 credentials do not contain the correct "
-                    #       "fields.\nIf you recently upgraded IVERT, please run the 'ivert setup' script again with "
-                    #       "your new credentials.\nIf the problem persists, contact your IVERT administrator.",
-                    #       file=sys.stderr)
-                    #
-                    # sys.exit(0)
 
         return

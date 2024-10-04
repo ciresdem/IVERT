@@ -46,8 +46,8 @@ class S3Manager:
     """Class for copying files into and out-of the IVERT AWS S3 buckets, as needed."""
 
     available_bucket_types = ("database", "untrusted", "trusted", "export_server", "export_client", "quarantine")
-    available_bucket_aliases = ("d", "u", "t", "s", "xs", "c", "xc", "q",
-                                "D", "U", "T", "S", "XS", "C", "XC", "Q")
+    available_bucket_aliases = ("d", "u", "t", "s", "x", "xs", "c", "xc", "q", "export",
+                                "D", "U", "T", "S", "X", "XS", "C", "XC", "Q")
     default_bucket_type = "database" if is_aws.is_aws() else "untrusted"
 
     def __init__(self):
@@ -154,6 +154,11 @@ class S3Manager:
             bucket_type = 'export_client'
         elif bucket_type in ('s', 'xs'):
             bucket_type = 'export_server'
+        elif bucket_type in ('x', 'export'):
+            if self.config.is_aws:
+                bucket_type = 'export_server'
+            else:
+                bucket_type = 'export_client'
         elif bucket_type in ('q', 'quarantined'):
             bucket_type = 'quarantine'
 
