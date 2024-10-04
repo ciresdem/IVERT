@@ -32,11 +32,11 @@ def fetch_min_client_from_server(ivert_config=None):
         endpoint_url = str(ivert_config.s3_export_client_endpoint_url)
         bucket_name = str(ivert_config.s3_bucket_export_client)
 
-    if endpoint_url is None:
-        endpoint_url = ""
-
     # Fetch the version from the server database. Not using s3.py to avoid circular imports.
-    client = boto3.Session(profile_name=profile_name).client('s3', endpoint_url=endpoint_url)
+    if endpoint_url:
+        client = boto3.Session(profile_name=profile_name).client('s3', endpoint_url=endpoint_url)
+    else:
+        client = boto3.Session(profile_name=profile_name).client('s3')
 
     if ivert_config.ivert_export_client_use_aws_tags_instead_of_metadata:
         tagset = client.get_object_tagging(Bucket=str(ivert_config.s3_bucket_export_client),
