@@ -8,10 +8,10 @@ do
   case "$OPTION" in
     k)
       # Kill the server
-      echo "pkill -e -f 'python3 maintain_server_manager.py'"
-      pkill -e -f "python3 maintain_server_manager.py"
-      echo "pkill -e -f 'python3 ivert_server_job_manager.py'"
-      pkill -e -f "python3 ivert_server_job_manager.py"
+      echo "pkill -e -f 'python3 server_maintain_manager.py'"
+      pkill -e -f "python3 server_maintain_manager.py"
+      echo "pkill -e -f 'python3 server_job_manager.py'"
+      pkill -e -f "python3 server_job_manager.py"
       exit 0
       ;;
     l)
@@ -21,12 +21,12 @@ do
       ;;
     r)
       # Restart the server
-      echo "pkill -e -f 'python3 maintain_server_manager.py'"
-      pkill -e -f "python3 maintain_server_manager.py"
-      echo "pkill -e -f 'python3 ivert_server_job_manager.py'"
-      pkill -e -f "python3 ivert_server_job_manager.py"
+      echo "pkill -e -f 'python3 server_maintain_manager.py'"
+      pkill -e -f "python3 server_maintain_manager.py"
+      echo "pkill -e -f 'python3 server_job_manager.py'"
+      pkill -e -f "python3 server_job_manager.py"
       # Echo the command back to the user.
-      echo "nohup python3 maintain_server_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &"
+      echo "nohup python3 server_maintain_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &"
       # Start the server
       nohup python3 server_maintain_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &
       exit 0
@@ -50,7 +50,7 @@ done
 
 # By default, start the server.
 # Echo the command back to the user.
-echo "nohup python3 maintain_server_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &"
+echo "nohup python3 server_maintain_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &"
 # Start the server
 nohup python3 server_maintain_manager.py -v >> /mnt/uvol0/ivert_data/ivert_server.log 2>&1 <&- &
 
