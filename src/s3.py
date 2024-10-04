@@ -797,8 +797,6 @@ class S3Manager:
 
         bucket_type = self.convert_btype(bucket_type)
 
-        client = self.get_client(bucket_type=bucket_type)
-
         if self.contains_glob_flags(s3_key):
             keyvals = {}
             key_names = self.listdir(s3_key, bucket_type=bucket_type, recursive=recursive)
@@ -815,6 +813,8 @@ class S3Manager:
             return keyvals
 
         else:
+            client = self.get_client(bucket_type=bucket_type)
+
             bname = self.get_bucketname(bucket_type=bucket_type)
             # If use_tags wasn't set, set it to the export_client bucket's setting in the ivert_config file.
             # This is the only IVERT bucket in which this is applicable.
@@ -831,6 +831,12 @@ class S3Manager:
                 return dict([(t["Key"], t["Value"]) for t in head["TagSet"]])
 
             # Otherwise, use the s3api "head-object" feature, under "Metadata".
+            else:
+                head = client.head_object(Bucket=bname, Key=s3_key)
+                if return_entire_header:
+                    return head
+                else:
+                    return head["Metadata"]
 
 
 def pretty_print_bucket_list(use_formatting=True):
