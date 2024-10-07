@@ -43,12 +43,14 @@ def fetch_min_client_from_server(ivert_config=None):
     for k, v in vars(ivert_config).items():
         print(f"{k}: {v} (type '{type(v)}')")
 
+    print("configfile from:", configfile.__file__)
+
     # Fetch the version from the server database. Not using s3.py to avoid circular imports.
     if endpoint_url is None:
-        print("Got here 2")
+        print("Got here 2", endpoint_url, type(endpoint_url))
         client = boto3.Session(profile_name=profile_name).client('s3')
     else:
-        print("Got here 1")
+        print("Got here 1", endpoint_url, type(endpoint_url))
         client = boto3.Session(profile_name=profile_name).client('s3', endpoint_url=endpoint_url)
 
     if ivert_config.ivert_export_client_use_aws_tags_instead_of_metadata:
