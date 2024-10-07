@@ -111,7 +111,7 @@ class Config:
     def _read_option(self, key, value):
         """Read an individual option.
 
-        Will sipmly use the "eval" python command to parse it,
+        Will use "ast.literal_eval()"  to parse it,
         and then attempt to read as a boolean if that fails. It helps to keep the
         .ini file a python-readable format, and allows base python objects to be in there.
         """
@@ -119,7 +119,7 @@ class Config:
             # Using ast.literal_eval() rather than eval(), because literal_eval only allows the creation of generic
             # python objects but doesn't allow the calling of functions or commands that could pose security risks.
             # It will natively evaluate things like lists, dictionaries, or other generic python data types.
-            val = ast.literal_eval(value)
+            val = setattr(self, key, ast.literal_eval(value))
             return
         except (NameError, ValueError, SyntaxError):
             pass
@@ -316,11 +316,6 @@ class Config:
         # Make sure all these are defined in here. They may be assigned to None but they should exist. This is
         # a sanity check in case we changed the bucket variables names in the configfile.
         try:
-            print(self._configfile)
-            print("ALL VARIABLES IN THIS CONFIG")
-            for (k, v) in vars(self).items():
-                print(f"{k} : {v} : {type(v)}")
-
             assert hasattr(self, "s3_bucket_import_untrusted")
             assert hasattr(self, "s3_bucket_export_client")
             assert hasattr(self, "s3_export_client_endpoint_url")
