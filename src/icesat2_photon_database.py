@@ -27,7 +27,7 @@ warnings.filterwarnings("ignore", message=".*pandas.Int64Index is deprecated*")
 #####################################
 
 import classify_icesat2_photons
-import nsidc_download
+# import nsidc_download
 import s3
 import utils.configfile
 import utils.progress_bar
@@ -584,8 +584,13 @@ class ICESat2_Database:
                 ph_bbox_mask = numexpr.evaluate("(ph_xcoords >= minx) & "
                                                 "(ph_xcoords < maxx) & "
                                                 "(ph_ycoords > miny) & "
-                                                "(ph_ycoords <= maxy)"
-                                                )
+                                                "(ph_ycoords <= maxy)",
+                                                local_dict={"ph_xcoords": ph_xcoords,
+                                                            "ph_ycoords": ph_ycoords,
+                                                            "minx": minx,
+                                                            "maxx": maxx,
+                                                            "miny": miny,
+                                                            "maxy": maxy})
 
                 # By creating a copy of the subset, it ensures the original is dereferenced and deleted from memory.
                 tile_df = tile_df[ph_bbox_mask].copy()
@@ -669,247 +674,247 @@ class ICESat2_Database:
         # Otherwise, if we couldn't find a matching granule or subset-of-a-granule anywhere, just return None.
         return None
 
-    def create_photon_tile(self, bbox_polygon,
-                                 tilename,
-                                 date_range = ['2021-01-01', '2021-12-31'], # Calendar-year 2021 is the dates we're using for ETOPO. TODO: Change this to read from the Config file later.
-                                 overwrite = False,
-                                 write_stats = True,
-                                 verbose = True):
-        """If a photon tile doesn't exist yet, download the necessary granules and create it."""
-        # If the tile exists, either delete it (if overwrite=True) or read it
-        # and return the datafarme (if overwrite=False)
-        if type(bbox_polygon) == shapely.geometry.Polygon:
-            # Get (xmin, ymin, xmax, ymax)
-            bbox_bounds = bbox_polygon.bounds
-        else:
-            # If it's already a 4-length tuple, assume it's the bbox and go from there.
-            assert type(bbox_polygon) in (list, tuple, numpy.ndarray) and len(bbox_polygon) == 4
-            bbox_bounds = bbox_polygon
-
-        # Read the tile. If it doesn't exist, create it.
-        if os.path.exists(tilename):
-            if overwrite:
-                os.remove(tilename)
-            else:
-                try:
-                    # If overwrite=False and the file exists, read it and just return the dataframe.
-                    return self.read_photon_tile(tilename)
-                except KeyboardInterrupt as e:
-                    # If we hit a keyboard interrupt while reading this, don't do
-                    # anything, just re-raise the interrupt. I'm probably trying
-                    # to kill the program halfway through working (just let me).
-                    raise e
-                except Exception:
-                    # If the file is incompliete or somehow corrupted, delete it and we'll try this again.
-                    if verbose:
-                        print("Error encountered while attempting to read photon tile {0}. Removing it to re-create it.".format(os.path.split(tilename)[1]))
-                    os.remove(tilename)
-
-        # Okay, so the tile doesn't exist. Query the icesat-2 photons files that overlap this bounding-box.
-        granule_names = nsidc_download.download_granules(short_name=["ATL03", "ATL08"],
-                                                         region = bbox_bounds,
-                                                         local_dir = self.granules_directory,
-                                                         dates = date_range,
-                                                         download_only_matching_granules = True,
-                                                         query_only = True,
-                                                         quiet = True)
-
-        atl03_granules = [fn for fn in granule_names if os.path.split(fn)[1].find("ATL03") > -1]
-        atl08_granules = [fn for fn in granule_names if os.path.split(fn)[1].find("ATL08") > -1]
-        assert len(atl03_granules) == len(atl08_granules)
-
-        # Generate the names of the _photon.h5 files from the ATL03 filenames.
-        atl03_photon_db_filenames = [(base + "_photons" + ext) for (base, ext) in [os.path.splitext(fn) for fn in atl03_granules]]
-
-        # Then, see if the _photon.h5 databases exist for all these tiles. If they do, read them.
-        photon_dfs = [None]*len(atl03_photon_db_filenames)
-        # gdf = None
-
-        if verbose:
-            print("Reading {0} _photons.h5 databases to generate {1}.".format(len(atl03_photon_db_filenames), os.path.split(tilename)[1]))
-        for i,(photon_db,atl3,atl8) in enumerate(zip(atl03_photon_db_filenames, atl03_granules, atl08_granules)):
-            df = None
-
-            # I am making is so the photon databases can be either .h5 or .feather database formats.
-            # .h5 (saved flat)
-            # base, ext = os.path.splitext(photon_db)
-            # ext = ext.lower()
-            # if ext == ".h5":
-            #     photon_db_other = base + ".feather"
-            # else:
-            #     photon_db_other = base + ".h5"
-
-            # Generate a temporary empty textfile to indicate this file is currently being downloaded.
-            # This helps prevent multiple processes from downloading the files all at the same time.
-            # CAUTION: If this process is terminated or does not complete successfully and the _TEMP_DOWNLOADING.txt
-            # file is not removed, this could cause a locking problem where some/all of the processes in subsequent runs are
-            # waiting on some non-existent process to supposedly finish downloading. A locking problem.
-            # I sort of pre-empted this somewhat by
-            # deleting the file in the exception block, but if the code truly is killed instantly
-            # (say, if the power suddenly goes out on your computer)
-            # the exception block will not be reached and that will not work. This is a somewhat reliable solution
-            # under normal operating conditions and handles most typical execution errors, but is not a 100% thread-safe locking solution.
-            # A better solution would take more time to implement and this counts as "good enough for now, until the photon database is complete."
-            downloading_fbase, downloading_fext = os.path.splitext(photon_db)
-            downloading_fname = downloading_fbase + "_TEMP_DOWNLOADING.txt"
-
-            df_is_read = False
-            photon_db_location = None
-            while not df_is_read:
-                # If the tile doesn't exist, get the granules needed for it. First, look for the photon database, either in .h5 or .feather format.
-                if photon_db_location is None:
-                    photon_db_location = self.look_for_local_icesat2_photon_db(photon_db, look_for_subset_at_longitude=None) #=(None if bbox_bounds[1] > -88 else bbox_bounds[0]))
-                    # TODO: DELETE THIS LATER.
-                    # FOR NOW, we know that if there exists no "subset datafraome" for this tile in this bounding box, then there are
-                    # no photons in that bounding box for this tile. Don't bother reading it to check again.
-                    # Just look for the pattern to see if this was a subset tile. If not, skip & move along.
-                    # print(photon_db_location)
-                    # if bbox_bounds[1] <= -88 and re.search("_[EW]((\d){3})_[EW]((\d){3})\.feather", photon_db_location) is None:
-                    #     df = self.read_empty_tile()
-
-                if photon_db_location is None:
-                    # If the granules don't exist, download them.
-
-                    # Check for existence of "_TEMP_DOWNLOADING.txt" file.
-                    # Skip if this file already exists.
-                    if os.path.exists(downloading_fname):
-                        time.sleep(1)
-                        continue
-
-                    if not os.path.exists(atl3) or not os.path.exists(atl8):
-
-                        # Create an emtpy textfile marking the existence of a process
-                        # that is currently downloading the data for this granule.
-                        with open(downloading_fname, 'w') as f:
-                            f.close()
-
-                        # If either of the granules aren't there, download them from NSIDC
-                        # Only granules that don't currently exist will be downloaded
-                        try:
-                            list_of_files = nsidc_download.download_granules(short_name=["ATL03", "ATL08"],
-                                                                             region=bbox_bounds,
-                                                                             local_dir = self.granules_directory,
-                                                                             dates = date_range,
-                                                                             download_only_matching_granules = False,
-                                                                             query_only = False,
-                                                                             fname_filter = os.path.split(atl3)[1][5:], # Get only the files with this granule ID number
-                                                                             quiet = not verbose
-                                                                             )
-                        except Exception as e:
-                            # The download_granules() method can return an exception,
-                            # or raise one, either way, just assign it to the return
-                            # variable to be handled immediately below.
-                            list_of_files = e
-
-                        if isinstance(list_of_files, Exception):
-                            # If the download script return an exception, or one is raised, delete the file saying that a download is happening.
-                            if os.path.exists(downloading_fname):
-                                os.remove(downloading_fname)
-
-                            if isinstance(list_of_files, KeyboardInterrupt):
-                                # If the session ended because it was killed, then just exit the hell outta here. We're done.
-                                raise list_of_files
-                            else:
-                                # Otherwise, go back to the top of the loop and try again.
-                                continue
-
-                    # Create the photon database if it doesn't already exist. (And grab the datframe from it.)
-                    df = classify_icesat2_photons.save_granule_ground_photons(atl3,
-                                                                              output_db = photon_db,
-                                                                              overwrite = False,
-                                                                              verbose=verbose)
-
-                    # Remove the temp downloading file.
-                    if os.path.exists(downloading_fname):
-                        os.remove(downloading_fname)
-
-                else:
-                    # Update the photon_db variable from its default location to wherever it actually sits on the various
-                    # drives.
-                    photon_db = photon_db_location
-
-                # print(i+1, len(atl03_photon_db_filenames), photon_db)
-
-                # At this point, the photon database should exist locally. So read it.
-                # Then, subset within the bounding box.
-                if df is None:
-                    base, ext = os.path.splitext(photon_db)
-                    try:
-                        if ext == ".h5":
-                            df = pandas.read_hdf(photon_db, mode='r')
-                        else:
-                            df = pandas.read_feather(photon_db)
-                    except (AttributeError, tables.exceptions.HDF5ExtError):
-                        print("===== ERROR: Photon database {0} corrupted. Will build anew. =====".format(os.path.basename(photon_db)))
-                        print("Removing", photon_db)
-                        # Remove the corrupted database.
-                        os.remove(photon_db)
-                        continue
-                    except KeyboardInterrupt as e:
-                        print("Process {} was reading".format(os.getpid()), photon_db, "in bbox ({0:0.2f},{1:0.2f},{2:0.2f},{3:0.2f})".format(*bbox_bounds))
-                        raise e
-                    # except FileNotFoundError:
-                    #     # If the file is not found, try to find the other one. One of them should be in here.
-                    #     if ext == ".h5":
-                    #         df = pandas.read_feather(photon_db_other)
-                    #     else:
-                    #         df = pandas.read_hdf(photon_db_other, mode='r')
-
-                # Only bother subsetting the dataframe if there are any photons in it.
-                if len(df.index) == 0:
-                    df_subset = df
-                else:
-                    # Select only photons within the bounding box, that are land (class_code==1) or canopy (==2,3) photons
-                    df_subset = df[df.longitude.between(bbox_bounds[0], bbox_bounds[2], inclusive="left") & \
-                                   df.latitude.between(bbox_bounds[1], bbox_bounds[3], inclusive="left") & \
-                                   df.class_code.between(1,3, inclusive="both")]
-
-                photon_dfs[i] = df_subset
-
-                df_is_read = True
-
-        # Now concatenate the databases.
-        # If there are no files to concatenate, just read the empty database and return that.
-        if len(photon_dfs) == 0:
-            tile_df = self.read_empty_tile()
-        else:
-            tile_df = pandas.concat(photon_dfs, ignore_index=True)
-        # Save the database.
-        ext_out = os.path.splitext(tilename)[1].lower()
-
-        if ext_out == ".h5":
-            tile_df.to_hdf(tilename, "icesat2", complib="zlib", complevel=3, mode='w')
-        elif ext_out == ".feather":
-            tile_df.to_feather(tilename,
-                               compression=self.ivert_config.feather_database_compress_algorithm,
-                               compression_level=self.ivert_config.feather_database_compress_level)
-        if verbose:
-            print(os.path.split(tilename)[1], "written.")
-
-        if write_stats:
-            # Write out the stats to a single-record .csv file.
-            # For later ingestion into the database.
-            summary_csv_fname = os.path.splitext(tilename)[0] + "_summary.csv"
-            # Update the database to reflect that this tile is already written.
-            # For now, just quickly spit out a csv file.
-            data_dict = {'filename': [tilename],
-                         'xmin'    : [bbox_bounds[0]],
-                         'xmax'    : [bbox_bounds[2]],
-                         'ymin'    : [bbox_bounds[1]],
-                         'ymax'    : [bbox_bounds[3]],
-                         'numphotons'       : [len(tile_df)],
-                         'numphotons_canopy': [numpy.count_nonzero(tile_df["class_code"].between(2,3,inclusive="both"))],
-                         'numphotons_ground': [numpy.count_nonzero(tile_df["class_code"] == 1)],
-                         'numphotons_bathy': [numpy.count_nonzero(tile_df["class_code"] == 4)],
-                         'is_populated'     : [True]
-                         }
-
-            csv_df = pandas.DataFrame(data=data_dict)
-            csv_df.to_csv(summary_csv_fname, index=False)
-            if verbose:
-                print(os.path.split(summary_csv_fname)[1], "written.")
-
-        return tile_df
+    # def create_photon_tile(self, bbox_polygon,
+    #                              tilename,
+    #                              date_range = ['2021-01-01', '2021-12-31'], # Calendar-year 2021 is the dates we're using for ETOPO. TODO: Change this to read from the Config file later.
+    #                              overwrite = False,
+    #                              write_stats = True,
+    #                              verbose = True):
+    #     """If a photon tile doesn't exist yet, download the necessary granules and create it."""
+    #     # If the tile exists, either delete it (if overwrite=True) or read it
+    #     # and return the datafarme (if overwrite=False)
+    #     if type(bbox_polygon) == shapely.geometry.Polygon:
+    #         # Get (xmin, ymin, xmax, ymax)
+    #         bbox_bounds = bbox_polygon.bounds
+    #     else:
+    #         # If it's already a 4-length tuple, assume it's the bbox and go from there.
+    #         assert type(bbox_polygon) in (list, tuple, numpy.ndarray) and len(bbox_polygon) == 4
+    #         bbox_bounds = bbox_polygon
+    #
+    #     # Read the tile. If it doesn't exist, create it.
+    #     if os.path.exists(tilename):
+    #         if overwrite:
+    #             os.remove(tilename)
+    #         else:
+    #             try:
+    #                 # If overwrite=False and the file exists, read it and just return the dataframe.
+    #                 return self.read_photon_tile(tilename)
+    #             except KeyboardInterrupt as e:
+    #                 # If we hit a keyboard interrupt while reading this, don't do
+    #                 # anything, just re-raise the interrupt. I'm probably trying
+    #                 # to kill the program halfway through working (just let me).
+    #                 raise e
+    #             except Exception:
+    #                 # If the file is incompliete or somehow corrupted, delete it and we'll try this again.
+    #                 if verbose:
+    #                     print("Error encountered while attempting to read photon tile {0}. Removing it to re-create it.".format(os.path.split(tilename)[1]))
+    #                 os.remove(tilename)
+    #
+    #     # Okay, so the tile doesn't exist. Query the icesat-2 photons files that overlap this bounding-box.
+    #     # granule_names = nsidc_download.download_granules(short_name=["ATL03", "ATL08"],
+    #     #                                                  region = bbox_bounds,
+    #     #                                                  local_dir = self.granules_directory,
+    #     #                                                  dates = date_range,
+    #     #                                                  download_only_matching_granules = True,
+    #     #                                                  query_only = True,
+    #     #                                                  quiet = True)
+    #
+    #     atl03_granules = [fn for fn in granule_names if os.path.split(fn)[1].find("ATL03") > -1]
+    #     atl08_granules = [fn for fn in granule_names if os.path.split(fn)[1].find("ATL08") > -1]
+    #     assert len(atl03_granules) == len(atl08_granules)
+    #
+    #     # Generate the names of the _photon.h5 files from the ATL03 filenames.
+    #     atl03_photon_db_filenames = [(base + "_photons" + ext) for (base, ext) in [os.path.splitext(fn) for fn in atl03_granules]]
+    #
+    #     # Then, see if the _photon.h5 databases exist for all these tiles. If they do, read them.
+    #     photon_dfs = [None]*len(atl03_photon_db_filenames)
+    #     # gdf = None
+    #
+    #     if verbose:
+    #         print("Reading {0} _photons.h5 databases to generate {1}.".format(len(atl03_photon_db_filenames), os.path.split(tilename)[1]))
+    #     for i,(photon_db,atl3,atl8) in enumerate(zip(atl03_photon_db_filenames, atl03_granules, atl08_granules)):
+    #         df = None
+    #
+    #         # I am making is so the photon databases can be either .h5 or .feather database formats.
+    #         # .h5 (saved flat)
+    #         # base, ext = os.path.splitext(photon_db)
+    #         # ext = ext.lower()
+    #         # if ext == ".h5":
+    #         #     photon_db_other = base + ".feather"
+    #         # else:
+    #         #     photon_db_other = base + ".h5"
+    #
+    #         # Generate a temporary empty textfile to indicate this file is currently being downloaded.
+    #         # This helps prevent multiple processes from downloading the files all at the same time.
+    #         # CAUTION: If this process is terminated or does not complete successfully and the _TEMP_DOWNLOADING.txt
+    #         # file is not removed, this could cause a locking problem where some/all of the processes in subsequent runs are
+    #         # waiting on some non-existent process to supposedly finish downloading. A locking problem.
+    #         # I sort of pre-empted this somewhat by
+    #         # deleting the file in the exception block, but if the code truly is killed instantly
+    #         # (say, if the power suddenly goes out on your computer)
+    #         # the exception block will not be reached and that will not work. This is a somewhat reliable solution
+    #         # under normal operating conditions and handles most typical execution errors, but is not a 100% thread-safe locking solution.
+    #         # A better solution would take more time to implement and this counts as "good enough for now, until the photon database is complete."
+    #         downloading_fbase, downloading_fext = os.path.splitext(photon_db)
+    #         downloading_fname = downloading_fbase + "_TEMP_DOWNLOADING.txt"
+    #
+    #         df_is_read = False
+    #         photon_db_location = None
+    #         while not df_is_read:
+    #             # If the tile doesn't exist, get the granules needed for it. First, look for the photon database, either in .h5 or .feather format.
+    #             if photon_db_location is None:
+    #                 photon_db_location = self.look_for_local_icesat2_photon_db(photon_db, look_for_subset_at_longitude=None) #=(None if bbox_bounds[1] > -88 else bbox_bounds[0]))
+    #                 # TODO: DELETE THIS LATER.
+    #                 # FOR NOW, we know that if there exists no "subset datafraome" for this tile in this bounding box, then there are
+    #                 # no photons in that bounding box for this tile. Don't bother reading it to check again.
+    #                 # Just look for the pattern to see if this was a subset tile. If not, skip & move along.
+    #                 # print(photon_db_location)
+    #                 # if bbox_bounds[1] <= -88 and re.search("_[EW]((\d){3})_[EW]((\d){3})\.feather", photon_db_location) is None:
+    #                 #     df = self.read_empty_tile()
+    #
+    #             if photon_db_location is None:
+    #                 # If the granules don't exist, download them.
+    #
+    #                 # Check for existence of "_TEMP_DOWNLOADING.txt" file.
+    #                 # Skip if this file already exists.
+    #                 if os.path.exists(downloading_fname):
+    #                     time.sleep(1)
+    #                     continue
+    #
+    #                 if not os.path.exists(atl3) or not os.path.exists(atl8):
+    #
+    #                     # Create an emtpy textfile marking the existence of a process
+    #                     # that is currently downloading the data for this granule.
+    #                     with open(downloading_fname, 'w') as f:
+    #                         f.close()
+    #
+    #                     # If either of the granules aren't there, download them from NSIDC
+    #                     # Only granules that don't currently exist will be downloaded
+    #                     try:
+    #                         list_of_files = nsidc_download.download_granules(short_name=["ATL03", "ATL08"],
+    #                                                                          region=bbox_bounds,
+    #                                                                          local_dir = self.granules_directory,
+    #                                                                          dates = date_range,
+    #                                                                          download_only_matching_granules = False,
+    #                                                                          query_only = False,
+    #                                                                          fname_filter = os.path.split(atl3)[1][5:], # Get only the files with this granule ID number
+    #                                                                          quiet = not verbose
+    #                                                                          )
+    #                     except Exception as e:
+    #                         # The download_granules() method can return an exception,
+    #                         # or raise one, either way, just assign it to the return
+    #                         # variable to be handled immediately below.
+    #                         list_of_files = e
+    #
+    #                     if isinstance(list_of_files, Exception):
+    #                         # If the download script return an exception, or one is raised, delete the file saying that a download is happening.
+    #                         if os.path.exists(downloading_fname):
+    #                             os.remove(downloading_fname)
+    #
+    #                         if isinstance(list_of_files, KeyboardInterrupt):
+    #                             # If the session ended because it was killed, then just exit the hell outta here. We're done.
+    #                             raise list_of_files
+    #                         else:
+    #                             # Otherwise, go back to the top of the loop and try again.
+    #                             continue
+    #
+    #                 # Create the photon database if it doesn't already exist. (And grab the datframe from it.)
+    #                 df = classify_icesat2_photons.save_granule_ground_photons(atl3,
+    #                                                                           output_db = photon_db,
+    #                                                                           overwrite = False,
+    #                                                                           verbose=verbose)
+    #
+    #                 # Remove the temp downloading file.
+    #                 if os.path.exists(downloading_fname):
+    #                     os.remove(downloading_fname)
+    #
+    #             else:
+    #                 # Update the photon_db variable from its default location to wherever it actually sits on the various
+    #                 # drives.
+    #                 photon_db = photon_db_location
+    #
+    #             # print(i+1, len(atl03_photon_db_filenames), photon_db)
+    #
+    #             # At this point, the photon database should exist locally. So read it.
+    #             # Then, subset within the bounding box.
+    #             if df is None:
+    #                 base, ext = os.path.splitext(photon_db)
+    #                 try:
+    #                     if ext == ".h5":
+    #                         df = pandas.read_hdf(photon_db, mode='r')
+    #                     else:
+    #                         df = pandas.read_feather(photon_db)
+    #                 except (AttributeError, tables.exceptions.HDF5ExtError):
+    #                     print("===== ERROR: Photon database {0} corrupted. Will build anew. =====".format(os.path.basename(photon_db)))
+    #                     print("Removing", photon_db)
+    #                     # Remove the corrupted database.
+    #                     os.remove(photon_db)
+    #                     continue
+    #                 except KeyboardInterrupt as e:
+    #                     print("Process {} was reading".format(os.getpid()), photon_db, "in bbox ({0:0.2f},{1:0.2f},{2:0.2f},{3:0.2f})".format(*bbox_bounds))
+    #                     raise e
+    #                 # except FileNotFoundError:
+    #                 #     # If the file is not found, try to find the other one. One of them should be in here.
+    #                 #     if ext == ".h5":
+    #                 #         df = pandas.read_feather(photon_db_other)
+    #                 #     else:
+    #                 #         df = pandas.read_hdf(photon_db_other, mode='r')
+    #
+    #             # Only bother subsetting the dataframe if there are any photons in it.
+    #             if len(df.index) == 0:
+    #                 df_subset = df
+    #             else:
+    #                 # Select only photons within the bounding box, that are land (class_code==1) or canopy (==2,3) photons
+    #                 df_subset = df[df.longitude.between(bbox_bounds[0], bbox_bounds[2], inclusive="left") & \
+    #                                df.latitude.between(bbox_bounds[1], bbox_bounds[3], inclusive="left") & \
+    #                                df.class_code.between(1,3, inclusive="both")]
+    #
+    #             photon_dfs[i] = df_subset
+    #
+    #             df_is_read = True
+    #
+    #     # Now concatenate the databases.
+    #     # If there are no files to concatenate, just read the empty database and return that.
+    #     if len(photon_dfs) == 0:
+    #         tile_df = self.read_empty_tile()
+    #     else:
+    #         tile_df = pandas.concat(photon_dfs, ignore_index=True)
+    #     # Save the database.
+    #     ext_out = os.path.splitext(tilename)[1].lower()
+    #
+    #     if ext_out == ".h5":
+    #         tile_df.to_hdf(tilename, "icesat2", complib="zlib", complevel=3, mode='w')
+    #     elif ext_out == ".feather":
+    #         tile_df.to_feather(tilename,
+    #                            compression=self.ivert_config.feather_database_compress_algorithm,
+    #                            compression_level=self.ivert_config.feather_database_compress_level)
+    #     if verbose:
+    #         print(os.path.split(tilename)[1], "written.")
+    #
+    #     if write_stats:
+    #         # Write out the stats to a single-record .csv file.
+    #         # For later ingestion into the database.
+    #         summary_csv_fname = os.path.splitext(tilename)[0] + "_summary.csv"
+    #         # Update the database to reflect that this tile is already written.
+    #         # For now, just quickly spit out a csv file.
+    #         data_dict = {'filename': [tilename],
+    #                      'xmin'    : [bbox_bounds[0]],
+    #                      'xmax'    : [bbox_bounds[2]],
+    #                      'ymin'    : [bbox_bounds[1]],
+    #                      'ymax'    : [bbox_bounds[3]],
+    #                      'numphotons'       : [len(tile_df)],
+    #                      'numphotons_canopy': [numpy.count_nonzero(tile_df["class_code"].between(2,3,inclusive="both"))],
+    #                      'numphotons_ground': [numpy.count_nonzero(tile_df["class_code"] == 1)],
+    #                      'numphotons_bathy': [numpy.count_nonzero(tile_df["class_code"] == 4)],
+    #                      'is_populated'     : [True]
+    #                      }
+    #
+    #         csv_df = pandas.DataFrame(data=data_dict)
+    #         csv_df.to_csv(summary_csv_fname, index=False)
+    #         if verbose:
+    #             print(os.path.split(summary_csv_fname)[1], "written.")
+    #
+    #     return tile_df
 
     def delete_csvs_already_in_database(self, gdf = None, force_read_from_disk=False, verbose=True):
         """Sometimes in parallelization, a tile _summary.csv file gets entered into the database
