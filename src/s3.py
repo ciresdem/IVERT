@@ -10,10 +10,9 @@ import os
 import re
 import shutil
 import sys
+import tabulate
 import tempfile
 import types
-import typing
-import tabulate
 import typing
 import warnings
 
