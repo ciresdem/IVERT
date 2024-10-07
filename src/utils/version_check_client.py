@@ -22,38 +22,24 @@ def fetch_min_client_from_server(ivert_config=None):
         ivert_config = configfile.Config()
 
     if ivert_config.use_export_alt_bucket:
-        profile_name = str(ivert_config.aws_profile_ivert_export_alt)
-        jobs_db_s3_key = str(ivert_config.s3_ivert_jobs_database_alt_client_key)
-        endpoint_url = str(ivert_config.s3_export_alt_endpoint_url)
-        bucket_name = str(ivert_config.s3_bucket_export_alt)
+        profile_name = ivert_config.aws_profile_ivert_export_alt
+        jobs_db_s3_key = ivert_config.s3_ivert_jobs_database_alt_client_key
+        endpoint_url = ivert_config.s3_export_alt_endpoint_url
+        bucket_name = ivert_config.s3_bucket_export_alt
     else:
-        profile_name = str(ivert_config.aws_profile_ivert_export_client)
-        jobs_db_s3_key = str(ivert_config.s3_ivert_jobs_database_client_key)
-        endpoint_url = str(ivert_config.s3_export_client_endpoint_url)
-        bucket_name = str(ivert_config.s3_bucket_export_client)
-
-    print("use_export_alt_bucket:", ivert_config.use_export_alt_bucket)
-    print("s3_bucket_export:", bucket_name)
-    print("s3_ivert_jobs_database_client_key:", jobs_db_s3_key)
-    print("s3_export_client_endpoint_url:", endpoint_url, type(endpoint_url))
-    print("Is endpoint_url None?", endpoint_url is None)
-    print("aws_profile_name:", profile_name)
-
-    print("=== ALL CONFIG VARIABLES ===")
-    for k, v in vars(ivert_config).items():
-        print(f"{k}: {v} (type '{type(v)}')")
-
-    print("configfile from:", configfile.__file__)
+        profile_name = ivert_config.aws_profile_ivert_export_client
+        jobs_db_s3_key = ivert_config.s3_ivert_jobs_database_client_key
+        endpoint_url = ivert_config.s3_export_client_endpoint_url
+        bucket_name = ivert_config.s3_bucket_export_client
 
     # Fetch the version from the server database. Not using s3.py to avoid circular imports.
     if endpoint_url is None:
-        print("Got here 2", endpoint_url, type(endpoint_url))
         client = boto3.Session(profile_name=profile_name).client('s3')
     else:
-        print("Got here 1", endpoint_url, type(endpoint_url))
         client = boto3.Session(profile_name=profile_name).client('s3', endpoint_url=endpoint_url)
 
     if ivert_config.ivert_export_client_use_aws_tags_instead_of_metadata:
+        # If it's returned as aws tags, it'll be in a list of {"Key": key, "Value": value} dict entries.
         tagset = client.get_object_tagging(Bucket=str(ivert_config.s3_bucket_export_client),
                                            Key=jobs_db_s3_key)['TagSet']
         tagdict = {tag['Key']: tag['Value'] for tag in tagset}

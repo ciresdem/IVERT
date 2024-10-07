@@ -120,10 +120,6 @@ class Config:
             # python objects but doesn't allow the calling of functions or commands that could pose security risks.
             # It will natively evaluate things like lists, dictionaries, or other generic python data types.
             val = ast.literal_eval(value)
-            if (isinstance(val, str) and (val.strip() == "None")) or val is None:
-                setattr(self, key, None)
-            else:
-                setattr(self, key, val)
             return
         except (NameError, ValueError, SyntaxError):
             pass
@@ -171,12 +167,6 @@ class Config:
                 return
         except ValueError:
             pass
-
-        # Last, if it's a string and it's "None" (and it wasn't caught up top by ast.literal_eval()), then make it None.
-        # This seems to happen sometimes when it's installed as a pip package.
-        if value.strip() == "None":
-            setattr(self, key, None)
-            return
 
         # Otherwise, it's probably just a regular string value, set it as-is.
         setattr(self, key, value)
