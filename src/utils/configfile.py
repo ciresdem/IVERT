@@ -120,7 +120,11 @@ class config:
             # Using ast.literal_eval() rather than eval(), because literal_eval only allows the creation of generic
             # python objects but doesn't allow the calling of functions or commands that could pose security risks.
             # It will natively evaluate things like lists, dictionaries, or other generic python data types.
-            setattr(self, key, ast.literal_eval(value))
+            val = ast.literal_eval(value)
+            if (isinstance(val, str) and (val.strip() == "None")) or val is None:
+                setattr(self, key, None)
+            else:
+                setattr(self, key, val)
             return
         except (NameError, ValueError, SyntaxError):
             pass
