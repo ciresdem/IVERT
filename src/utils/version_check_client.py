@@ -33,10 +33,11 @@ def fetch_min_client_from_server(ivert_config=None):
         bucket_name = str(ivert_config.s3_bucket_export_client)
 
     print("use_export_alt_bucket:", ivert_config.use_export_alt_bucket)
-    print("s3_bucket_export", bucket_name)
-    print("s3_ivert_jobs_database_client_key", jobs_db_s3_key)
-    print("s3_export_client_endpoint_url", endpoint_url)
-    print("aws_profile_name", profile_name)
+    print("s3_bucket_export:", bucket_name)
+    print("s3_ivert_jobs_database_client_key:", jobs_db_s3_key)
+    print("s3_export_client_endpoint_url:", endpoint_url)
+    print("Is endpoint_url None?", endpoint_url is None)
+    print("aws_profile_name:", profile_name)
 
     # Fetch the version from the server database. Not using s3.py to avoid circular imports.
     if endpoint_url is None:
