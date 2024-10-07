@@ -19,7 +19,7 @@ else:
 
 def fetch_min_client_from_server(ivert_config=None):
     if ivert_config is None:
-        ivert_config = configfile.config()
+        ivert_config = configfile.Config()
 
     if ivert_config.use_export_alt_bucket:
         profile_name = str(ivert_config.aws_profile_ivert_export_alt)
@@ -61,7 +61,7 @@ def is_this_client_compatible():
     if is_aws.is_aws():
         raise NotImplementedError("is_this_client_compatible is supported only on the AWS client. Use is_compatible instead.")
 
-    ivert_config = configfile.config()
+    ivert_config = configfile.Config()
     min_client_key = fetch_min_client_from_server(ivert_config=ivert_config)
 
     return Version(ivert_config.ivert_version) >= Version(min_client_key)

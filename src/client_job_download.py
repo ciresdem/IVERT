@@ -27,14 +27,14 @@ def run_download_command(args: argparse.Namespace) -> list[str]:
 
     global ivert_config
     if ivert_config is None:
-        ivert_config = configfile.config()
+        ivert_config = configfile.Config()
 
     # If we set it (by default) to just get the last job from the user, go find what the last job was.
     if args.job_id_or_name.lower() == "latest":
         args.job_id_or_name = client_job_status.find_latest_job_submitted(ivert_config.username)
 
     if args.job_id_or_name.find("_") == -1:
-        # If it's just a numeric job ID, use that and get the username from the config file.
+        # If it's just a numeric job ID, use that and get the username from the Config file.
         job_id = int(args.job_id_or_name)
         username = ivert_config.username
 
@@ -67,7 +67,7 @@ def find_most_recent_job_dir_from_this_machine() -> str:
     """Find the most recent job directory on this machine."""
     global ivert_config
     if ivert_config is None:
-        ivert_config = configfile.config()
+        ivert_config = configfile.Config()
 
     # Get the base IVERT jobs directory.
     ivert_jobs_dir = ivert_config.ivert_jobs_directory_local
@@ -80,7 +80,7 @@ def find_matching_job_dir(job_name: str) -> str:
     """Find the IVERT job directory with the given name."""
     global ivert_config
     if ivert_config is None:
-        ivert_config = configfile.config()
+        ivert_config = configfile.Config()
 
     dirname = os.path.join(ivert_config.ivert_jobs_directory_local, job_name)
     if not os.path.exists(dirname):

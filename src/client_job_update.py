@@ -22,7 +22,7 @@ def run_update_command(args: argparse.Namespace) -> None:
     assert hasattr(args, "leave_old_data")
     assert hasattr(args, "wait")
 
-    # Make a copy we can modify to generate a config file for the job.
+    # Make a copy we can modify to generate a Config file for the job.
     args_to_send = argparse.Namespace(**vars(args))
 
     if os.path.splitext(args.polygon_file)[1].lower() == ".shp":

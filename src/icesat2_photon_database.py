@@ -46,7 +46,7 @@ class ICESat2_Database:
 
         The current geodatabase consists of 0.25 degree tiles, 417,760 of them covering the planet's land surface."""
         if ivert_config is None:
-            self.ivert_config = utils.configfile.config()
+            self.ivert_config = utils.configfile.Config()
         else:
             self.ivert_config = ivert_config
         self.gpkg_fname = self.ivert_config.icesat2_photon_geopackage
@@ -671,7 +671,7 @@ class ICESat2_Database:
 
     def create_photon_tile(self, bbox_polygon,
                                  tilename,
-                                 date_range = ['2021-01-01', '2021-12-31'], # Calendar-year 2021 is the dates we're using for ETOPO. TODO: Change this to read from the config file later.
+                                 date_range = ['2021-01-01', '2021-12-31'], # Calendar-year 2021 is the dates we're using for ETOPO. TODO: Change this to read from the Config file later.
                                  overwrite = False,
                                  write_stats = True,
                                  verbose = True):

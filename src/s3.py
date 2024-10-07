@@ -53,7 +53,7 @@ class S3Manager:
     def __init__(self):
         global ivert_config
         if ivert_config is None:
-            ivert_config = configfile.config()
+            ivert_config = configfile.Config()
 
         self.config = ivert_config
 
@@ -846,7 +846,7 @@ def pretty_print_bucket_list(use_formatting=True):
     """
     global ivert_config
     if ivert_config is None:
-        ivert_config = configfile.config()
+        ivert_config = configfile.Config()
 
     aliases = S3Manager.available_bucket_types
 
@@ -904,9 +904,9 @@ def pretty_print_bucket_list(use_formatting=True):
     print(f"\n{bc.BOLD}*{bc.ENDC}default bucket on this machine.\n")
     if none_values_found:
         print(f"{bc.BOLD}Note{bc.ENDC}: '{none_str}' indicates that the bucket is not used by this client and/or is "
-              f"not set in the config file. For instance, the {bc.OKBLUE}{bc.BOLD}database{bc.ENDC}{bc.ENDC} and "
+              f"not set in the Config file. For instance, the {bc.OKBLUE}{bc.BOLD}database{bc.ENDC}{bc.ENDC} and "
               f"{bc.OKBLUE}{bc.BOLD}trusted{bc.ENDC}{bc.ENDC} buckets are used by the EC2 server and are not set in "
-              f"a user's config file. ({bc.ITALIC}This is fine.{bc.ENDC})\n")
+              f"a user's Config file. ({bc.ITALIC}This is fine.{bc.ENDC})\n")
 
 
 def add_subparser_bucket_param(subparser):
@@ -1211,7 +1211,7 @@ def s3_cli():
     ### 'buckets' and 'list_buckets' parser ################
     ########################################################
     elif args.command in ("buckets", "list_buckets"):
-        # Fetch the bucket data from the config file
+        # Fetch the bucket data from the Config file
         pretty_print_bucket_list()
 
     ########################################################

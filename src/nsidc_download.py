@@ -64,9 +64,9 @@ import shapely.geometry
 # import import_parent_dir; import_parent_dir.import_src_dir_via_pythonpath()
 ####################################3
 # import utils.progress_bar as progress_bar
-# Use config file to get the encrypted credentials.
+# Use Config file to get the encrypted credentials.
 import utils.configfile as configfile
-my_config = configfile.config()
+my_config = configfile.Config()
 
 
 try:

@@ -20,24 +20,23 @@ else:
         import utils.version as version
 
 ivert_default_configfile = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                                                        "..", "..", "config", "ivert_config.ini"))
+                                                        "..", "..", "Config", "ivert_config.ini"))
 
 # When we build the ivert package, this is the location of the ivert_data directory. Look for it there.
 if not os.path.exists(ivert_default_configfile):
     ivert_default_configfile = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                                             "..", "..", "..", "..",
-                                                            "ivert_data", "config", "ivert_config.ini"))
+                                                            "ivert_data", "Config", "ivert_config.ini"))
 
 
-
-class config:
-    """A subclass implementation of configparser.ConfigParser(), expect that config attributes are referenced as object
+class Config:
+    """A subclass implementation of configparser.ConfigParser(), expect that Config attributes are referenced as object
     attributes rather than in a dictionary.
 
     So if the .ini file contains the attribute:
          varname = 0
     it is referenced by:
-         >> c = configfile.config()
+         >> c = configfile.Config()
          >> c.varname
          0
 
@@ -57,7 +56,7 @@ class config:
     def __init__(self,
                  configfile: str = ivert_default_configfile,
                  ignore_errors: bool = False):
-        """Initializes a new instance of the config class."""
+        """Initializes a new instance of the Config class."""
 
         self._configfile = os.path.abspath(os.path.realpath(configfile))
         self._config = configparser.ConfigParser()
@@ -68,12 +67,12 @@ class config:
 
         self._config.read(configfile)
 
-        # Turn the values of the config file into attributes.
+        # Turn the values of the Config file into attributes.
         # This does not handle sections separately. Change this functionality
         # if I need to use different sections separately.
         self._parse_config_into_attrs()
 
-        # If we're importing the primary IVERT config file, add the user variables and S3 creds to the config as well.
+        # If we're importing the primary IVERT Config file, add the user variables and S3 creds to the Config as well.
         if os.path.basename(self._configfile) == os.path.basename(ivert_default_configfile):
             self._add_user_variables_and_s3_creds_to_config_obj(ignore_errors=ignore_errors)
 
@@ -85,7 +84,7 @@ class config:
         """Retreive the absolute path of a file path contained in the configfile.
 
         In this project, absolute paths are relative to the location of the
-        configfile. In this case. join them with the path to the config file and
+        configfile. In this case. join them with the path to the Config file and
         return an absolute path rather than a relative path."""
         # If we've specified to do this only if the path doesn't exist in its current location,
         # and the path does exist in its current location (either the filename, or the parent directory),
@@ -96,10 +95,10 @@ class config:
         return os.path.abspath(os.path.join(os.path.dirname(self._configfile), path))
 
     def _parse_config_into_attrs(self):
-        """Read all the config lines, put into object attributes. If we're running in an AWS instance, also read the
+        """Read all the Config lines, put into object attributes. If we're running in an AWS instance, also read the
         [AWS] section.
         """
-        # First input the default values from the config file.
+        # First input the default values from the Config file.
         for k, v in self._config["DEFAULT"].items():
             self._read_option(k, v)
 
@@ -140,7 +139,7 @@ class config:
         # Check to see if this is potentially a path. Interpret it as such if it is a string and contains path
         # characters ('\' in Windows or '/' in Linux).
         # If this is the case, return the absolute path of that file/directory *relative* to the current directory the
-        # config.ini file is contained.
+        # Config.ini file is contained.
         try:
             if key[:3].lower() == "s3_":
                 # This is an S3 key-path. Do not convert it to an absolute path.
@@ -184,7 +183,7 @@ class config:
         return
 
     def _fill_bucket_names_from_ivert_setup(self, include_sns_arn=True):
-        """Fills in the bucket name entries in the config object.
+        """Fills in the bucket name entries in the Config object.
 
         If we're server-side, we need to fill in [s3_bucket_database], [s3_bucket_trusted], and [s3_bucket_export],
         and [s3_bucket_quarantine].
@@ -321,7 +320,7 @@ class config:
         return
 
     def _add_user_variables_and_s3_creds_to_config_obj(self, ignore_errors: bool = False):
-        """Add the names of the S3 buckets to the configfile.config object.
+        """Add the names of the S3 buckets to the configfile.Config object.
 
         On a client instance, src setup needs to be run to flesh out the user configfile, before this will work."""
         # Make sure all these are defined in here. They may be assigned to None but they should exist. This is
@@ -352,7 +351,7 @@ class config:
         else:
             try:
                 if os.path.exists(self.user_configfile):
-                    user_config = config(self.user_configfile)
+                    user_config = Config(self.user_configfile)
                     self.user_email = user_config.user_email
                     self.username = user_config.username
                     self.aws_profile_ivert_import_untrusted = user_config.aws_profile_ivert_import_untrusted
@@ -361,7 +360,7 @@ class config:
 
                 # Now try to read the s3 credentials file.
                 if os.path.exists(os.path.abspath(self.ivert_s3_credentials_file)):
-                    s3_credentials = config(self.ivert_s3_credentials_file)
+                    s3_credentials = Config(self.ivert_s3_credentials_file)
                     self.s3_bucket_import_untrusted = s3_credentials.s3_bucket_import_untrusted
                     self.s3_import_untrusted_endpoint_url = s3_credentials.s3_import_untrusted_endpoint_url
 

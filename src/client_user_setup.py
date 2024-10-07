@@ -47,12 +47,12 @@ def setup_new_user(args: argparse.Namespace) -> None:
     # Update the AWS profiles on the local machine.
     update_local_aws_profiles(args)
 
-    # Update the IVERT user config file.
+    # Update the IVERT user Config file.
     update_ivert_user_config(args)
 
-    # Update the IVERT config file, since the credentials fields should now be populated. They weren't before this.
+    # Update the IVERT Config file, since the credentials fields should now be populated. They weren't before this.
     global ivert_config
-    ivert_config = configfile.config()
+    ivert_config = configfile.Config()
 
     # Gotta do this in the client_job_upload module too, or else these new variables won't be there either.
     # This is a bit of a hack but it works.
@@ -61,7 +61,7 @@ def setup_new_user(args: argparse.Namespace) -> None:
 
     if args.subscribe_to_sns:
         print("\nSending a job to the IVERT server to subscribe you to IVERT SNS notifications.")
-        # Send new_user config (as an "update" command) to the IVERT cloud tool. This will subscribe the user to the IVERT SNS topic.
+        # Send new_user Config (as an "update" command) to the IVERT cloud tool. This will subscribe the user to the IVERT SNS topic.
         subscribe_user_to_sns_notifications(args)
 
     print("\nIVERT user setup complete!")
@@ -82,7 +82,7 @@ def read_ivert_s3_credentials(creds_file: str = "", error_if_not_found: bool = T
     If we're given a path, move it first into the default credentials location."""
     global ivert_config
     if not ivert_config:
-        ivert_config = configfile.config(ignore_errors=True)
+        ivert_config = configfile.Config(ignore_errors=True)
 
     if os.path.exists(creds_file) and \
             (os.path.normcase(os.path.realpath(creds_file)) !=
@@ -96,7 +96,7 @@ def read_ivert_s3_credentials(creds_file: str = "", error_if_not_found: bool = T
         shutil.move(creds_file, ivert_config.ivert_s3_credentials_file)
 
     if os.path.exists(ivert_config.ivert_s3_credentials_file):
-        return configfile.config(ivert_config.ivert_s3_credentials_file)
+        return configfile.Config(ivert_config.ivert_s3_credentials_file)
     else:
         if error_if_not_found:
             raise FileNotFoundError(f"IVERT S3 credentials file '{ivert_config.ivert_s3_credentials_file}' not found.")
@@ -110,7 +110,7 @@ def read_ivert_personal_credentials(pcreds_file: str = "", error_if_not_found: b
     If we're given a path, move it first into the default credentials location."""
     global ivert_config
     if not ivert_config:
-        ivert_config = configfile.config(ignore_errors=True)
+        ivert_config = configfile.Config(ignore_errors=True)
 
     if os.path.exists(pcreds_file) and \
             (os.path.normcase(os.path.realpath(pcreds_file)) !=
@@ -134,7 +134,7 @@ def read_ivert_personal_credentials(pcreds_file: str = "", error_if_not_found: b
 
 
 def subscribe_user_to_sns_notifications(args: argparse.Namespace) -> None:
-    """Send new_user config (as an "update" command) to the IVERT cloud tool. This will subscribe the user to the IVERT SNS topic."""
+    """Send new_user Config (as an "update" command) to the IVERT cloud tool. This will subscribe the user to the IVERT SNS topic."""
     if not args.subscribe_to_sns:
         return
 
@@ -174,7 +174,7 @@ def subscribe_user_to_sns_notifications(args: argparse.Namespace) -> None:
     del args_copy.ivert_import_profile
     del args_copy.ivert_export_client_profile
     del args_copy.ivert_export_alt_profile
-    # Can delete username since that will be grabbed from the user config file (that we just set up)
+    # Can delete username since that will be grabbed from the user Config file (that we just set up)
     # in the ivert_client_job_upload:upload_new_job() function
     del args_copy.username
     # The "prompt" argument is not needed for the IVERT server.
@@ -189,7 +189,7 @@ def subscribe_user_to_sns_notifications(args: argparse.Namespace) -> None:
 def collect_inputs(args: argparse.Namespace, only_if_not_provided: bool = True) -> argparse.Namespace:
     """Collect user inputs and return them as a dictionary.
 
-    Any arguments that were not provided at the command line will be collected from existing config and credentials files."""
+    Any arguments that were not provided at the command line will be collected from existing Config and credentials files."""
 
     # Check to make sure all the args are present here.
     assert "email" in args
@@ -225,11 +225,11 @@ def collect_inputs(args: argparse.Namespace, only_if_not_provided: bool = True) 
 
     global ivert_config
     if not ivert_config:
-        ivert_config = configfile.config()
+        ivert_config = configfile.Config()
 
     global ivert_user_config_template
     if not ivert_user_config_template:
-        ivert_user_config_template = configfile.config(ivert_config.ivert_user_config_template)
+        ivert_user_config_template = configfile.Config(ivert_config.ivert_user_config_template)
 
     # Check for valid AWS profile names (they can basically be anyting except empty strings)
     # If we weren't provided a profile name or we aren't using the defaults, prompt for them.
@@ -545,9 +545,9 @@ def update_local_aws_profiles(args: argparse.Namespace) -> None:
 def update_local_aws_config(aws_config_file: str,
                             args: argparse.Namespace) -> None:
     """
-    Update the AWS config file.
+    Update the AWS Config file.
     """
-    # if the config file doesn't exist, create it
+    # if the Config file doesn't exist, create it
     if not os.path.exists(aws_config_file):
         # Make the directory if it doesn't exist.
         if not os.path.exists(os.path.dirname(aws_config_file)):
@@ -557,10 +557,10 @@ def update_local_aws_config(aws_config_file: str,
         with open(aws_config_file, "w") as f:
             f.write("")
 
-    # Check that the config file exists
+    # Check that the Config file exists
     assert os.path.exists(aws_config_file)
 
-    # Read the config file.
+    # Read the Config file.
     with open(aws_config_file, "r") as f:
         config_text = f.read()
 
@@ -600,12 +600,12 @@ def update_local_aws_config(aws_config_file: str,
         else:
             config_text = re.sub(old_ivert_profile_search_regex, new_ivert_profile, config_text, count=1)
 
-    # Get rid of excess newlines that may have accidentally been added in the config file, which sometimes happens.
+    # Get rid of excess newlines that may have accidentally been added in the Config file, which sometimes happens.
     config_text = config_text.rstrip("\n\r ").lstrip("\n\r ") + "\n"
     while "\n\n\n" in config_text:
         config_text = config_text.replace("\n\n\n", "\n\n")
 
-    # Overwrite the config file.
+    # Overwrite the Config file.
     with open(aws_config_file, "w") as f:
         f.write(config_text)
 
@@ -680,7 +680,7 @@ def update_local_aws_credentials(aws_credentials_file: str,
         else:
             credentials_text = re.sub(old_ivert_profile_search_regex, new_ivert_profile, credentials_text, count=1)
 
-    # Get rid of excess newlines that may have accidentally been added in the config file.
+    # Get rid of excess newlines that may have accidentally been added in the Config file.
     credentials_text = credentials_text.rstrip("\n\r ").lstrip("\n\r ") + "\n"
     while "\n\n\n" in credentials_text:
         credentials_text = credentials_text.replace("\n\n\n", "\n\n")
@@ -698,7 +698,7 @@ def create_local_dirs() -> None:
     """Create the local directories needed to store IVERT user data."""
     global ivert_config
     if not ivert_config:
-        ivert_config = configfile.config(ignore_errors=True)
+        ivert_config = configfile.Config(ignore_errors=True)
 
     creds_folder = ivert_config.user_data_creds_directory
     jobs_folder = ivert_config.ivert_jobs_directory_local
@@ -713,25 +713,25 @@ def create_local_dirs() -> None:
 
 def update_ivert_user_config(args: argparse.Namespace) -> None:
     """Create or overwrite the ivert_user_config_[name].ini file."""
-    # First, find all instances of existing user config files in the config/ directory.
+    # First, find all instances of existing user Config files in the Config/ directory.
     global ivert_config
     if not ivert_config:
-        ivert_config = configfile.config(ignore_errors=True)
+        ivert_config = configfile.Config(ignore_errors=True)
 
     user_config_file = ivert_config.user_configfile
 
-    # Get the text from the user config template.
+    # Get the text from the user Config template.
     with open(ivert_config.ivert_user_config_template, "r") as f:
         user_config_text = f.read()
 
-    # Update the user config text with the new values.
+    # Update the user Config text with the new values.
     user_config_text = re.sub(r"user_email\s*[=]\s*[\w\[\].@-]+", f"user_email = {args.email}", user_config_text)
 
-    # Update the username in the user config text.
+    # Update the username in the user Config text.
     user_config_text = re.sub(r"username\s*[=]\s*[\w\[\].-]+", f"username = {args.username}", user_config_text)
 
     # In previous IVERT versions (<0.5.0) these were called "aws_profile_ivert_ingest" and "aws_profile_ivert_export".
-    # If those exist in the user config, change them to the new field names here.
+    # If those exist in the user Config, change them to the new field names here.
     user_config_text = re.sub(r"aws_profile_ivert_ingest\s*=\s*",
                               r'aws_profile_ivert_import_untrusted = ',
                               user_config_text)
@@ -739,7 +739,7 @@ def update_ivert_user_config(args: argparse.Namespace) -> None:
                               r'aws_profile_ivert_export_client = ',
                               user_config_text)
 
-    # Update the aws_profile_ivert_import_untrusted in the user config text, if needed.
+    # Update the aws_profile_ivert_import_untrusted in the user Config text, if needed.
     # If it's using a different profile name, then update it.
     user_config_text = re.sub(r"aws_profile_ivert_import_untrusted\s*[=]\s*[\w\[\].-]+",
                               f"aws_profile_ivert_import_untrusted = {args.ivert_import_profile}",
@@ -751,7 +751,7 @@ def update_ivert_user_config(args: argparse.Namespace) -> None:
                               f"aws_profile_ivert_export_alt = {args.ivert_export_alt_profile}",
                               user_config_text)
 
-    # Write the boolean flags for the user config file. Overwrite any old ones.
+    # Write the boolean flags for the user Config file. Overwrite any old ones.
     user_config_text = re.sub(r"subscribe_to_sns\s*[=]\s*[\w\[\].-]+",
                               f"subscribe_to_sns = {str(args.subscribe_to_sns)}",
                               user_config_text)
@@ -759,7 +759,7 @@ def update_ivert_user_config(args: argparse.Namespace) -> None:
                               f"filter_sns_by_username = {str(args.filter_sns)}",
                               user_config_text)
 
-    # Write the user config file. Overwrite any old one.
+    # Write the user Config file. Overwrite any old one.
     with open(user_config_file, "w") as f:
         f.write(user_config_text)
 
@@ -769,22 +769,22 @@ def update_ivert_user_config(args: argparse.Namespace) -> None:
 
 
 def get_aws_config_and_credentials_files() -> typing.List[str]:
-    """Find the locations of the AWS config and credentials files.
+    """Find the locations of the AWS Config and credentials files.
 
     If the locations are set in the environment variables, use those.
     Otherwise, use the default locations as specified in the AWS documentation:
     https://docs.aws.amazon.com/sdkref/latest/guide/file-location.html
 
     The default locations are in the user's home directory:
-    ~/.aws/config
+    ~/.aws/Config
     ~/.aws/credentials
 
-    Create the config and credentials files if they don't exist.
+    Create the Config and credentials files if they don't exist.
 
     Returns
     -------
     list[str]
-        The filenames of the config and credentials files.
+        The filenames of the Config and credentials files.
     """
     # First, check to see if these locations are set in the environment variables.
     # Documentation from https://docs.aws.amazon.com/sdkref/latest/guide/file-location.html
@@ -836,9 +836,9 @@ def define_and_parse_args(just_return_parser: bool = False,
     global ivert_user_config_template
 
     if not ivert_config:
-        ivert_config = configfile.config(ignore_errors=ignore_config_errors)
+        ivert_config = configfile.Config(ignore_errors=ignore_config_errors)
     if not ivert_user_config_template:
-        ivert_user_config_template = configfile.config(ivert_config.ivert_user_config_template)
+        ivert_user_config_template = configfile.Config(ivert_config.ivert_user_config_template)
 
     parser = argparse.ArgumentParser(description="Set up a new IVERT user on the local machine.")
     parser.add_argument("email", type=is_email.return_email,

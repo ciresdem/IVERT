@@ -18,7 +18,7 @@ import typing
 import utils.configfile
 import utils.progress_bar
 
-ivert_config = utils.configfile.config()
+ivert_config = utils.configfile.Config()
 
 def is_iterable(obj):
     """Tell whether an object is a non-string iterable. (list, tuple, etc)."""

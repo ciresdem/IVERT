@@ -14,14 +14,14 @@ import jobs_database
 import s3
 
 
-def clean_cudem_cache(ivert_config: typing.Union[utils.configfile.config, None] = None,
+def clean_cudem_cache(ivert_config: typing.Union[utils.configfile.Config, None] = None,
                       only_if_no_running_jobs: bool = True,
                       verbose: bool = True):
     """Clean out the .cudem_cache directory.
 
     This should be run server-side only."""
     if ivert_config is None:
-        ivert_config = utils.configfile.config()
+        ivert_config = utils.configfile.Config()
 
     # First check to see if any active IVERT jobs are running. If so, we don't want to clean out the cache.
     if only_if_no_running_jobs:
@@ -106,13 +106,13 @@ def fix_database_of_orphaned_jobs():
         pass
 
 
-def clean_old_jobs_dirs(ivert_config: typing.Union[utils.configfile.config, None] = None,
+def clean_old_jobs_dirs(ivert_config: typing.Union[utils.configfile.Config, None] = None,
                         verbose: bool = True):
     """Clean out old job directories local.
 
     This can be run client-side or server-side."""
     if ivert_config is None:
-        ivert_config = utils.configfile.config()
+        ivert_config = utils.configfile.Config()
 
     if ivert_config.is_aws:
         jobs_files = utils.traverse_directory.list_files(ivert_config.ivert_jobs_directory_local)
@@ -170,7 +170,7 @@ def truncate_jobs_database(date_cutoff_str: str = "7 days ago",
         pass
 
 
-def clean_export_dirs(ivert_config: typing.Union[utils.configfile.config, None] = None,
+def clean_export_dirs(ivert_config: typing.Union[utils.configfile.Config, None] = None,
                       date_cutoff_str: str = "7 days ago",
                       verbose: bool = True):
     """Clean out old files from the "export" bucket in the Secure Ingest pipeline.
@@ -178,12 +178,12 @@ def clean_export_dirs(ivert_config: typing.Union[utils.configfile.config, None] 
     This should be run from the server side.
 
     Args:
-        ivert_config (typing.Union[utils.configfile.config, None], optional): The IVERT config to use. Defaults to None.
+        ivert_config (typing.Union[utils.configfile.Config, None], optional): The IVERT Config to use. Defaults to None.
         date_cutoff_str (str, optional): The date cutoff to use. Defaults to "7 days ago".
         verbose (bool, optional): Whether to print verbose output. Defaults to True.
     """
     if ivert_config is None:
-        ivert_config = utils.configfile.config()
+        ivert_config = utils.configfile.Config()
 
     cutoff_datetime = dateparser.parse(date_cutoff_str)
 
@@ -212,7 +212,7 @@ def clean_export_dirs(ivert_config: typing.Union[utils.configfile.config, None] 
     pass
 
 
-def clean_untrusted_bucket(ivert_config: typing.Union[utils.configfile.config, None] = None,
+def clean_untrusted_bucket(ivert_config: typing.Union[utils.configfile.Config, None] = None,
                            date_cutoff_str: str = "7 days ago",
                            verbose: bool = True):
     """Clean out old files from the "untrusted" bucket in the Secure Ingest pipeline from the client.
@@ -220,12 +220,12 @@ def clean_untrusted_bucket(ivert_config: typing.Union[utils.configfile.config, N
     This should be run from the client side.
 
     Args:
-        ivert_config (typing.Union[utils.configfile.config, None], optional): The IVERT config to use. Defaults to None.
+        ivert_config (typing.Union[utils.configfile.Config, None], optional): The IVERT Config to use. Defaults to None.
         date_cutoff_str (str, optional): The date cutoff to use. Defaults to "7 days ago".
         verbose (bool, optional): Whether to print verbose output. Defaults to True.
     """
     if ivert_config is None:
-        ivert_config = utils.configfile.config()
+        ivert_config = utils.configfile.Config()
 
     cutoff_datetime = dateparser.parse(date_cutoff_str)
 
@@ -254,16 +254,16 @@ def clean_untrusted_bucket(ivert_config: typing.Union[utils.configfile.config, N
     pass
 
 
-def delete_local_jobs_database(ivert_config: typing.Union[utils.configfile.config, None] = None,
+def delete_local_jobs_database(ivert_config: typing.Union[utils.configfile.Config, None] = None,
                                verbose: bool = True):
     """Delete the local jobs database on the client.
 
     Args:
-        ivert_config (typing.Union[utils.configfile.config, None], optional): The IVERT config to use. Defaults to None.
+        ivert_config (typing.Union[utils.configfile.Config, None], optional): The IVERT Config to use. Defaults to None.
         verbose (bool, optional): Whether to print verbose output. Defaults to True.
     """
     if ivert_config is None:
-        ivert_config = utils.configfile.config()
+        ivert_config = utils.configfile.Config()
 
     if ivert_config.is_aws:
         raise RuntimeError("'delete_local_jobs_database()' is intended solely for the IVERT client.")
@@ -275,16 +275,16 @@ def delete_local_jobs_database(ivert_config: typing.Union[utils.configfile.confi
             os.remove(jobs_db_fname)
 
 
-def delete_local_photon_tiles(ivert_config: typing.Union[utils.configfile.config, None] = None,
+def delete_local_photon_tiles(ivert_config: typing.Union[utils.configfile.Config, None] = None,
                               verbose: bool = True):
     """Delete files from the local photon_tiles directory on the server, only if there are no active running ivert jobs.
 
     Args:
-        ivert_config (typing.Union[utils.configfile.config, None], optional): The IVERT config to use. Defaults to None.
+        ivert_config (typing.Union[utils.configfile.Config, None], optional): The IVERT Config to use. Defaults to None.
         verbose (bool, optional): Whether to print verbose output. Defaults to True.
     """
     if ivert_config is None:
-        ivert_config = utils.configfile.config()
+        ivert_config = utils.configfile.Config()
 
     if not ivert_config.is_aws:
         raise RuntimeError("'delete_local_photon_tiles()' is intended solely for the IVERT server.")
@@ -329,7 +329,7 @@ def define_and_parse_args(return_parser: bool = False):
 
 if __name__ == "__main__":
     args = define_and_parse_args()
-    iconfig = utils.configfile.config()
+    iconfig = utils.configfile.Config()
 
     args.what = args.what.lower().strip()
 

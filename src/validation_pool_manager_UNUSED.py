@@ -170,7 +170,7 @@ class ValidationManager:
         # The geographic or projected bounding box of the DEM as a 4-tuple. (xmin, ymin, xmax, ymax)
         self.dem_bbox = None
         # The configfile for this prociess.
-        self.config = utils.configfile.config()
+        self.config = utils.configfile.Config()
         # The temporary directory for this process.
         if working_tempdir is None:
             self.proc_tempdir = self._create_new_tempdir(delete_existing=True)
@@ -285,7 +285,7 @@ def clear_validation_tempdirs(verbose=True):
     """Clear out all the 'validation_temp_' directories in the scratch_data folder.
 
     This should only be done if other processes aren't currently using the scratch directory for temporary"""
-    config = utils.configfile.config()
+    config = utils.configfile.Config()
     parent_dir = config.cudem_cache_directory
     dir_prefix = ValidationManager.tempdir_prefix
     tempdirs_list = [os.path.join(parent_dir, dname) for dname in os.listdir(parent_dir) if

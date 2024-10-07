@@ -80,7 +80,7 @@ class IvertJobManager:
         Returns:
             None
         """
-        self.ivert_config = utils.configfile.config()
+        self.ivert_config = utils.configfile.Config()
         if time_interval_s is None:
             self.time_interval_s = self.ivert_config.ivert_server_job_check_interval_s
         else:
@@ -240,7 +240,7 @@ class IvertJobManager:
         return new_files
 
     def check_for_new_jobs(self) -> list[str]:
-        """Return a list of new .ini config files in the trusted bucket that haven't yet been added to the database.
+        """Return a list of new .ini Config files in the trusted bucket that haven't yet been added to the database.
 
         These indicate new IVERT jobs. Once the .ini file arrives, we can parse it and create and start the IvertJob
         object, which will handle the rest of the files and kick off the new job.."""
@@ -519,7 +519,7 @@ class IvertJob:
             job_config_s3_bucket_type (str): The S3 bucket type of the job configuration file. Defaults to "trusted".
             auto_start (bool): Start the job immediately upon initialization.
         """
-        self.ivert_config = utils.configfile.config()
+        self.ivert_config = utils.configfile.Config()
 
         self.jobs_db = jobs_database.JobsDatabaseServer()
 
@@ -546,7 +546,7 @@ class IvertJob:
 
         self.job_config_local = os.path.join(self.job_dir, self.job_config_s3_key.split("/")[-1])
 
-        self.job_config_object: typing.Union[utils.configfile.config, None] = None
+        self.job_config_object: typing.Union[utils.configfile.Config, None] = None
         self.output_dir = os.path.join(self.job_dir, "outputs")
         # Define the export prefix.
         self.import_prefix = self.ivert_config.s3_import_trusted_prefix_base + \
@@ -700,10 +700,10 @@ class IvertJob:
             self.update_job_status("error")
             return False
 
-    def get_email_templates(self) -> utils.configfile.config:
+    def get_email_templates(self) -> utils.configfile.Config:
         """Get the email templates."""
         if not self.email_templates:
-            self.email_templates = utils.configfile.config(self.ivert_config.ivert_email_templates)
+            self.email_templates = utils.configfile.Config(self.ivert_config.ivert_email_templates)
 
         return self.email_templates
 
@@ -758,7 +758,7 @@ class IvertJob:
         # The job configfile is a .ini configuration file.
         assert os.path.exists(self.job_config_local)
 
-        self.job_config_object = utils.configfile.config(self.job_config_local)
+        self.job_config_object = utils.configfile.Config(self.job_config_local)
 
         if not self.is_valid_job_config(self.job_config_object) and not dry_run_only:
             # If the logfile is not validly formatted, print an error message to the log file, upload the log file,
@@ -780,7 +780,7 @@ class IvertJob:
         return
 
     @staticmethod
-    def is_valid_job_config(job_config_obj: utils.configfile.config) -> bool:
+    def is_valid_job_config(job_config_obj: utils.configfile.Config) -> bool:
         """Validate to make sure the input configfile is correctly formatted and has all the necessary fields."""
         jco = job_config_obj
         if (not hasattr(jco, "username")) or not isinstance(jco.username, str):
@@ -806,7 +806,7 @@ class IvertJob:
         If upload_t_s3 is True, then the new version of the database will be immediately uploaded."""
 
         # Create a new job entry in the jobs database.
-        assert isinstance(self.job_config_object, utils.configfile.config)
+        assert isinstance(self.job_config_object, utils.configfile.Config)
 
         # If the job number already exists, then just update it here:
         if self.jobs_db.job_exists(self.username, self.job_id):
@@ -823,7 +823,7 @@ class IvertJob:
                                         upload_to_s3=upload_to_s3)
 
         if not self.jobs_db.file_exists(self.job_config_local, self.username, self.job_id):
-            # Generate a new file record for the config file of this job.
+            # Generate a new file record for the Config file of this job.
             self.jobs_db.create_new_file_record(self.job_config_local,
                                                 self.job_id,
                                                 self.username,
@@ -873,7 +873,7 @@ class IvertJob:
 
         while len(files_to_download) > 0 and (time.time() - time_start) <= self.download_timeout_s:
             for fname in files_to_download:
-                # files will each be in the same prefix as the config file.
+                # files will each be in the same prefix as the Config file.
                 f_key = "/".join(self.job_config_s3_key.split("/")[:-1]) + "/" + fname
                 # Put in the same local folder as the configfile.
                 local_fname = os.path.join(os.path.dirname(self.job_config_local), fname)
@@ -957,7 +957,7 @@ class IvertJob:
         # If we've exited the loop and there are still files that didn't download, log an error status for them.
         if len(files_to_download) > 0:
             for fname in files_to_download.copy():
-                # files will each be in the same prefix as the config file.
+                # files will each be in the same prefix as the Config file.
                 # f_key = self.job_config_s3_key.rsplit("/")[0] + "/" + fname
                 # Put in the same local folder as the configfile.
                 local_fname = os.path.join(os.path.dirname(self.job_config_local), fname)
@@ -1160,7 +1160,7 @@ class IvertJob:
             # THIS IS THE LOGIC FOR DETERMINING WHICH COMMAND TO RUN ON THE SERVER.
 
             if self.command == "validate":
-                # If EMPTY_TEST is set in the config file, don't actually do a validation. Just print a confirm message
+                # If EMPTY_TEST is set in the Config file, don't actually do a validation. Just print a confirm message
                 # to the logfile and upload it, then we're done.
 
                 # RUN A TEST COMMAND

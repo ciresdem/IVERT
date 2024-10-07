@@ -26,12 +26,12 @@ import sys
 import time
 import typing
 
-# Use config file to get the encrypted credentials.
+# Use Config file to get the encrypted credentials.
 import utils.pyproj_funcs
 import utils.configfile as configfile
 import utils.query_yes_no as yes_no
 
-ivert_config = configfile.config()
+ivert_config = configfile.Config()
 gdal.UseExceptions()
 
 
