@@ -317,6 +317,9 @@ class Config:
         # a sanity check in case we changed the bucket variables names in the configfile.
         try:
             print(self._configfile)
+            print("ALL VARIABLES IN THIS CONFIG")
+            for (k, v) in vars(self).items():
+                print(f"{k} : {v} : {type(v)}")
 
             assert hasattr(self, "s3_bucket_import_untrusted")
             assert hasattr(self, "s3_bucket_export_client")
