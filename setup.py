@@ -44,7 +44,7 @@ setuptools.setup(
     package_dir = {'ivert': 'src',
                    'ivert_utils': 'src/utils'},
     data_files = [('ivert_data/data/', ["data/empty_tile.tif"]),
-                  ('ivert_data/Config', ["config/email_templates.ini",
+                  ('ivert_data/config', ["config/email_templates.ini",
                                          "config/ivert_config.ini",
                                          "config/ivert_job_config_TEMPLATE.ini",
                                          "config/ivert_user_config_TEMPLATE.ini",
