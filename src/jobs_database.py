@@ -56,7 +56,7 @@ class JobsDatabaseClient:
         # The IVERT configfile object. Get the paths from here.
         global ivert_config
         if ivert_config is None:
-            ivert_config = configfile.config()
+            ivert_config = configfile.Config()
 
         self.ivert_config = ivert_config
         self.ivert_jobs_dir = self.ivert_config.ivert_jobs_directory_local
@@ -69,12 +69,16 @@ class JobsDatabaseClient:
         self.conn = None
 
         # Where the jobs database sits in the S3 bucket
-        if ivert_config.is_aws:
-            self.s3_bucket_type = self.ivert_config.s3_ivert_jobs_database_bucket_type_server
-            self.s3_database_key = self.ivert_config.s3_ivert_jobs_database_server_key
+        if ivert_config.use_export_alt_bucket:
+            self.s3_bucket_type= self.ivert_config.s3_ivert_jobs_database_bucket_type_export_alt
+            self.s3_database_key = self.ivert_config.s3_ivert_jobs_database_alt_client_key
         else:
-            self.s3_bucket_type = self.ivert_config.s3_ivert_jobs_database_bucket_type_client
-            self.s3_database_key = self.ivert_config.s3_ivert_jobs_database_client_key
+            if ivert_config.is_aws:
+                self.s3_bucket_type = self.ivert_config.s3_ivert_jobs_database_bucket_type_server
+                self.s3_database_key = self.ivert_config.s3_ivert_jobs_database_server_key
+            else:
+                self.s3_bucket_type = self.ivert_config.s3_ivert_jobs_database_bucket_type_client
+                self.s3_database_key = self.ivert_config.s3_ivert_jobs_database_client_key
 
         # The S3Manager instance, for uploading and downloading files to the S3 buckets
         self.s3m = s3.S3Manager()
@@ -974,7 +978,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
         return
 
     def create_new_job(self,
-                       job_config_obj: configfile.config,
+                       job_config_obj: configfile.Config,
                        job_configfile: str,
                        job_logfile: str,
                        job_local_dir: str,
@@ -992,7 +996,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
         No files are created here.
 
         Args:
-            job_config_obj (utils.configfile.config object): A parsed configuraiton object of the job_config.ini file.
+            job_config_obj (utils.configfile.Config object): A parsed configuraiton object of the job_config.ini file.
             job_configfile (str): the name of the job configuration file.
             job_logfile (str): the name of the logfile for this job.
             job_local_dir (str): the local directory where this job's files will be downloaded.
@@ -1006,8 +1010,8 @@ class JobsDatabaseServer(JobsDatabaseClient):
         Returns:
             The database row (record) of the new job in the "ivert_jobs" table.
         """
-        # job_config_obj should be a configfile.config object with fields defined in
-        # config/ivert_job_config_TEMPLATE.ini
+        # job_config_obj should be a configfile.Config object with fields defined in
+        # Config/ivert_job_config_TEMPLATE.ini
         jco = job_config_obj
 
         # Check if the (username, job_id) tuple already exists in the database.
@@ -1021,7 +1025,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
             return existing_row
 
         if not (hasattr(jco, "job_id") and hasattr(jco, "username") and hasattr(jco, "ivert_command")):
-            # If we have an imcompliete job config ini file, then populate these fields with values from the S3 path.
+            # If we have an imcompliete job Config ini file, then populate these fields with values from the S3 path.
             # This can be the case if we're backfilling the database with old files from the S3 bucket.
             params_dict = self.get_params_from_s3_path(job_configfile)
             jco.job_id = params_dict["job_id"]
@@ -1071,7 +1075,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
         if job_row["export_prefix"] is not None:
             return job_row["export_prefix"]
 
-        # Get the export prefix from the config file.
+        # Get the export prefix from the Config file.
         export_base_prefix = self.ivert_config.s3_export_prefix_base + "jobs/"
 
         export_prefix = export_base_prefix + self.ivert_config.s3_ivert_job_subdirs_template \
@@ -1538,7 +1542,7 @@ def define_and_parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     if not ivert_config:
-        ivert_config = configfile.config()
+        ivert_config = configfile.Config()
 
     args = define_and_parse_args()
 

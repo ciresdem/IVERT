@@ -23,7 +23,7 @@ import utils.parallel_funcs
 import s3
 # import datasets.etopo_source_dataset
 
-my_config = utils.configfile.config()
+my_config = utils.configfile.Config()
 
 # def create_bad_granules_master_csv(bad_granule_list_fname = my_config._abspath(my_config.icesat2_bad_granules_list),
 #                                     dataset_name = "CopernicusDEM",

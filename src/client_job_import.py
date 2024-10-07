@@ -23,7 +23,7 @@ else:
 def run_import_command(args: argparse.Namespace) -> None:
     """Run an import command from the ivert_client to the ivert_server."""
 
-    # Make a copy we can modify to generate a config file for the job.
+    # Make a copy we can modify to generate a Config file for the job.
     args_to_send = argparse.Namespace(**vars(args))
 
     # Run through the files, populate any glob patterns.

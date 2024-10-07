@@ -45,15 +45,15 @@ ivert_config = None
 class S3Manager:
     """Class for copying files into and out-of the IVERT AWS S3 buckets, as needed."""
 
-    available_bucket_types = ("database", "untrusted", "trusted", "export_server", "export_client", "quarantine")
-    available_bucket_aliases = ("d", "u", "t", "s", "xs", "c", "xc", "q",
-                                "D", "U", "T", "S", "XS", "C", "XC", "Q")
+    available_bucket_types = ("database", "untrusted", "trusted", "export_server", "export_client", "export_alt", "quarantine")
+    available_bucket_aliases = ("d", "u", "t", "s", "x", "xs", "c", "xc", "q", "export",
+                                "D", "U", "T", "S", "X", "XS", "C", "XC", "Q")
     default_bucket_type = "database" if is_aws.is_aws() else "untrusted"
 
     def __init__(self):
         global ivert_config
         if ivert_config is None:
-            ivert_config = configfile.config()
+            ivert_config = configfile.Config()
 
         self.config = ivert_config
 
@@ -64,6 +64,7 @@ class S3Manager:
                             "trusted": self.config.s3_bucket_import_trusted,
                             "export_server": self.config.s3_bucket_export_server,
                             "export_client": self.config.s3_bucket_export_client,
+                            "export_alt": self.config.s3_bucket_export_alt,
                             "quarantine": self.config.s3_bucket_quarantine}
 
         self.endpoint_urls = {"untrusted": self.config.s3_import_untrusted_endpoint_url,
@@ -71,6 +72,7 @@ class S3Manager:
                               "database": None,
                               "trusted": None,
                               "export_server": None,
+                              "export_alt": self.config.s3_export_alt_endpoint_url,
                               "quarantine": None}
 
         # Different AWS profiles for each bucket. "None" indicates no profile is needed.
@@ -83,6 +85,8 @@ class S3Manager:
             None if self.config.is_aws else self.config.aws_profile_ivert_import_untrusted
         self.bucket_profile_dict["export_client"] = \
             None if self.config.is_aws else self.config.aws_profile_ivert_export_client
+        self.bucket_profile_dict["export_alt"] = \
+            None if self.config.is_aws else self.config.aws_profile_ivert_export_alt
 
         # The s3 session. Session created on demand when needed by the :get_resource_bucket() and :get_client() methods.
         self.session_dict = dict([(dbtype, None) for dbtype in self.available_bucket_types])
@@ -146,14 +150,37 @@ class S3Manager:
         bucket_type = bucket_type.strip().lower()
         if bucket_type == 'd':
             bucket_type = 'database'
+
         elif bucket_type == 't':
             bucket_type = 'trusted'
+
         elif bucket_type == 'u':
             bucket_type = 'untrusted'
+
         elif bucket_type in ('c', 'xc'):
-            bucket_type = 'export_client'
+            if self.config.use_export_alt_bucket:
+                bucket_type = 'export_alt'
+            else:
+                bucket_type = 'export_client'
+
         elif bucket_type in ('s', 'xs'):
-            bucket_type = 'export_server'
+            if self.config.s3_bucket_export_alt:
+                bucket_type = 'export_alt'
+            else:
+                bucket_type = 'export_server'
+
+        elif bucket_type in ('x', 'export'):
+            if self.config.is_aws:
+                if self.config.use_export_alt_bucket:
+                    bucket_type = 'export_alt'
+                else:
+                    bucket_type = 'export_server'
+            else:
+                if self.config.use_export_alt_bucket:
+                    bucket_type = 'export_alt'
+                else:
+                    bucket_type = 'export_client'
+
         elif bucket_type in ('q', 'quarantined'):
             bucket_type = 'quarantine'
 
@@ -573,7 +600,6 @@ class S3Manager:
 
         Returns the full key path, since that's how S3's operate. But this make it a bit different than os.listdir().
         """
-
         bucket_type = self.convert_btype(bucket_type)
 
         # Directories should not start with '/'
@@ -770,8 +796,6 @@ class S3Manager:
 
         bucket_type = self.convert_btype(bucket_type)
 
-        client = self.get_client(bucket_type=bucket_type)
-
         if self.contains_glob_flags(s3_key):
             keyvals = {}
             key_names = self.listdir(s3_key, bucket_type=bucket_type, recursive=recursive)
@@ -788,6 +812,8 @@ class S3Manager:
             return keyvals
 
         else:
+            client = self.get_client(bucket_type=bucket_type)
+
             bname = self.get_bucketname(bucket_type=bucket_type)
             # If use_tags wasn't set, set it to the export_client bucket's setting in the ivert_config file.
             # This is the only IVERT bucket in which this is applicable.
@@ -804,6 +830,12 @@ class S3Manager:
                 return dict([(t["Key"], t["Value"]) for t in head["TagSet"]])
 
             # Otherwise, use the s3api "head-object" feature, under "Metadata".
+            else:
+                head = client.head_object(Bucket=bname, Key=s3_key)
+                if return_entire_header:
+                    return head
+                else:
+                    return head["Metadata"]
 
 
 def pretty_print_bucket_list(use_formatting=True):
@@ -813,7 +845,7 @@ def pretty_print_bucket_list(use_formatting=True):
     """
     global ivert_config
     if ivert_config is None:
-        ivert_config = configfile.config()
+        ivert_config = configfile.Config()
 
     aliases = S3Manager.available_bucket_types
 
@@ -822,6 +854,7 @@ def pretty_print_bucket_list(use_formatting=True):
                   "untrusted"    : ivert_config.s3_bucket_import_untrusted,
                   "export_client": ivert_config.s3_bucket_export_client,
                   "export_server": ivert_config.s3_bucket_export_server,
+                  "export_alt"   : ivert_config.s3_bucket_export_alt,
                   "quarantine"   : ivert_config.s3_bucket_quarantine}
 
     prefixes_dict = {"database" : "",
@@ -829,6 +862,7 @@ def pretty_print_bucket_list(use_formatting=True):
                      "untrusted": ivert_config.s3_import_untrusted_prefix_base if bname_dict["untrusted"] else "",
                      "export_client": ivert_config.s3_export_client_prefix_base if bname_dict["export_client"] else "",
                      "export_server": ivert_config.s3_export_server_prefix_base if bname_dict["export_server"] else "",
+                     "export_alt": ivert_config.s3_export_alt_prefix_base if bname_dict["export_alt"] else "",
                      "quarantine": ivert_config.s3_quarantine_prefix_base if bname_dict["quarantine"] else ""}
 
     bc = bcolors.bcolors()
@@ -869,9 +903,9 @@ def pretty_print_bucket_list(use_formatting=True):
     print(f"\n{bc.BOLD}*{bc.ENDC}default bucket on this machine.\n")
     if none_values_found:
         print(f"{bc.BOLD}Note{bc.ENDC}: '{none_str}' indicates that the bucket is not used by this client and/or is "
-              f"not set in the config file. For instance, the {bc.OKBLUE}{bc.BOLD}database{bc.ENDC}{bc.ENDC} and "
+              f"not set in the Config file. For instance, the {bc.OKBLUE}{bc.BOLD}database{bc.ENDC}{bc.ENDC} and "
               f"{bc.OKBLUE}{bc.BOLD}trusted{bc.ENDC}{bc.ENDC} buckets are used by the EC2 server and are not set in "
-              f"a user's config file. ({bc.ITALIC}This is fine.{bc.ENDC})\n")
+              f"a user's Config file. ({bc.ITALIC}This is fine.{bc.ENDC})\n")
 
 
 def add_subparser_bucket_param(subparser):

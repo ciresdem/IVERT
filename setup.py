@@ -53,8 +53,8 @@ setuptools.setup(
                   ],
     # package_data = {'ivert': ['data/icesat2/ATL03_EMPTY_TILE.h5',
     #                           'data/empty_tile.tif',
-    #                           'config/*.ini',
-    #                           'config/*.sql']},
+    #                           'Config/*.ini',
+    #                           'Config/*.sql']},
     classifiers = [
         'Programming Language :: Python :: 3',
         'License :: OSI APPROVED :: MIT License',

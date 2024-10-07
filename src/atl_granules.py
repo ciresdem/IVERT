@@ -13,13 +13,13 @@ import utils.configfile as configfile
 class ATL_granule:
     """Base class for other ATLXX granules, such as ATL03, ATL06, ATL08."""
     # Save the configuration file as a base class variable, shared one instance among all class instances.
-    config = configfile.config()
+    config = configfile.Config()
 
     beam_name_dict = {"gt1l": 0, "gt1r": 1, "gt2l": 2, "gt2r": 3, "gt3l": 4, "gt3r": 5}
     beam_code_dict = {0: "gt1l", 1: "gt1r", 2: "gt2l", 3: "gt2r", 4: "gt3l", 5: "gt3r"}
 
     def __init__(self, h5name, dataset_name):
-        # The various settings, in /src/ini/config.ini
+        # The various settings, in /src/ini/Config.ini
         self.config = ATL_granule.config
         self.atl_sdp_epoch = dateparser.parse(self.config.atlas_sdp_epoch)
 
@@ -41,7 +41,7 @@ class ATL_granule:
             dataset_name = dataset_name.strip().upper()
             # Right now I just have ATL03,06,08 explicitly implemented. However, the "else" branch
             # should allow us to get the data directory for any of the datsets along
-            # as they follow the same naming convention in the config.ini file.
+            # as they follow the same naming convention in the Config.ini file.
             if dataset_name == "ATL03":
                 data_dir = self.config.atl03_dir_raw
             if dataset_name == "ATL06":

@@ -64,7 +64,7 @@ def get_latest_job_name_from_local_dirs():
     """Find the most recent job submitted by this user on this machine, from the local jobs directory."""
     global ivert_config
     if ivert_config is None:
-        ivert_config = configfile.config()
+        ivert_config = configfile.Config()
 
     # Now look in the local jobs folder to see if there's a more recent job there that was submitted, but isn't yet in
     # the server's jobs database. (Perhaps it just hasn't been picked up by the server yet.)
@@ -83,7 +83,7 @@ def run_job_status_command(args: argparse.Namespace) -> None:
     """Run the job status command from the ivert_client."""
     global ivert_config
     if ivert_config is None:
-        ivert_config = configfile.config()
+        ivert_config = configfile.Config()
 
     assert hasattr(args, "job_name")
     assert hasattr(args, "command") and args.command == "status"
@@ -130,7 +130,7 @@ def run_job_status_command(args: argparse.Namespace) -> None:
                 #     status = f"{bcolors.WARNING}unknown{bcolors.ENDC}"
                 print(f"    {frow['filename']}: {status}", end="")
                 if frow['filename'].endswith(".ini"):
-                    print(f" (<-{bcolors.ITALIC}job config file{bcolors.ENDC})")
+                    print(f" (<-{bcolors.ITALIC}job Config file{bcolors.ENDC})")
                 else:
                     print()
 

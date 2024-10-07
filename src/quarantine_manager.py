@@ -7,7 +7,7 @@ import utils.configfile
 
 def list_files_in_quarantine() -> typing.List[str]:
     """Return a list of all files that currently sit in quarantine."""
-    iconfig = utils.configfile.config()
+    iconfig = utils.configfile.Config()
     s3m = s3.S3Manager()
 
     return s3m.listdir(iconfig.s3_quarantine_prefix_base +
@@ -27,7 +27,7 @@ def is_quarantined(s3_key: str) -> bool:
     Returns:
         bool: True if the file exists in the quarantine bucket, False otherwise.
     """
-    iconfig = utils.configfile.config()
+    iconfig = utils.configfile.Config()
     s3m = s3.S3Manager()
 
     s3_key = s3_key.strip()

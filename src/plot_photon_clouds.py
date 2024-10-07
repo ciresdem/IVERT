@@ -8,58 +8,71 @@ plot_photon_clouds.py -- Simple tool for making photon point clouds with matplot
 @author: mmacferrin
 """
 
-# import retrieve_land_photons
-import atl_granules
-import utils.progress_bar as progress_bar
+import utils.pickle_blosc
 
-import pandas
-import numpy
+import geopandas
 import matplotlib.pyplot as plt
-import matplotlib.patches
-import matplotlib.gridspec
-import matplotlib.ticker
 import os
-# import numpy
+import numpy
+import numexpr
+import utm
+import typing
 
-def plot_photon_data(photon_h5, granule_id1_int=None, beam_id=None, bbox=None, surface_field="h_geoid",
-                     fix_reef=False, overwrite=False, verbose=True):
 
-    if verbose:
-        print("Reading", photon_h5, end="...")
-    df = pandas.read_hdf(photon_h5)
-    if verbose:
-        print("done.")
+def plot_photon_data(photon_gpkg: typing.Union[str, geopandas.GeoDataFrame],
+                     outfile: str,
+                     unique_laser_id: int = 0,
+                     figsize: typing.Union[tuple, list] = (6.5, 3.2),
+                     dpi = 300,
+                     bbox = None,
+                     x = "x",
+                     y = "y",
+                     z = "z",
+                     ylim = None,
+                     plot_north = True,
+                     ):
+    """Read an IVERT-derived ICESat-2 photon geodataframe and plot one of the laser paths.
 
-    if type(beam_id) == int:
-        beam_number = beam_id
-        beam_name = atl_granules.beam_int_to_name(beam_number)
-    elif type(beam_id) == str:
-        beam_number = beam_id
-        beam_name = atl_granules.beam_int_to_name(beam_number)
-    elif beam_id is None:
-        # By default, just literally get the first beam.
-        beam_number = df.iloc[0]["beam"]
-        beam_name = atl_granules.beam_int_to_name(beam_number)
+    Parameters
+    ----------
+    photon_gpkg : str
+        Path to the geopackage containing the photon data, or a geodataframe object.
+    outfile : str
+        Path to the output image file to write.
+    unique_laser_id : int
+        The unique laser ID of the photon data to plot, in column "unique_laser_id".
+        Only used if more than one granule_id is present.
+    bbox : list
+        Bounding box subset to plot, in (xmin, xmax, ymin, ymax) format, to subset and "zoom in" on the data.
+    figsize : tuple, list
+        Width and height of the image in inches
+    dpi: int
+        DPI of the image
+    x: str
+        Column name of the x coordinate
+    y: str
+        Column name of the y coordinate
+    z: str
+        Column name of the z coordinate
+    ylim: tuple
+        Plot the limits of the y axis.
+    plot_north: bool
+        Plot from south to north. Reverse if False.
+
+    """
+
+    if isinstance(photon_gpkg, geopandas.GeoDataFrame):
+        gdf = photon_gpkg
+    elif os.path.splitext(photon_gpkg)[1] == ".gpkg":
+        print("Reading", os.path.basename(photon_gpkg), end="...", flush=True)
+        gdf = geopandas.read_file(photon_gpkg, driver="GPKG")
+        print(" done.", flush=True)
+    elif os.path.splitext(photon_gpkg)[1] in (".blosc", ".blosc2"):
+        print("Reading", os.path.basename(photon_gpkg), end="...", flush=True)
+        gdf = utils.pickle_blosc.read(photon_gpkg)
+        print(" done.", flush=True)
     else:
-        raise ValueError("Unknown Beam ID {}".format(repr(beam_id)))
-
-    # print(df)
-    # print(df.columns)
-
-    # When we print the dataframe, include all the columns.
-    pandas.set_option('display.max_columns', None)
-
-    if granule_id1_int:
-        # Subset dataframe by granule_id1 and beam
-        df = df[(df["granule_id1"] == granule_id1_int)]
-
-    df = df[df["beam"] == beam_number]
-
-    # parray = retrieve_land_photons.get_photon_data(granule_id, beam=beam)
-    # foobar
-    # print(df)
-    # print(df.columns)
-    # print(df['beam'].unique())
+        raise ValueError("Unrecognized file extension: " + os.path.splitext(photon_gpkg)[1])
 
     # Type codes:
     # -1 : uncoded
@@ -67,649 +80,202 @@ def plot_photon_data(photon_h5, granule_id1_int=None, beam_id=None, bbox=None, s
     #  1 : ground
     #  2 : canopy
     #  3 : top of canopy
-    #  4 : ocean surface (added after-the-fact, kinda cheating for now)
-    colors={-1:"lightgrey", 0:"lightgrey", 1:"brown", 2:"mediumseagreen", 3:"green", 4:"dodgerblue"}
+    #  4 : bathy floor
+    #  5 : bathy surface
+    #  6 : ice surface
+    #  7 : built structure
 
-    labels = {-1: None, 0:"Noise", 1:"Land / Seafloor", 2:"Canopy", 3:"Canopy Top", 4: "Sea Surface"}
+    # If the gdf has -1 values, classify those same as 0 values (noise)
+    # For right now, also get rid of forest canopies and just classify those as noise too.
+    # Just keep ground, water floor, water surface, and building tops.
+    gdf["class_code"] = gdf["class_code"].apply(lambda x: x if (x >= 0) else 0)
 
-    # parray_sub =
-    # N = 1
-    # idxs = numpy.arange(0,len(dist_x_km),N)
+    # Anything with a confidence less than 3, just set the class_code to zero. Low confidence is classified as noise.
+    # Turn this off, was just testing before.
+    # gdf["class_code"] = gdf.apply(lambda x: 0 if x["confidence"] < 3 else x["class_code"], axis=1)
 
-    # print("dist_x:", df['dist_x'])
-    # print("dist_x.min:", df['dist_x'].min())
+    # Subset the GDF to the unique_granule_id if more than one granule_id exists.
+    if len(gdf["unique_laser_id"].unique()) > 1:
+        gdf = gdf[gdf["unique_laser_id"] == unique_laser_id].copy()
 
-    # dist_x_km = df["dist_x"] / 1e3
+    # Subset the GDF to the bounding box
+    if bbox is not None:
+        min_x, max_x, min_y, max_y = bbox
 
-    # print(dist_x_km.min())
+        gdf = gdf[numexpr.evaluate("(x >= min_x) & (x <= max_x) & (y >= min_y) & (y <= max_y)",
+                                   local_dict={"x": gdf[x], "y": gdf[y],
+                                               "min_x": min_x, "max_x": max_x, "min_y": min_y, "max_y": max_y})]
 
-    if bbox != None:
-        lats = df["latitude"]
-        lons = df["longitude"]
-        xmin, ymin, xmax, ymax = bbox
+    # Sort the points going either north or south.
+    gdf.sort_values(y, axis=0, ascending=plot_north, inplace=True, ignore_index=True)
 
-        subset_mask = (lons >= xmin) & (lons <= xmax) & (lats >= ymin) & (lats <= ymax)
-        df = df[subset_mask]
-        # dist_x_km = dist_x_km[subset_mask]
-    # start=1500
-    # end=1680
-    # subset = (dist_x_km >= start) & (dist_x_km <end)
+    # Assign the class colors and labels to be used.
+    colors = {}
+    labels = {}
+    zorders = {}
+    markers = {}
+    alphas = {}
+    sizes = {}
+    # Set the settings for the plotting colors and point-sizes.
+    for class_code in sorted(gdf["class_code"].unique()):
+        # If there are no photons of that class code, don't bother including it in the index.
+        if numpy.count_nonzero(gdf["class_code"] == class_code) == 0:
+            continue
 
-    # print(df)
-    # print(df.columns)
+        if class_code == 0:
+            color = "lightgrey"
+            label = "Noise"
+            zorder = 0
+            marker = 'o'
+            alpha = 0.4
+            size = 1
 
-    dist_x_km = (df["dist_x"] - df["dist_x"].min())/1e3
+        elif class_code == 1:
+            color = "brown"
+            label = "Land"
+            zorder = 1
+            marker = 'o'
+            alpha = 1.0
+            size = 2.5
 
-    # Define the plot
-    DPI = 500
+        elif class_code == 2:
+            color = "mediumseagreen"
+            label = "Canopy"
+            zorder = 0
+            marker = 'o'
+            alpha = 0.4
+            size = 1
 
-    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6.0,3.5), dpi=DPI) #, wspace=1, hspace=1)
-    # ASPECT = 2.0
-    # ax1.set_aspect(ASPECT)
-    # ax2.set_aspect(ASPECT*0.25)
-    # fig = plt.Figure(figsize=(10.0,6.5), dpi=DPI)
-    # gs1 = matplotlib.gridspec.GridSpec(2, 1)
-    # ax1 = fig.add_subplot(gs1[0])
-    # ax2 = fig.add_subplot(gs1[1])
+        elif class_code == 3:
+            color = "green"
+            label = "Canopy Top"
+            zorder = 0
+            marker = 'o'
+            alpha = 0.4
+            size = 1
 
-    # ax1 = fig.add_subplot(2,1,1)
-    # ax2 = fig.add_subplot(2,1,2)
+        elif class_code == 4:
+            color = "saddlebrown"
+            label = "Sea Floor"
+            zorder = 1
+            marker = 'o'
+            alpha = 1.0
+            size = 2.5
 
-    class_id_list = [-1,0,1,2,3] #,4] # sorted(list(colors.keys()))[1:]
-    for class_id in class_id_list:
-        color = colors[class_id]
-        label = labels[class_id]
-
-        if class_id == 1:
-            zorder=2
-        else:
-            zorder=1
-
-        if class_id in [-1,0]:
-            markersize=1
+        elif class_code == 5:
+            color = "dodgerblue"
+            label = "Sea Surface"
+            zorder = 0
             marker = '.'
+            alpha = 1.0
+            size = 1
+
+        elif class_code == 6:
+            color = "lightblue"
+            label = "Ice Surface"
+            zorder = 1
+            marker = 'o'
+            alpha = 1.0
+            size = 2.5
+
+        elif class_code == 7:
+            color = "red"
+            label = "Built Structure"
+            zorder = 1
+            marker = 'o'
+            alpha = 0.4
+            size = 1
+
         else:
-            markersize=1
-            marker = "o"
+            raise ValueError("Unknown class code {}".format(class_code))
 
+        colors[class_code] = color
+        labels[class_code] = label
+        zorders[class_code] = zorder
+        markers[class_code] = marker
+        alphas[class_code] = alpha
+        sizes[class_code] = size
 
-        color_mask = (df["class_code"] == class_id)
+    gdf["distance_km"] = calculate_distances(gdf, unit="km", x=x, y=y)
 
-        # plt.scatter(dist_x_km[subset] - start, df1l['height'][subset], c=df1l["class_flag"][subset].map(colors), marker=".", s=1)
-        # plt.scatter(dist_x_km, parray['height'], c=numpy.vectorize(colors.__getitem__)(parray["class_code"]), marker="pixel") #, s=0.25)
-        ax.scatter(dist_x_km[color_mask], df[surface_field][color_mask], c=color, label=label, marker=marker, zorder=zorder, s=markersize, linewidths=0)
+    # Create the figure
+    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=figsize, dpi=dpi)
+
+    for class_code in sorted(gdf["class_code"].unique()):
+        # If there are no photons of that class code, don't bother including it in the index.
+        gdf_class = gdf[gdf["class_code"] == class_code].copy()
+        print(f"class {class_code}, {len(gdf_class)} points", flush=True)
+        ax.scatter(gdf_class["distance_km"], gdf_class[z],
+                   color=colors[class_code], zorder=zorders[class_code],
+                   marker=markers[class_code], label=labels[class_code],
+                   s=sizes[class_code], linewidth=0,
+                   alpha=alphas[class_code])
 
     lgnd = ax.legend(loc="upper right", fontsize="small", labelspacing=0.5)
 
-    #change the marker size manually for both lines
+    # Change the marker size manually for both lines
     legend_markersize = 20
-    for color_id in range(len(class_id_list[1:])):
+    for color_id in range(len(lgnd.legendHandles)):
         lgnd.legendHandles[color_id]._sizes = [legend_markersize]
-    # lgnd.legendHandles[1]._sizes = [legend_markersize]
-    # lgnd.legendHandles[2]._sizes = [legend_markersize]
-    # lgnd.legendHandles[3]._sizes = [legend_markersize]
-    # lgnd.legendHandles[4]._sizes = [legend_markersize]
-
 
     ax.set_xlabel("Distance (km)")
-    ax.set_ylabel("{} Elevation (m)".format({"h_ellipsoid": "WGS84", "h_geoid": "Geoid", "h_meantide":"Mean Tide"}[surface_field]))
+    ax.set_ylabel("Elevation (m)")
 
-    # TODO: Get the highest & lowest land/canopy elevations. Use those.
-    ax.set_ylim(-20, 150)
-    # ax2.set_xlabel(ax1.get_xlabel())
-    # ax2.set_ylabel(ax1.get_ylabel())
-    date_str = str(df['granule_id1'].iloc[0])[0:8]
-    rgt_str = int(str(df['granule_id2'].iloc[0]).zfill(13)[0:4])
-    # ax = plt.gca()
-    plt.text(0.02,0.98,"New England, United States\n{0}.{1}.{2}\nRGT #{3}\nLaser {4}".format(
-        date_str[0:4], date_str[4:6], date_str[6:8],
-        rgt_str,
-        beam_name[-2:].upper()),
-        ha="left", va="top", fontsize="large", transform=ax.transAxes)
-    # ax1.text(0.02,0.02,"South", ha="left", va="bottom", fontsize="large", transform=ax1.transAxes)
-    # ax1.text(0.98,0.02,"North", ha="right", va="bottom", fontsize="large", transform=ax1.transAxes)
-    # ax1.set_ylim((-15,27))
+    ax.text(0.02, 0.98, "Eureka, CA",
+            ha="left", va="top", fontsize="large", transform=ax.transAxes)
 
-    # ax2.set_xlim(subset_box[0])
-    # ax2.set_ylim(subset_box[1])
-
-    # ax2.xaxis.grid(True, which='major', lw=0.25, zorder=-1)
-    # ax2.xaxis.grid(True, which='minor', lw=0.1, zorder=-1)
-    # ax2.yaxis.grid(True, which='major', lw=0.25, zorder=-1)
-    # ax2.yaxis.grid(True, which='minor', lw=0.1, zorder=-1)
-    # ax2.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
-    # ax2.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
-    # ax2.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
-    # ax2.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
-    # ax2.set_xticklabels(ax2.get_xticks(), rotation=90)
-
-    # fig.tight_layout()
-
-    # print(parray)
-    # print(parray.dtype)
-    # print(parray.shape)
-
-    plt.tight_layout()
-    figname = os.path.splitext(photon_h5)[0] + "_" + str(granule_id1_int) + "_" + beam_name + ".png"
-    plt.savefig(figname) #, dpi=DPI)
-    print(figname, "written.")
-
-    return df
-
-
-def plot_photon_data_gbr(photon_h5, granule_id1_int=None, beam_id=None, bbox=None, surface_field="h_geoid",
-                     fix_reef=False, overwrite=False, verbose=True):
-
-    if verbose:
-        print("Reading", photon_h5, end="...")
-    df = pandas.read_hdf(photon_h5)
-    if verbose:
-        print("done.")
-
-    if type(beam_id) == int:
-        beam = atl_granules.ATL_granule.beam_code_dict[beam_id]
-    elif type(beam_id) == str:
-        beam = beam_id
-    elif beam_id is None:
-        beam = atl_granules.beam_int_to_name(df.iloc[0]["beam"])
+    if ylim is None:
+        # If we haven't specified y-limits, just use whatever matplot lib automatically selects but pad the top by
+        # an extra 10%.
+        ax.set_ylim(ax.get_ylim()[0], ax.get_ylim()[1] * 1.1)
     else:
-        raise ValueError("Unknown Beam ID {}".format(repr(beam_id)))
+        # Otherwise, use whatever we picked.
+        ax.set_ylim(ylim[0], ylim[1])
 
-    # print(df)
-    # print(df.columns)
+    fig.tight_layout()
 
-    # When we print the dataframe, include all the columns.
-    pandas.set_option('display.max_columns', None)
+    fig.savefig(outfile)
+    print(os.path.basename(outfile), "written.")
 
-    if granule_id1_int:
-        # Subset dataframe by granule_id1 and beam
-        df = df[(df["granule_id1"] == granule_id1_int)]
-
-    if beam_id:
-        beam_number = atl_granules.beam_name_to_int(beam_id)
-        df = df[df["beam"] == beam_number]
-
-    # parray = retrieve_land_photons.get_photon_data(granule_id, beam=beam)
-    # foobar
-    # print(df)
-    # print(df.columns)
-    # print(df['beam'].unique())
-
-    # Type codes:
-    # -1 : uncoded
-    #  0 : noise
-    #  1 : ground
-    #  2 : canopy
-    #  3 : top of canopy
-    #  4 : ocean surface (added after-the-fact, kinda cheating for now)
-    colors={-1:"lightgrey", 0:"lightgrey", 1:"brown", 2:"mediumseagreen", 3:"green", 4:"dodgerblue"}
-
-    labels = {-1: None, 0:"Noise", 1:"Land / Seafloor", 2:"Canopy", 3:"Canopy Top", 4: "Sea Surface"}
-
-    # parray_sub =
-    # N = 1
-    # idxs = numpy.arange(0,len(dist_x_km),N)
-
-    # print("dist_x:", df['dist_x'])
-    # print("dist_x.min:", df['dist_x'].min())
-
-    # dist_x_km = df["dist_x"] / 1e3
-
-    # print(dist_x_km.min())
-
-    if bbox != None:
-        lats = df["latitude"]
-        lons = df["longitude"]
-        xmin, ymin, xmax, ymax = bbox
-
-        subset_mask = (lons >= xmin) & (lons <= xmax) & (lats >= ymin) & (lats <= ymax)
-        df = df[subset_mask]
-        # dist_x_km = dist_x_km[subset_mask]
-    # start=1500
-    # end=1680
-    # subset = (dist_x_km >= start) & (dist_x_km <end)
-
-    # print(df)
-    # print(df.columns)
-
-    dist_x_km = (df["dist_x"] - df["dist_x"].min())/1e3
-
-    # print(dist_x_km.min())
-
-    # print(df['dist_x'].min())
-    # foobar
-
-    # FOR THIS GREAT_BARRIER_REEF CLOUD, change some of the photon classifications from canopy-->noise, and ground--ocean
-    # Change the ocean-surface "ground" photons to "ocean surface"
-    ground_to_ocean_surface_km_cutoff = 46.5
-    slope_target = 0.36
-    buffer_size = 0.50
-    sea_surface = (dist_x_km - ground_to_ocean_surface_km_cutoff) * slope_target / (dist_x_km.max() - ground_to_ocean_surface_km_cutoff)
-
-    # If we haven't yet reclassified the photons, do so here.
-    if 'class_code_rc' not in list(df.columns) or overwrite:
-        # Create a column for reclassified photon codes. Keep the originals as-is.
-        df['class_code_rc'] = df['class_code'].copy()
-
-        # Canopy Photons outside of SS +- buffer --> noise
-        #  Only over the ocean
-        # Classified as canopy
-        # Outside of buffer zone.
-        # Turn into noise
-        df.loc[(dist_x_km >= ground_to_ocean_surface_km_cutoff) & \
-                df['class_code_rc'].between(2,3, inclusive='both') & \
-               ((df[surface_field] < (sea_surface-buffer_size)) | (df[surface_field] > (sea_surface+buffer_size))),
-                   "class_code_rc"] = 0
+    plt.close(fig)
+    return
 
 
-        # Canopy inside the buffer zone: turn into sea-surface.
-        # Only over the ocean
-        # Classified as canopy
-        # Inside the buffer zone
-        # Turn into sea-surface
-        df.loc[(dist_x_km >= ground_to_ocean_surface_km_cutoff) & \
-                df['class_code_rc'].between(2,3, inclusive='both') & \
-                df[surface_field].between((sea_surface-buffer_size), (sea_surface+buffer_size), inclusive="both"),
-                   "class_code_rc"] = 4
+def calculate_distances(gdf, unit="km", x="x", y="y"):
+    """Given a geopandas GeoDataFrame, calculate the distance from the first point to each point in the GeoDataFrame."""
 
-        # Now for the hard part. Go through by increment (0.1 km?).
-        # For each increment:
-        #     If no sea-surface within that increment, then color ground within the buffer --> sea-surface.
-        STEP_SIZE_KM = 0.05
-        increment_boundaries = numpy.arange(ground_to_ocean_surface_km_cutoff, dist_x_km.max(), STEP_SIZE_KM)
-        ss_photons = (df['class_code_rc'] == 4)
-        gr_photons = (df['class_code_rc'] == 1)
+    utm_e, utm_n, zone, zone_letter = utm.from_latlon(gdf[y].to_numpy(), gdf[x].to_numpy())
+    print("UTM", zone, zone_letter)
 
-        # Create a "change_to_ss" field to help skip this (time-consuming) step in future calculations.
-        # if "change_to_ss" not in list(df.columns)):
-            # df["change_to_ss"] = False
+    e1 = utm_e[0]
+    n1 = utm_n[0]
+    # Gives UTM coordinates in meters.
+    distance_m = numpy.sqrt(numpy.power(utm_e - e1, 2) + numpy.power(utm_n - n1, 2))
+    distance_m = distance_m - distance_m.min()
+    # print(utm_e - e1, utm_n - n1, distance_m)
 
-        for i,b_start in enumerate(increment_boundaries):
-            # Show the progress
-            progress_bar.ProgressBar(i,len(increment_boundaries), suffix="{0}/{1}".format(i,len(increment_boundaries)))
+    # assert numpy.all(distance_m >= 0) and distance_m.min() == 0
+    # assert numpy.all(sorted(distance_m) == distance_m)
 
-            b_end = b_start + STEP_SIZE_KM
-            photons_in_step = dist_x_km.between(b_start, b_end, inclusive="left")
-            if photons_in_step.sum() == 0:
-                continue
+    unit = unit.strip().lower()
 
-            if (photons_in_step & ss_photons).sum() <= 1:
-                # If one photon or less is classified as "sea-surface", then change all ground photons (within or above the buffer zone) in that segment to sea-surface.
-                subset_photons = photons_in_step & gr_photons & (df[surface_field] >= (sea_surface-(buffer_size*1.1)))
-                # df.loc[subset_photons, 'change_to_ss'] = True
-                df.loc[subset_photons, 'class_code_rc'] = 4
-
-                gr_photons_step = (photons_in_step & (df['class_code_rc'] == 1))
-                # Sometimes there's a straggling noise ground photon or few, just outside the buffer. Get them too.
-                if gr_photons_step.sum() <= 3:
-                    df.loc[gr_photons_step, 'class_code_rc'] = 4
-
-        progress_bar.ProgressBar(len(increment_boundaries),len(increment_boundaries), suffix="{0}/{1}".format(len(increment_boundaries),len(increment_boundaries)))
-
-        base, ext = os.path.splitext(photon_h5)
-        if base[-3:] != "_rc":
-            fname_out = base + "_rc" + ext
-        else:
-            fname_out = photon_h5
-        df.to_hdf(fname_out, "icesat2")
-        print(fname_out, "written.")
-
-    # Fill missing gaps in sea surface
-    df.loc[(dist_x_km.between(163, 175) | dist_x_km.between(220, 228) | dist_x_km.between(258.5, 297)) &
-           df[surface_field].between(sea_surface - buffer_size, sea_surface + buffer_size),
-           "class_code_rc"] = 4
-    # Fill missing reef floor ground photons! Important stuff!
-    def line(xvals, x1, x2, y1, y2):
-        m = (y2 - y1)/(x2 - x1)
-        b = y1 - (m*x1)
-        return (xvals * m) + b
-
-    if fix_reef:
-
-        h = df[surface_field]
-        # Hand-pick out some reefs in the bounding box (very track-specific here, only 2020.04.20, RGT 375, Laser 1R
-
-        # Reef 1, p1
-        x1, x2, y1, y2 = (233.65, 233.8, -0.8, -4.0)
-        buffer = 0.4
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-        # Reef 1, p2
-        x1, x2, y1, y2 = (233.75, 233.8, -1, -3)
-        buffer = 0.5
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-
-        # Reef 2, p0
-        x1, x2, y1, y2 = (237.05, 237.15, -5.4, -2.5)
-        buffer = 0.5
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-        # Reef 2, p1
-        x1, x2, y1, y2 = (237.1, 237.8, -4, -1.6)
-        buffer = 0.5
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-        # Reef 2, p2
-        x1, x2, y1, y2 = (237.8, 238.1, -1.6, -3.4)
-        buffer = 0.65
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-        # Reef 2, p3
-        x1, x2, y1, y2 = (238.1, 238.25, -2.7, -2.4)
-        buffer = 0.5
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-        # Reef 2, p4
-        x1, x2, y1, y2 = (238.25, 238.4, -2.2, -0.5)
-        buffer = 0.5
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-        # Reef 2, p5
-        x1, x2, y1, y2 = (239.06, 239.15, -2.3, -10)
-        buffer = 0.9
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-        # Reef 2, p6
-        x1, x2, y1, y2 = (239.15, 239.2, -10, -11)
-        buffer = 0.7
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-        # Reef 2, p6
-        x1, x2, y1, y2 = (239.2, 239.3, -10.3, -10.1)
-        buffer = 0.7
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-        # Reef 2, p7
-        x1, x2, y1, y2 = (239.3, 239.5, -11.5, -8.5)
-        buffer = 0.7
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-        # Reef 2, p8
-        x1, x2, y1, y2 = (239.45, 239.7, -9, -13)
-        buffer = 0.7
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-        # Reef 2, p9
-        x1, x2, y1, y2 = (239.7, 239.8, -13, -12.8)
-        buffer = 0.6
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-        # Reef 2, p10
-        x1, x2, y1, y2 = (239.8, 239.9, -12.5, -8.5)
-        buffer = 0.7
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-        # Reef 2, p11
-        x1, x2, y1, y2 = (239.9, 240.0, -10.5, -9.3)
-        buffer = 0.7
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-        # Reef 2, p12
-        x1, x2, y1, y2 = (240.0, 240.07, -9.5, -10.6)
-        buffer = 0.7
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-        # Reef 2, p13
-        x1, x2, y1, y2 = (240.07, 240.18, -10.4, -1.4)
-        buffer = 0.8
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-
-        # Reef 2, water surface
-        x1, x2 = (238.2, 239.15)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(sea_surface - 0.5, sea_surface + 0.5)), 'class_code_rc'] = 4
-
-        # Reef 3, p1
-        x1, x2, y1, y2 = (241.4, 241.45, -5.5, -1.4)
-        buffer = 0.8
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-        # Reef 3, p2
-        x1, x2, y1, y2 = (241.4, 241.45, -5.5, -1.4)
-        buffer = 0.8
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-        # Reef 3, p3
-        x1, x2, y1, y2 = (241.4, 241.45, -5.5, -1.4)
-        buffer = 0.8
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-        # Reef 3, p4
-        x1, x2, y1, y2 = (241.45, 241.55, -2, -1.2)
-        buffer = 0.8
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer)), 'class_code_rc'] = 1
-        # Reef 3, p5
-        x1, x2, y1, y2 = (241.55, 242.1, -0.5, -0.3)
-        buffer = 0.4
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-
-        # Reef 4, p1
-        x1, x2, y1, y2 = (243.55, 244, -1, -0.5)
-        buffer = 0.4
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-
-        # Reef 5, bit
-        x1, x2, y1, y2 = (244.88, 245.01, -3, -3)
-        buffer = 0.7
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-
-        # Reef 9, p1
-        x1, x2, y1, y2 = (259.17, 259.21, -1.2, -2.6)
-        buffer = 0.7
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-        # Reef 9, p2
-        x1, x2, y1, y2 = (259.2, 259.55, -2.5, -0.3)
-        buffer = 0.7
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-        # Reef 9, p3
-        x1, x2, y1, y2 = (259.6, 260.5, -0.7, -0.5)
-        buffer = 0.45
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-        # Reef 9, p4
-        x1, x2, y1, y2 = (260.5, 261.2, -0.5, -0.8)
-        buffer = 0.5
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-        # Reef 9, p5
-        x1, x2, y1, y2 = (261.2, 262.0, -1, -1)
-        buffer = 0.9
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-        # Reef 9, p6
-        x1, x2, y1, y2 = (262.0, 262.85, -0.85, -0.9)
-        buffer = 0.6
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-        # Reef 9, p7
-        x1, x2, y1, y2 = (262.6, 262.85, -1.5, -3.5)
-        buffer = 0.7
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-        # Reef 9, p8
-        x1, x2, y1, y2 = (262.75, 263.27, -1.5, -10)
-        buffer = 1.0
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-        # Reef 9, p9
-        x1, x2, y1, y2 = (263.3, 263.41, -9.9, -10)
-        buffer = 0.8
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-
-        # Reef 10, p1
-        x1, x2, y1, y2 = (264.93, 265.1, -13.5, -10)
-        buffer = 1.0
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-        # Reef 10, p2
-        x1, x2, y1, y2 = (265.05, 265.2, -10.5, -3)
-        buffer = 1.0
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-        # Reef 10, p3
-        x1, x2, y1, y2 = (265.37, 265.88, -0.6, -1.1)
-        buffer = 0.75
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-        # Reef 10, p4
-        x1, x2, y1, y2 = (265.85, 266.1, -1.8, -0.5)
-        buffer = 0.75
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-        # Reef 10, p5
-        x1, x2, y1, y2 = (266.1, 266.2, -0.7, -1.8)
-        buffer = 0.75
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-        # Reef 10, p6
-        x1, x2, y1, y2 = (266.2, 266.3, -1.5, -0.5)
-        buffer = 0.8
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-        # Reef 10, p7
-        x1, x2, y1, y2 = (266.3, 266.6, -0.7, -0.75)
-        buffer = 0.6
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-        # Reef 10, p8
-        x1, x2, y1, y2 = (266.6, 266.8, -0.75, -3.5)
-        buffer = 0.6
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-        # Reef 10, p9
-        x1, x2, y1, y2 = (266.75, 266.85, -2.2, -2.2)
-        buffer = 0.75
-        line1 = line(dist_x_km, x1, x2, y1, y2)
-        df.loc[(dist_x_km.between(x1, x2) & h.between(line1-buffer, line1+buffer) & df["class_code_rc"].between(-1,0,inclusive="both")), 'class_code_rc'] = 1
-
-
-    # df.loc[(dist_x_km >= ground_to_ocean_surface_km_cutoff) & (df[surface_field] > (sea_surface-buffer_size)) & (df[surface_field] < (sea_surface+buffer_size)) & df['class_code'].between(2,3, inclusive='both'), "class_code",] = 4
-    # Change the remaining veg photons to noise
-    # canopy_to_noise_km_cutoff = 170.2
-    # df.loc[(dist_x_km >= canopy_to_noise_km_cutoff) & df['class_code'].between(2, 3, inclusive='both'), "class_code"] = 0
-    # On the inset, pick up some of the bathy surface returns that aren't captured here.
-    # df.loc[dist_x_km.between(356, 356.2) & df[surface_field].between(-4, -1), "class_code"] = 1
-    # df.loc[dist_x_km.between(359.35, 360.7) & df[surface_field].between(-5,-1.1), "class_code"] = 1
-
-    # Define the plot
-    DPI = 500
-
-    fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(12.0,6.5), dpi=DPI) #, wspace=1, hspace=1)
-    fig.subplots_adjust(top=0.99, bottom=0.1, wspace=0.1, hspace=0.2)
-    ax1, ax2 = axes
-    # ASPECT = 2.0
-    # ax1.set_aspect(ASPECT)
-    # ax2.set_aspect(ASPECT*0.25)
-    # fig = plt.Figure(figsize=(10.0,6.5), dpi=DPI)
-    # gs1 = matplotlib.gridspec.GridSpec(2, 1)
-    # ax1 = fig.add_subplot(gs1[0])
-    # ax2 = fig.add_subplot(gs1[1])
-
-    # ax1 = fig.add_subplot(2,1,1)
-    # ax2 = fig.add_subplot(2,1,2)
-
-    class_id_list = [-1,0,1,2,3,4] # sorted(list(colors.keys()))[1:]
-    for class_id in class_id_list:
-        color = colors[class_id]
-        label = labels[class_id]
-
-        if class_id == 1:
-            zorder=2
-        else:
-            zorder=1
-
-        if class_id in [-1,0]:
-            markersize=1
-            marker = '.'
-        else:
-            markersize=1
-            marker = "o"
-
-
-        color_mask = (df["class_code_rc"] == class_id)
-
-        # plt.scatter(dist_x_km[subset] - start, df1l['height'][subset], c=df1l["class_flag"][subset].map(colors), marker=".", s=1)
-        # plt.scatter(dist_x_km, parray['height'], c=numpy.vectorize(colors.__getitem__)(parray["class_code"]), marker="pixel") #, s=0.25)
-        ax1.scatter(dist_x_km[color_mask], df[surface_field][color_mask], c=color, label=label, marker=marker, zorder=zorder, s=markersize, linewidths=0)
-        ax2.scatter(dist_x_km[color_mask], df[surface_field][color_mask], c=color, label=label, marker=marker, zorder=zorder, s=markersize, linewidths=0)
-
-    lgnd = ax1.legend(loc="upper right", fontsize="small", labelspacing=0.5)
-
-    #change the marker size manually for both lines
-    legend_markersize = 20
-    for color_id in range(len(class_id_list[1:])):
-        lgnd.legendHandles[color_id]._sizes = [legend_markersize]
-    # lgnd.legendHandles[1]._sizes = [legend_markersize]
-    # lgnd.legendHandles[2]._sizes = [legend_markersize]
-    # lgnd.legendHandles[3]._sizes = [legend_markersize]
-    # lgnd.legendHandles[4]._sizes = [legend_markersize]
-
-    subset_box = ((231.2, 268.5), (-14, 3))
-
-    # Add the inset rectangle
-    rect = matplotlib.patches.Rectangle((subset_box[0][0], subset_box[1][0]),
-                                        subset_box[0][1] - subset_box[0][0],
-                                        subset_box[1][1] - subset_box[1][0],
-                                        linewidth=1,
-                                        edgecolor="blue",
-                                        facecolor='none')
-    ax1.add_patch(rect)
-
-    ax1.set_xlabel("Distance (km)")
-    ax1.set_ylabel("{} Elevation (m)".format({"h_ellipsoid": "WGS84", "h_geoid": "Geoid", "h_meantide":"Mean Tide"}[surface_field]))
-    ax2.set_xlabel(ax1.get_xlabel())
-    ax2.set_ylabel(ax1.get_ylabel())
-    date_str = str(df['granule_id1'].iloc[0])[0:8]
-    rgt_str = int(str(df['granule_id2'].iloc[0]).zfill(13)[0:4])
-    # ax = plt.gca()
-    plt.text(0.25,0.98,"Great Barrier Reef, Australia\n{0}.{1}.{2}\nRGT #{3}\nLaser {4}".format(
-        date_str[0:4], date_str[4:6], date_str[6:8],
-        rgt_str,
-        beam[-2:].upper()),
-        ha="left", va="top", fontsize="large", transform=ax1.transAxes)
-    ax1.text(0.02,0.02,"South", ha="left", va="bottom", fontsize="large", transform=ax1.transAxes)
-    ax1.text(0.98,0.02,"North", ha="right", va="bottom", fontsize="large", transform=ax1.transAxes)
-    ax1.set_ylim((-15,27))
-
-    ax2.set_xlim(subset_box[0])
-    ax2.set_ylim(subset_box[1])
-
-    ax2.xaxis.grid(True, which='major', lw=0.25, zorder=-1)
-    ax2.xaxis.grid(True, which='minor', lw=0.1, zorder=-1)
-    ax2.yaxis.grid(True, which='major', lw=0.25, zorder=-1)
-    ax2.yaxis.grid(True, which='minor', lw=0.1, zorder=-1)
-    # ax2.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
-    # ax2.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
-    # ax2.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
-    # ax2.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
-    # ax2.set_xticklabels(ax2.get_xticks(), rotation=90)
-
-    # fig.tight_layout()
-
-    # print(parray)
-    # print(parray.dtype)
-    # print(parray.shape)
-
-    figname = "../plots/GBR2_{}_{}_{}.png".format(df['granule_id1'].iloc[0], df['granule_id2'].iloc[0], beam)
-    plt.savefig(figname) #, dpi=DPI)
-    print(figname, "written.")
-
-    return df
+    if unit == "km":
+        return distance_m / 1000
+    elif unit == "m":
+        return distance_m
+    elif unit == "mi":
+        return distance_m / 1609.344
+    else:
+        raise ValueError(f"Unknown unit {unit}.")
 
 
 if __name__ == "__main__":
-    # df = plot_photon_data("../data/great_barrier_reef_2/gbr2_photons.h5", 20200420033024, 'gt1r', bbox=[142, -14.9, 146, -12.0])
-    # df = plot_photon_data("../data/great_barrier_reef_2/gbr2_photons_20200420033024.h5", bbox=[142, -14.9, 146, -12.0])
-    # df = plot_photon_data("../data/great_barrier_reef_2/gbr2_photons_20200420033024_gt1r_rc.h5", overwrite=False, fix_reef = True) #, bbox=[142, -14.9, 146, -12.0])
-    # plot_photon_data("ATL08_20200901235954_10480807_004_01.h5", 'gt2l', bbox=(-79.03, 26.3, -76.91, 27.05), surface="mean_tide")
-    # plot_photon_data("ATL08_20200901235954_10480807_004_01.h5", 'gt1l', bbox=(-79.03,25.82,-76.91,26.95))
 
-    df = plot_photon_data("../data/temp/ne_dems_copernicus/NE_photons.h5", granule_id1_int=20200601153829, beam_id=0, bbox=[-71.1, 41.4, -70.7, 42.8])
+    plot_photon_data("/home/mmacferrin/.ivert/jobs/elliot.lim_202409260002/ncei1_westCoast_CRM_2024v1_photons_14.blosc2",
+                     "/home/mmacferrin/.ivert/jobs/elliot.lim_202409260002/ncei1_westCoast_CRM_2024v1_photons_14_sub1.png",
+                     unique_laser_id=0,
+                     bbox = [-124.5, -124, 40.73, 40.92],
+                     # bbox = [-124.5, -124, 40.8013, 40.815],
+                     ylim=(-40, 160)
+                     )
+

@@ -23,7 +23,7 @@ else:
 
 def write_photon_tiles_to_file(outfile: str):
     """Write all photon tiles in an S3 bucket to a file."""
-    ivert_config = configfile.config()
+    ivert_config = configfile.Config()
     if ivert_config.is_aws:
         s3m = s3.S3Manager()
         ptile_prefix = ivert_config.s3_photon_tiles_directory_prefix

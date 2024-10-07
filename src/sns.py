@@ -8,7 +8,7 @@ import typing
 import utils.configfile
 import utils.is_email
 
-ivert_config = utils.configfile.config()
+ivert_config = utils.configfile.Config()
 
 
 def send_sns_message(subject: str,

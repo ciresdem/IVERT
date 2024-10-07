@@ -33,7 +33,7 @@ import sys
 import utils.traverse_directory
 import utils.configfile
 
-my_config = utils.configfile.config()
+my_config = utils.configfile.Config()
 
 # Vertical datum dictionary -- for converting vertical datums to their corresponding EPSG numbers
 vdd_lookup_dict = {

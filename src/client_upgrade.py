@@ -12,9 +12,9 @@ else:
 
 def upgrade():
     """Upgrade the IVERT client."""
-    ivert_config = configfile.config()
+    ivert_config = configfile.Config()
 
-    # Run the upgrade, using the pip command specified in the config file.
+    # Run the upgrade, using the pip command specified in the Config file.
     args = shlex.split(ivert_config.ivert_pip_upgrade_command)
     subprocess.run(args)
 

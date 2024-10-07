@@ -15,7 +15,7 @@ from osgeo import gdal
 import import_parent_dir; import_parent_dir.import_src_dir_via_pythonpath()
 ####################################3
 import utils.configfile
-my_config = utils.configfile.config()
+my_config = utils.configfile.Config()
 import icesat2.plot_validation_results
 
 def add_lat_lons(df):

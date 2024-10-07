@@ -58,7 +58,7 @@ import utils.loggerproc
 gdal.UseExceptions()
 osr.UseExceptions()
 
-ivert_config = utils.configfile.config()
+ivert_config = utils.configfile.Config()
 EMPTY_VAL = ivert_config.dem_default_ndv
 
 

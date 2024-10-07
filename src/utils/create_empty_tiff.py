@@ -19,7 +19,7 @@ from osgeo import gdal
 
 def create_empty_tiff():
     """Create an empty one-cell TIFF file for IVERT to use for testing."""
-    ivert_config = configfile.config()
+    ivert_config = configfile.Config()
     tiff_location = ivert_config.empty_tiff
 
     if not os.path.exists(tiff_location):

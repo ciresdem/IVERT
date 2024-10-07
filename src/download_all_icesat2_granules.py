@@ -29,7 +29,7 @@ warnings.filterwarnings("ignore", message=".*pandas.Int64Index is deprecated*")
 import import_parent_dir; import_parent_dir.import_src_dir_via_pythonpath()
 ####################################3
 import utils.configfile
-my_config = utils.configfile.config()
+my_config = utils.configfile.Config()
 import icesat2.nsidc_download as nsidc_download
 import icesat2.classify_icesat2_photons as classify_icesat2_photons
 import icesat2.icesat2_photon_database as icesat2_photon_database

@@ -16,7 +16,7 @@ import sys
 
 import atl_granules
 import utils.configfile
-my_config = utils.configfile.config()
+my_config = utils.configfile.Config()
 
 # TODO: Implement this in parallel.
 

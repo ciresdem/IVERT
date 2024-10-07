@@ -31,7 +31,7 @@ def run_test_command(args: argparse.Namespace,
                      wait_time_s: int = 5) -> None:
     """Run an end-to-end test job of the IVERT system, without having it actually process any data."""
 
-    ivert_config = configfile.config()
+    ivert_config = configfile.Config()
     empty_tiff = ivert_config.empty_tiff
 
     # if the empty .tif doesn't already exist, just create it.

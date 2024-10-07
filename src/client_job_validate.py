@@ -47,9 +47,9 @@ def run_validate_command(args: argparse.Namespace) -> None:
 
     global ivert_config
     if ivert_config is None:
-        ivert_config = configfile.config()
+        ivert_config = configfile.Config()
 
-    # Make a copy we can modify to generate a config file for the job.
+    # Make a copy we can modify to generate a Config file for the job.
     args_to_send = argparse.Namespace(**vars(args))
 
     # Run through the files, populate any glob patterns.
