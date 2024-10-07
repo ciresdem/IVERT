@@ -169,7 +169,13 @@ class config:
         except ValueError:
             pass
 
-        # Otherwise, it's probably just a string value, set it as-is.
+        # Last, if it's a string and it's "None" (and it wasn't caught up top by ast.literal_eval()), then make it None.
+        # This seems to happen sometimes when it's installed as a pip package.
+        if value.strip() == "None":
+            setattr(self, key, None)
+            return
+
+        # Otherwise, it's probably just a regular string value, set it as-is.
         setattr(self, key, value)
         return
 
