@@ -316,6 +316,8 @@ class Config:
         # Make sure all these are defined in here. They may be assigned to None but they should exist. This is
         # a sanity check in case we changed the bucket variables names in the configfile.
         try:
+            print(self._configfile)
+
             assert hasattr(self, "s3_bucket_import_untrusted")
             assert hasattr(self, "s3_bucket_export_client")
             assert hasattr(self, "s3_export_client_endpoint_url")
