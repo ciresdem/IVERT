@@ -32,10 +32,18 @@ def fetch_min_client_from_server(ivert_config=None):
         endpoint_url = str(ivert_config.s3_export_client_endpoint_url)
         bucket_name = str(ivert_config.s3_bucket_export_client)
 
+    print("use_export_alt_bucket:", ivert_config.use_export_alt_bucket)
+    print("s3_bucket_export", bucket_name)
+    print("s3_ivert_jobs_database_client_key", jobs_db_s3_key)
+    print("s3_export_client_endpoint_url", endpoint_url)
+    print("aws_profile_name", profile_name)
+
     # Fetch the version from the server database. Not using s3.py to avoid circular imports.
     if endpoint_url:
+        print("Got here 1")
         client = boto3.Session(profile_name=profile_name).client('s3', endpoint_url=endpoint_url)
     else:
+        print("Got here 2")
         client = boto3.Session(profile_name=profile_name).client('s3')
 
     if ivert_config.ivert_export_client_use_aws_tags_instead_of_metadata:
