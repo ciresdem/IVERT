@@ -39,6 +39,10 @@ def fetch_min_client_from_server(ivert_config=None):
     print("Is endpoint_url None?", endpoint_url is None)
     print("aws_profile_name:", profile_name)
 
+    print("=== ALL CONFIG VARIABLES ===")
+    for k, v in vars(ivert_config).items():
+        print(f"{k}: {v} (type '{type(v)}')")
+
     # Fetch the version from the server database. Not using s3.py to avoid circular imports.
     if endpoint_url is None:
         print("Got here 2")
