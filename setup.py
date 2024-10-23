@@ -69,7 +69,8 @@ setuptools.setup(
         'dateparser',
         'tabulate',
         'psutil',
-        'packaging'
+        'packaging',
+        'gdal'
     ],
     entry_points = {
         'console_scripts': [
