@@ -68,7 +68,8 @@ setuptools.setup(
         'pandas', # for reading the IVERT database tables.
         'dateparser',
         'tabulate',
-        'psutil'
+        'psutil',
+        'packaging'
     ],
     entry_points = {
         'console_scripts': [
