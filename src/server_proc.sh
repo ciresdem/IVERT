@@ -16,7 +16,7 @@ do
       ;;
     l)
       # List the running server processes
-      pgrep -a python3 | grep -e maintain_server_manager\.py -e ivert_server_job_manager\.py
+      pgrep -a python3 | grep -e server_maintain_manager\.py -e server_job_manager\.py
       exit 0
       ;;
     r)
