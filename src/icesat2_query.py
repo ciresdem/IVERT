@@ -16,14 +16,14 @@ import utils.pickle_blosc
 
 
 def get_photon_dataframe(polygon_bbox_or_dem_fname: typing.Union[shapely.geometry, list, tuple, str],
-                         dem_horz_reference_frame: typing.Union[str, None, pyproj.CRS] = None,
-                         dem_vert_reference_frame: typing.Union[str, None, pyproj.CRS] = None,
+                         dem_horz_reference_frame: typing.Union[str, None, pyproj.CRS, int] = None,
+                         dem_vert_reference_frame: typing.Union[str, None, pyproj.CRS, int] = None,
                          start_date: str = "a year ago midnight",
                          end_date: str = "midnight today",
                          other_columns: typing.Union[dict, None] = None,
                          classify_bathymetry: bool = True,
                          classify_buildings: bool = True,
-                         classifications_to_keep: typing.Union[list, tuple, str, set, numpy.ndarray] = (1, 2, 3, 4),
+                         classifications_to_keep: typing.Union[list, tuple, str, set, numpy.ndarray] = (1, 2, 3, 4, 7),
                          conf_levels_to_keep: typing.Union[list, tuple, str, set, numpy.ndarray] = "4",
                          ) -> typing.Union[pandas.DataFrame, geopandas.GeoDataFrame, None]:
     """Return a dataframe of all classified photons within the polygon/bounding-box and timeframe, from NSIDC data.
@@ -94,6 +94,11 @@ def get_photon_dataframe(polygon_bbox_or_dem_fname: typing.Union[shapely.geometr
     dem_srs_string = get_dem_srs_string(horz_proj, vert_proj)
     # ICESat-2, by default using dlim, comes in WGS84 lat-lon coordinates and EGM2008 vertical reference frame.
     is2_srs_string = "EPSG:4326+3855"
+
+    print(f"ds = dlim.IceSat2Fetcher(fn={repr(fetches_module)}, src_region={repr(region)}, src_srs={repr(is2_srs_string)}, "
+          f"dst_srs={repr(dem_srs_string)}, classes={repr(classes_str)}, confidence_levels={repr(conf_str)}, "
+          f"columns={repr(other_columns if other_columns else {})}, classify_bathymetry={repr(classify_bathymetry)}, cshelph={repr(classify_bathymetry)}, "
+          f"classify_buildings={classify_buildings})")
 
     # Initialize the icesat2 query.
     ds = dlim.IceSat2Fetcher(fn=fetches_module,
@@ -383,7 +388,7 @@ def get_dem_reference_frame_from_file(dem_fname: str, vert_horz_or_both: str = "
     return get_dem_reference_frame_from_user_input(dem_ds_str, vert_horz_or_both)
 
 
-def get_dem_reference_frame_from_user_input(crs: typing.Union[pyproj.CRS, rasterio.crs.CRS, str, None],
+def get_dem_reference_frame_from_user_input(crs: typing.Union[pyproj.CRS, rasterio.crs.CRS, str, int, None],
                                             vert_horz_or_both: str = "both") -> typing.Union[pyproj.CRS, tuple, None]:
     """Get the horizontal reference frame from an input string.
 
