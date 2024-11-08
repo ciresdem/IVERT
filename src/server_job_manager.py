@@ -555,8 +555,14 @@ class IvertJob:
                                               .replace('[command]', self.command) \
                                               .replace('[username]', self.username) \
                                               .replace('[job_id]', self.job_id)
-        self.export_prefix = self.ivert_config.s3_export_server_prefix_base + \
-                             ("" if self.ivert_config.s3_export_server_prefix_base[-1] == "/" else "/") + \
+
+        if self.ivert_config.use_export_alt_bucket:
+            export_prefix_base = self.ivert_config.s3_export_alt_prefix_base
+        else:
+            export_prefix_base = self.ivert_config.s3_export_server_prefix_base
+
+        self.export_prefix = export_prefix_base + \
+                             ("" if export_prefix_base[-1] == "/" else "/") + \
                              (self.ivert_config.s3_ivert_job_subdirs_template
                                   .replace('[command]', self.command)
                                   .replace('[username]', self.username)
