@@ -424,17 +424,21 @@ def reset_results_indexes_after_merge(sub_results_df: pandas.DataFrame,
                                       sub_dem_fname: str,
                                       parent_dem_fname: str) -> pandas.DataFrame:
     """DEM results dataframes are indexed by (i, j).  Reset the index after merging."""
-    if "i" not in sub_results_df.columns or "j" not in sub_results_df.columns:
-        raise ValueError("sub_results_df must have columns 'i' and 'j'")
+    if ("i" not in sub_results_df.columns and "i" not in sub_results_df.index.names) or \
+            ("j" not in sub_results_df.columns and "j" not in sub_results_df.index.names):
+        raise ValueError("sub_results_df must have columns 'i' and 'j' in columns or index.")
 
     sub_geotransform = gdal.Open(sub_dem_fname).GetGeoTransform()
     parent_geotransform = gdal.Open(parent_dem_fname).GetGeoTransform()
 
     x_step = sub_geotransform[1]
     y_step = sub_geotransform[5]
+
     # The two DEMs should have the exact same x- and y-steps (resolutions).
-    assert x_step == parent_geotransform[1]
-    assert y_step == parent_geotransform[5]
+    if x_step != parent_geotransform[1] or y_step != parent_geotransform[5]:
+        raise ValueError(f"DEMs {os.path.basename(sub_dem_fname)} and {os.path.basename(parent_dem_fname)}"
+                         " have different x- or y-resolutions. Cannot combine results.")
+
 
     x_offset = int((sub_geotransform[0] - parent_geotransform[0]) / x_step)
     y_offset = int((sub_geotransform[3] - parent_geotransform[3]) / y_step)
