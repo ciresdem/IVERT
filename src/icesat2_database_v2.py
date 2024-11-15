@@ -1,6 +1,7 @@
 # Functionality for reading ICESat-2 data and saving it in a tiled database.
 
 import datetime
+import dateparser
 import geopandas
 import os
 import sqlite3
@@ -58,15 +59,25 @@ class IS2Database:
         -------
         geopandas.GeoDataFrame containing the photon tiles from the database that fix the bounding box and date range.
         """
-        if self.gdf is None or force_read_again or (tuple(bbox) != tuple(self.last_gdf_bbox)):
-            self.gdf = self.read_database_file(bbox=bbox)
+        if date_range is not None:
+            date_range = self.convert_date_range(date_range)
+
+        if self.gdf is None \
+                or force_read_again \
+                or (bbox is not None and (tuple(bbox) != tuple(self.last_gdf_bbox))) \
+                or (date_range is not None and (tuple(date_range) != self.last_gdf_date_range)):
+            self.gdf = self.read_database_file(bbox=bbox, date_range=date_range)
 
         return self.gdf
 
     def read_database_file(self,
                            bbox: typing.Union[list, tuple, None] = None,
                            date_range: typing.Union[list, tuple, None] = None):
-        """Read the database into a GeoDataFrame."""
+        """Read the database into a GeoDataFrame.
+
+        Subset by bounding box and date range.
+
+        Return the subset of the database read off of disk."""
         if os.path.exists(self.db_fname):
             gdf_subset = geopandas.read_file(self.db_fname, bbox=bbox)
 
@@ -79,6 +90,9 @@ class IS2Database:
             self.last_gdf_bbox = tuple(bbox)
 
             return gdf_subset
+
+        else:
+            return None
 
     def query_photons(self,
                       bbox: typing.Union[list, tuple, None] = None,
@@ -109,9 +123,26 @@ class IS2Database:
         if date_range is None:
             return None
         elif len(date_range) == 2:
-            return self.convert_date_to_YYYYMMDD(date_range[0]), self.convert_date_to_YYYYMMDD(date_range[1])
+            return self.convert_date_to_yyyymmdd(date_range[0]), self.convert_date_to_yyyymmdd(date_range[1])
         else:
             raise ValueError("Date range must be a list or tuple of length 2.")
 
-    def convert_date_to_YYYYMMDD(self, date: typing.Union[int, str, datetime.datetime]) -> int:
-        """Convert date to the format required by the database."""
+    def convert_date_to_yyyymmdd(self, date: typing.Union[int, str, datetime.datetime, datetime.date]) -> int:
+        """Convert date to the YYYYMMDD integer format required by the database."""
+        if isinstance(date, int):
+            # If it's an integer, make sure it's 8 digits and then return as-is.
+            if len(str(date)) != 8:
+                raise ValueError("Date must be an 8 digit integer in YYYYMMDD.")
+            return date
+        elif isinstance(date, str):
+            try:
+                # If it's a string in "YYYYMMDD" format, convert it to an int.
+                date_int = int(date)
+                return self.convert_date_to_yyyymmdd(date_int)
+            except ValueError:
+                # If it isn't a YYYYMMDD string, parse it with dateparser.
+                return int(dateparser.parse(date).strftime("%Y%m%d"))
+        elif isinstance(date, datetime.datetime) or isinstance(date, datetime.date):
+            return int(date.strftime("%Y%m%d"))
+        else:
+            raise ValueError("Date must be an int, str, datetime.datetime, or datetime.date.")

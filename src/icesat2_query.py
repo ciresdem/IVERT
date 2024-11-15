@@ -110,6 +110,8 @@ def get_photon_dataframe(polygon_bbox_or_dem_fname: typing.Union[shapely.geometr
                              columns=other_columns if other_columns else {},
                              classify_bathymetry=classify_bathymetry,
                              cshelph=classify_bathymetry,
+                             classify_water=True,
+                             reject_failed_qa=True,
                              classify_buildings=classify_buildings).initialize()
 
     # Run the icesat2 query over all files and lasers in that box.
