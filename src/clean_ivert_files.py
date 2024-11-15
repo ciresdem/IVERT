@@ -12,6 +12,7 @@ import utils.configfile
 import utils.traverse_directory
 import jobs_database
 import s3
+import ivert_jobs
 
 
 def clean_cudem_cache(ivert_config: typing.Union[utils.configfile.Config, None] = None,
@@ -30,7 +31,7 @@ def clean_cudem_cache(ivert_config: typing.Union[utils.configfile.Config, None] 
             # Check if any of the jobs are still running.
             running_jobs = [job for job in jobs_db.list_unfinished_jobs(return_rows=True) if psutil.pid_exists(job['job_pid'])]
             for running_job in running_jobs:
-                if is_pid_an_active_ivert_job(running_job['job_pid']):
+                if ivert_jobs.is_pid_an_active_ivert_job(running_job['job_pid']):
                     if verbose:
                         print(f"Skipping .cudem_cache cleanup for job {running_job['job_id']}, as it is still running.")
                     return
@@ -46,48 +47,6 @@ def clean_cudem_cache(ivert_config: typing.Union[utils.configfile.Config, None] 
     return
 
 
-def is_pid_an_active_ivert_job(pid: int) -> bool:
-    """Check if the pid is an IVERT job.
-
-    Checks whether 'ivert' is in the command (it should be in the path of our ivert conda environment) and 'python3' in the path.
-
-    Args:
-        pid (int): The pid to check.
-
-    Returns:
-        bool: True if the pid is an IVERT job, False otherwise."""
-    try:
-        proc = psutil.Process(pid)
-
-        cmd_line_0 = proc.cmdline()[0]
-        if "ivert" in cmd_line_0 and "python3" in cmd_line_0:
-            return True
-        else:
-            return False
-
-    except psutil.NoSuchProcess:
-        return False
-
-
-def are_any_ivert_jobs_running() -> bool:
-    """Check if any IVERT jobs are still running.
-
-    Returns:
-        bool: True if any IVERT jobs are still running, False otherwise."""
-    jobs_db = jobs_database.JobsDatabaseServer()
-
-    try:
-        running_jobs = [job for job in jobs_db.list_unfinished_jobs(return_rows=True)
-                        if is_pid_an_active_ivert_job(job['job_pid'])]
-    except FileNotFoundError:
-        return False
-
-    if len(running_jobs) > 0:
-        return True
-    else:
-        return False
-
-
 def fix_database_of_orphaned_jobs():
     """Fix the job status of any orphaned jobs that are no longer running on the server."""
     jobs_db = jobs_database.JobsDatabaseServer()
@@ -98,7 +57,7 @@ def fix_database_of_orphaned_jobs():
         for job in open_jobs:
             # For any jobs that are still 'unfinished' on the server but don't map to any active IVERT processes,
             # mark them as 'error'
-            if (not psutil.pid_exists(job['job_pid'])) or (not is_pid_an_active_ivert_job(job['job_pid'])):
+            if (not psutil.pid_exists(job['job_pid'])) or (not ivert_jobs.is_pid_an_active_ivert_job(job['job_pid'])):
                 jobs_db.update_job_status(job['username'], job['job_id'], 'error', upload_to_s3=False)
 
         jobs_db.upload_to_s3(only_if_newer=True)
@@ -122,7 +81,7 @@ def clean_old_jobs_dirs(ivert_config: typing.Union[utils.configfile.Config, None
         for i, job_row in jobs_df.iterrows():
             job_pid = job_row["job_pid"]
 
-            if is_pid_an_active_ivert_job(job_pid):
+            if ivert_jobs.is_pid_an_active_ivert_job(job_pid):
                 continue
 
             job_datadir = job_row["input_dir_local"]
@@ -293,7 +252,7 @@ def delete_local_photon_tiles(ivert_config: typing.Union[utils.configfile.Config
         return
 
     # If there are active running jobs, don't delete anything.
-    if are_any_ivert_jobs_running():
+    if ivert_jobs.are_any_ivert_jobs_running():
         raise RuntimeError("There are active running IVERT jobs. Won't delete photon tiles.")
 
     tilenames = [fn for fn in os.listdir(ivert_config.icesat2_photon_tiles_directory) if fn.startswith("photon_tile_")]
