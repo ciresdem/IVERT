@@ -1,7 +1,6 @@
 # Functionality for reading ICESat-2 data and saving it in a tiled database.
 
 import datetime
-import dateparser
 import geopandas
 import os
 import sqlite3
