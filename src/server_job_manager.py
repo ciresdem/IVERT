@@ -20,6 +20,8 @@ import time
 import traceback
 import typing
 
+import clean_ivert_files
+import ivert_jobs
 import jobs_database
 import quarantine_manager
 import s3
@@ -115,7 +117,9 @@ class IvertJobManager:
         # With the new egress solution the export bucket doesn't hold a copy of the database. Don't try to sync.
         # TODO: Delete this line once the new egress solution is in production, or change this to sync with the database
         #   bucket rather than the export bucket.
-        # self.sync_database_with_s3()
+        # Only try to synchronize the database if the we're using the export "alt" bucket, but not the hybrid-egress solution.
+        if self.ivert_config.use_export_alt_bucket:
+            self.sync_database_with_s3()
 
         while True:
             try:
@@ -293,6 +297,9 @@ class IvertJobManager:
                 self.running_jobs.remove(job)
                 self.running_jobs_keys.remove(job_key)
 
+                # If no other jobs are running, use this as an excuse to clean up temporary cached files on the server.
+                self.clean_up_temp_file()
+
                 if self.verbose:
                     job_name = job_key[job_key.rfind("/") + 1: job_key.rfind(".ini")]
                     print(f"Job {job_name} is finished.", flush=True)
@@ -306,6 +313,18 @@ class IvertJobManager:
                     sys.exit(0)
 
         return
+
+    def clean_up_temp_file(self, only_if_no_other_jobs: bool = True):
+        """Clean up any temporary files that may have been left around.
+
+        This is only run if there are no other running jobs at the moment."""
+        if only_if_no_other_jobs and ivert_jobs.are_any_ivert_jobs_running():
+            return
+
+        clean_ivert_files.clean_old_jobs_dirs(self.ivert_config, verbose=self.verbose)
+        clean_ivert_files.clean_cudem_cache(self.ivert_config, True, verbose=self.verbose)
+        clean_ivert_files.delete_local_photon_tiles(self.ivert_config, verbose=self.verbose)
+        clean_ivert_files.fix_database_of_orphaned_jobs()
 
     def job_stdout_file(self, ini_s3_key: str) -> str:
         """Return the location of the stdout file for the given job."""
@@ -414,11 +433,10 @@ class IvertJobManager:
 
         # Clean up the local files.
         job_obj.delete_local_job_folders()
+
         # Remove the log file if it exists.
-        # TODO: REMOVED FOR DEBUGGING PURPOSES.
-        #   WHEN READY, RE-ENABLE THESE LINES.
-        # if os.path.exists(job_obj.logfile):
-        #     os.remove(job_obj.logfile)
+        if os.path.exists(job_obj.logfile):
+            os.remove(job_obj.logfile)
 
         return
 
