@@ -788,7 +788,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
         update_stmt = """UPDATE ivert_jobs
                          SET status = ?"""
         if new_pid is not None:
-            update_stmt += ", process_pid = ?"
+            update_stmt += ", job_pid = ?"
         update_stmt += """
                          WHERE username = ? AND job_id = ?;"""
 
