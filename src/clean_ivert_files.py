@@ -47,6 +47,16 @@ def clean_cudem_cache(ivert_config: typing.Union[utils.configfile.Config, None] 
     return
 
 
+def disk_usage_pct(ivert_config: typing.Union[utils.configfile.Config, None] = None):
+    """Calculate the disk usage percentage of the ivert data directory."""
+    if ivert_config is None:
+        ivert_config = utils.configfile.Config()
+
+    data_dir = ivert_config.ivert_data_directory
+
+    return psutil.disk_usage(data_dir).percent
+
+
 def fix_database_of_orphaned_jobs():
     """Fix the job status of any orphaned jobs that are no longer running on the server."""
     jobs_db = jobs_database.JobsDatabaseServer()

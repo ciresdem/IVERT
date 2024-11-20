@@ -18,12 +18,16 @@ import typing
 # # Include the base /src/ directory of thie project, to add all the other modules.
 # import import_parent_dir; import_parent_dir.import_src_dir_via_pythonpath()
 ####################################
+import clean_ivert_files as clean_ivert_files
 import icesat2_photon_database as icesat2_photon_database
+import ivert_jobs
 import jobs_database
 import server_file_export
 import plot_validation_results as plot_validation_results
 import validate_dem as validate_dem
 import utils.query_yes_no as yes_no
+import utils.is_aws as is_aws
+import utils.configfile as configfile
 
 
 def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFrame, str],
@@ -184,7 +188,7 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
                                 .replace(";", "_")
                                 .replace(",", "_")
                                 .replace("/", "_")
-                                .replace("__", "_") + "_results")
+                                .replace("__", "_") + "_results").replace("__", "_")
 
     if ivert_job_name is None:
         ivert_jobs_db = None
@@ -369,6 +373,20 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
         elif ivert_job_name:
             ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
                                              os.path.basename(dem_path), "error", upload_to_s3=True)
+
+        # On the IVERT server, the local EC2 instance has limited disk space. If it's more than the maximnum disk usage
+        # threshold outlined in ivert_config, clean it up. BUT ONLY IF IT'S AN AWS INSTANCE AND
+        # NO OTHER JOBS BESIDES THIS ONE ARE RUNNING.
+        ivert_config = configfile.get_ivert_config()
+        if is_aws.is_aws() and \
+                clean_ivert_files.disk_usage_pct() >= ivert_config.ivert_disk_usage_max_percent and \
+                len(ivert_jobs.list_running_ivert_jobs()) <= 1:
+
+            if verbose:
+                print(f"Disk usage is over {ivert_config.ivert_disk_usage_max_percent:0.1f}%. Cleaning up...")
+            clean_ivert_files.delete_local_photon_tiles(ivert_config, verbose=verbose)
+            clean_ivert_files.clean_cudem_cache(ivert_config, False, verbose=verbose)
+
 
     # An extra newline is appreciated here just for readability's sake.
     if verbose:

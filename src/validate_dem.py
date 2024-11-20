@@ -723,7 +723,7 @@ def validate_dem(dem_name: str,
         # Second, create the results geotiff from the dataframe.
         if write_result_tifs and (shared_results_df is not None) and subdivision_number == 0:
             common_key = "result_tif_filename"
-            output_fname = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_ICESat2_error_map.tif")
+            output_fname = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_ICESat2_error_raster.tif")
             generate_result_geotiff(shared_results_df, gdal.Open(dem_name, gdal.GA_ReadOnly),
                                     output_fname, verbose=verbose)
 
@@ -894,7 +894,7 @@ def validate_dem_parallel(dem_name: str,
 
     result_tif_filename = ""
     if write_result_tifs:
-        result_tif_filename = re.sub(r"_results\.h5\Z", "_ICESat2_error_map.tif", results_dataframe_file)
+        result_tif_filename = re.sub(r"_results\.h5\Z", "_ICESat2_error_raster.tif", results_dataframe_file)
 
     plot_filename = ""
     if plot_results:

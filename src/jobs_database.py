@@ -744,6 +744,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
                           job_username: str,
                           job_id: typing.Union[int, str],
                           status: str,
+                          new_pid: typing.Union[int, None] = None,
                           increment_vnum: bool = True,
                           upload_to_s3: bool = True):
         """
@@ -753,6 +754,8 @@ class JobsDatabaseServer(JobsDatabaseClient):
             job_username (str): The username of the job.
             job_id (int or str): The ID of the job.
             status (str): The new status of the job.
+            new_pid (int): The new process ID of the job, to replace the existing process_pid in the database
+                           (this is useful if the job entry was originally added as a placeholder).
             increment_vnum (bool): Whether to increment the database version number. This may be set to false if
                                       several changes are being made at once, including this one.
                                       If this is set to False, then the database version number will not be incremented
@@ -771,8 +774,8 @@ class JobsDatabaseServer(JobsDatabaseClient):
         # First check to see if the job exists
         results = self.job_exists(job_username, job_id, return_row=True)
         if results:
-            # Check to see if the status is different. If not, don't do anything.
-            if results['status'] == status:
+            # Check to see if the status is different, or if the PID is different. If not, don't do anything.
+            if results['status'] == status and (new_pid is None or results['process_pid'] == new_pid):
                 return
         else:
             raise ValueError(f"Job {job_username}_{job_id} does not exist in the database.")
@@ -783,10 +786,16 @@ class JobsDatabaseServer(JobsDatabaseClient):
 
         # Build the update statement
         update_stmt = """UPDATE ivert_jobs
-                         SET status = ?
+                         SET status = ?"""
+        if new_pid is not None:
+            update_stmt += ", process_pid = ?"
+        update_stmt += """
                          WHERE username = ? AND job_id = ?;"""
 
-        cursor.execute(update_stmt, (status, job_username, job_id))
+        if new_pid is not None:
+            cursor.execute(update_stmt, (status, new_pid, job_username, job_id))
+        else:
+            cursor.execute(update_stmt, (status, job_username, job_id))
 
         # Increment the database version number
         if increment_vnum:
