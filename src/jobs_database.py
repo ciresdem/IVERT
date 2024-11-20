@@ -775,7 +775,7 @@ class JobsDatabaseServer(JobsDatabaseClient):
         results = self.job_exists(job_username, job_id, return_row=True)
         if results:
             # Check to see if the status is different, or if the PID is different. If not, don't do anything.
-            if results['status'] == status and (new_pid is None or results['process_pid'] == new_pid):
+            if results['status'] == status and (new_pid is None or results['job_pid'] == new_pid):
                 return
         else:
             raise ValueError(f"Job {job_username}_{job_id} does not exist in the database.")
