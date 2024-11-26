@@ -298,7 +298,7 @@ class IvertJobManager:
                 self.running_jobs_keys.remove(job_key)
 
                 # If no other jobs are running, use this as an excuse to clean up temporary cached files on the server.
-                self.clean_up_temp_file()
+                self.clean_up_temp_files()
 
                 if self.verbose:
                     job_name = job_key[job_key.rfind("/") + 1: job_key.rfind(".ini")]
@@ -314,7 +314,7 @@ class IvertJobManager:
 
         return
 
-    def clean_up_temp_file(self, only_if_no_other_jobs: bool = True):
+    def clean_up_temp_files(self, only_if_no_other_jobs: bool = True):
         """Clean up any temporary files that may have been left around.
 
         This is only run if there are no other running jobs at the moment."""
@@ -335,6 +335,11 @@ class IvertJobManager:
         """Start a new job."""
         subproc = IvertJob
         proc_stdout_file = self.job_stdout_file(ini_s3_key)
+
+        # If no other jobs are running, clear out the temporary files from any previous jobs on the server that may
+        # not have been previously cleaned up. This will save disk space and also help with any corrupted cache files.
+        if not ivert_jobs.are_any_ivert_jobs_running():
+            self.clean_up_temp_files()
 
         # Create a job record for the job in the database before starting the subprocess.
         # This will help ensure that new jobs don't get run twice, which was occasionally happening.
