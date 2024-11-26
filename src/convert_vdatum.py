@@ -124,12 +124,13 @@ def convert_vdatum(input_dem,
         shutil.copyfile(input_dem, output_dem)
         return 0
 
-    command_template = "vdatums {3:s} {4:s} -i {0} -o {1} -D {2:s} --keep-cache"
+    # Run the vdatums command under the hood. The "-wm" flag is forwarded on to gdalwarp in order to limit the memory
+    # usage of the process to 50% of available memory and help ensure it doesn't crash.
+    # Requires cudem v 2.3.16 or higher (vdatums v0.2 or higher).
+    command_template = "vdatums {3:s} {4:s} -i {0} -o {1} -D {2:s} --keep-cache -wm 50%"
     command = command_template.format(input_vertical_datum,
                                       output_vertical_datum,
                                       my_config.cudem_cache_directory,
-                                      # repr(input_dem),
-                                      # repr(output_dem))
                                       input_dem.replace(" ", r"\ "),
                                       output_dem.replace(" ", r"\ "))
 
