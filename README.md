@@ -19,9 +19,9 @@ IVERT will perform the following actions:
 - Vertically translate the ICESat-2 data to match the vertical reference frame of the DEM using [CUDEM's "vdatums" tool](https://github.com/ciresdem/cudem/blob/main/cudem/vdatums.py), which itself incorporates [NOAA's "VDatum"](https://vdatum.noaa.gov/) program as well as other functionality).
 - Bin elevations into DEM grid cell, remove outliers, and compute statistics of DEM elevations compared to ICESat-2.
 
-![IVERT Boston Map](./docs/images/ICESat2_Boston_Map.png "Map of ICESat-2 orbit paths over Botson, MA (2021).")
-![IVERT Photon Cloud](./docs/images/ICESat2_orbit_example.png "Cloud of ICESat-2 photons over Boston, MA (2021), indicated by bold red line on the map (left).")
-![IVERT Example Plot](./docs/images/IVERT_outputs_example.png "Example of an IVERT summary plot for the Boston DEM (2021).")
+<img src="./docs/images/ICESat2_Boston_Map.png" alt="Map of ICESat-2 orbit paths over Botson, MA (2021)." width="450"/>
+<img src="./docs/images/ICESat2_orbit_example.png" alt="Cloud of ICESat-2 photons over Boston, MA (2021), indicated by bold red line on the map (left)." width="450"/>
+<img src="./docs/images/IVERT_outputs_example.png" alt="Example of an IVERT summary plot for the Boston DEM (2021)." width="450"/>
 
 IVERT outputs:
 - A sparse raster grid of DEM Errors, in the same geo-referenced grids as the incoming datasets.
