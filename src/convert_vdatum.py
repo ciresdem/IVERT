@@ -25,6 +25,7 @@ cudem
 import argparse
 import os
 import shutil
+import signal
 import subprocess
 import re
 import shlex
@@ -142,6 +143,12 @@ def convert_vdatum(input_dem,
                              cwd=cwd)
 
     if verbose and retproc.returncode != 0:
+        if abs(retproc.returncode) == abs(signal.SIGKILL):
+            pass
+            # TODO: Divide and conquer. See validate_dem.py lines 616-ish ("elif abs(exitcode) == abs(signal.SIGKILL):")
+            #   and do similar here.
+
+
         print("ERROR: Process\n'{0}'\n... returned status code {1}.".format(command, retproc.returncode))
 
     return retproc.returncode

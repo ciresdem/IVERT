@@ -44,11 +44,12 @@ import plot_validation_results
 import jobs_database
 import server_file_export
 import icesat2_photon_database
+import icesat2_query
 import find_bad_icesat2_granules
 import utils.query_yes_no as yes_no
 import utils.loggerproc
 
-# # Just for debugging memory issues. TODO: REmove later.
+# # Just for debugging memory issues. TODO: Remove later.
 # import psutil
 # import utils.sizeof_format as sizeof
 
@@ -525,6 +526,8 @@ def validate_dem(dem_name: str,
         orig_dem_name (str): Name of the original DEM file. Only used for error messages.
         verbose (bool): Be verbose.
     """
+    # If we're running this on the ivert AWS server it'll have an "ivert_job_name" parameter.
+    # Create the necessary support objects.
     if ivert_job_name:
         ivert_jobs_db = jobs_database.JobsDatabaseServer() # Jobs database object.
         ivert_exporter = server_file_export.IvertExporter(s3_manager=None, jobs_db=ivert_jobs_db)  # Exporter object
@@ -607,7 +610,7 @@ def validate_dem(dem_name: str,
 
         return list(shared_ret_values.values())
 
-    elif exitcode == -signal.SIGKILL:
+    elif abs(exitcode) == abs(signal.SIGKILL):
         # The job was killed by the operating system. This happens with a Memory Error. Divvy the file up and try again.
 
         # Unless we've already hit max recursion. In that case, error-out.
@@ -616,7 +619,8 @@ def validate_dem(dem_name: str,
                 ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
                                                  os.path.basename(orig_dem_name), "error", upload_to_s3=False)
 
-            raise MemoryError(f"validate_dem.validate_dem('{orig_dem_name}', ...) was terminated, likely due to a memory error.")
+            raise MemoryError(f"validate_dem.validate_dem('{orig_dem_name}', ...) was terminated, "
+                              f"likely due to a memory error.")
 
         # Make sure the DEM exists that we're trying to sub-divide
         if not os.path.exists(dem_name):
@@ -1005,14 +1009,14 @@ def validate_dem_parallel(dem_name: str,
             shared_ret_values["coastline_mask_filename"] = coastline_mask_filename
 
         # If we didn't have to open the dataframe or export anything, it was all already done.
-        elif results_dataframe is None and verbose:
+        if results_dataframe is None and verbose:
             print("Work already done here. Moving on.")
 
         return files_to_export
 
     elif mark_empty_results and os.path.exists(empty_results_filename):
         if verbose:
-            print("No valid data produced during previous ICESat-2 analysis of", dem_name + ". Returning.")
+            print("No valid data produced during previous ICESat-2 analysis of", os.path.basename(dem_name) + ". Returning.")
         return files_to_export
 
     # Collect the metadata from the DEM.
@@ -1096,6 +1100,18 @@ def validate_dem_parallel(dem_name: str,
     # elif use_icesat2_photon_database:
     if icesat2_photon_database_obj is None:
         icesat2_photon_database_obj = icesat2_photon_database.ICESat2_Database()
+
+    # TEMP: Replace querying the dataframe with a call to icesatw_query.
+    # TODO: Modify this later.
+    # photon_df = icesat2_query.get_photon_dataframe(converted_dem_name,
+    #                                                None,
+    #                                                None,
+    #                                                start_date="20240101",
+    #                                                end_date="20250101",
+    #                                                other_columns=None,
+    #                                                classify_bathymetry=True,
+    #                                                classify_buildings=True,
+    #                                                )
 
     photon_df = icesat2_photon_database_obj.get_photon_dataframe(dem_bbox,
                                                                  build_tiles_if_nonexistent=False,

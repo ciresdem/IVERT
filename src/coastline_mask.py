@@ -38,9 +38,12 @@ gdal.UseExceptions()
 def is_this_run_in_ipython():
     """Tell whether we're running in an IPython console or not. Useful for rich.print()."""
     try:
+        # When using IPython, the __IPYTHON__ variable is defined.
         __IPYTHON__
         return True
+
     except NameError:
+        # Outside of IPython, referencing the variable fails with a NameError. Just return False.
         return False
 
 
@@ -56,7 +59,8 @@ def create_coastline_mask(input_dem,
                           run_in_tempdir: bool = False,
                           horizontal_datum_only: bool = True,
                           verbose: bool = True):
-    """From a given DEM (.tif or otherwise), generate a coastline mask at the same grid and resolution.
+    """
+    From a given DEM (.tif or otherwise), generate a coastline mask at the same grid and resolution.
 
     Uses the cudem waffles utility, which is handy for this.
 
@@ -139,11 +143,11 @@ def create_coastline_mask(input_dem,
             os.mkdir(tempdir)
         kwargs["cwd"] = tempdir
 
-    subprocess.run(waffle_args,
-                   check=True,
-                   stdout=sys.stdout,
-                   stderr=sys.stderr,
-                   **kwargs)
+    ret_proc = subprocess.run(waffle_args,
+                              check=True,
+                              stdout=sys.stdout,
+                              stderr=sys.stderr,
+                              **kwargs)
 
     if os.path.splitext(output_filepath_base)[1].lower() != ".tif":
         final_output_path = os.path.join(output_filepath_base + ".tif")
@@ -152,7 +156,8 @@ def create_coastline_mask(input_dem,
 
     if not os.path.exists(final_output_path) and verbose:
         print(os.path.basename(final_output_path), "NOT written.")
-    # assert os.path.exists(final_output_path)
+
+        # TODO: Check return value, if the process was killed by a memory error, divide and conquer. Otherwise, just clear the cache and try again up to N number of times.
 
     if run_in_tempdir:
         shutil.rmtree(tempdir, ignore_errors=True)

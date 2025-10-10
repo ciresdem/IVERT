@@ -1,6 +1,7 @@
 import argparse
 import ast
 import dateparser
+import datetime
 import geopandas
 import numpy
 import os
@@ -109,8 +110,8 @@ def get_photon_dataframe(polygon_bbox_or_dem_fname: typing.Union[shapely.geometr
                              confidence_levels=conf_str,
                              columns=other_columns if other_columns else {},
                              classify_bathymetry=classify_bathymetry,
-                             cshelph=classify_bathymetry,
-                             classify_water=True,
+                             # cshelph=classify_bathymetry,
+                             # classify_water=True,
                              reject_failed_qa=True,
                              classify_buildings=classify_buildings).initialize()
 
@@ -445,6 +446,12 @@ def _process_input_date_str(date_str: str) -> str:
 
     Input date string can be anything that can be parsed by dateparser.parse().
     """
+    try:
+        if len(date_str) == 8 and 19000000 <= int(date_str) <= 21000000:
+            return datetime.datetime.strptime(date_str, "%Y%m%d").strftime("%Y-%m-%d")
+    except ValueError:
+        pass
+
     return dateparser.parse(date_str).strftime("%Y-%m-%d")
 
 

@@ -18,12 +18,16 @@ import typing
 # # Include the base /src/ directory of thie project, to add all the other modules.
 # import import_parent_dir; import_parent_dir.import_src_dir_via_pythonpath()
 ####################################
+import clean_ivert_files as clean_ivert_files
 import icesat2_photon_database as icesat2_photon_database
+import ivert_jobs
 import jobs_database
 import server_file_export
 import plot_validation_results as plot_validation_results
 import validate_dem as validate_dem
 import utils.query_yes_no as yes_no
+import utils.is_aws as is_aws
+import utils.configfile as configfile
 
 
 def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFrame, str],
@@ -106,7 +110,8 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
                           mask_osm_buildings: bool = True,
                           mask_bing_buildings: bool = True,
                           mask_wsf_urban: bool = False,
-                          create_individual_results: bool = False,
+                          mask_out_lakes: bool = True,
+                          create_individual_results: bool = True,
                           export_coastline_masks: bool = True,
                           delete_datafiles: bool = False,
                           include_photon_validation: bool = True,
@@ -184,7 +189,7 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
                                 .replace(";", "_")
                                 .replace(",", "_")
                                 .replace("/", "_")
-                                .replace("__", "_") + "_results")
+                                .replace("__", "_") + "_results").replace("__", "_")
 
     if ivert_job_name is None:
         ivert_jobs_db = None
@@ -315,6 +320,7 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
                                       mask_osm_buildings=mask_osm_buildings,
                                       mask_bing_buildings=mask_bing_buildings,
                                       mask_wsf_urban=mask_wsf_urban,
+                                      mask_out_lakes=mask_out_lakes,
                                       write_summary_stats=create_individual_results,
                                       export_coastline_mask=export_coastline_masks,
                                       include_photon_level_validation=include_photon_validation,
@@ -370,6 +376,20 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
             ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
                                              os.path.basename(dem_path), "error", upload_to_s3=True)
 
+        # On the IVERT server, the local EC2 instance has limited disk space. If it's more than the maximnum disk usage
+        # threshold outlined in ivert_config, clean it up. BUT ONLY IF IT'S AN AWS INSTANCE AND
+        # NO OTHER JOBS BESIDES THIS ONE ARE RUNNING.
+        ivert_config = configfile.get_ivert_config()
+        if is_aws.is_aws() and \
+                clean_ivert_files.disk_usage_pct() >= ivert_config.ivert_disk_usage_max_percent and \
+                len(ivert_jobs.list_running_ivert_jobs()) <= 1:
+
+            if verbose:
+                print(f"Disk usage is over {ivert_config.ivert_disk_usage_max_percent:0.1f}%. Cleaning up...")
+            clean_ivert_files.delete_local_photon_tiles(ivert_config, verbose=verbose)
+            clean_ivert_files.clean_cudem_cache(ivert_config, False, verbose=verbose)
+
+
     # An extra newline is appreciated here just for readability's sake.
     if verbose:
         print()
@@ -406,6 +426,7 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
                                                                     verbose=verbose)
 
     files_to_export.append(plot_file_name)
+
     if ivert_job_name is not None:
         ivert_exporter.upload_file_to_export_bucket(ivert_job_name, plot_file_name)
 
@@ -414,8 +435,8 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
         if verbose:
             print(results_h5, "written.")
 
-    files_to_export.append(results_h5)
-    if ivert_job_name is not None:
+    if ivert_job_name is not None and results_h5 is not None:
+        files_to_export.append(results_h5)
         ivert_exporter.upload_file_to_export_bucket(ivert_job_name, results_h5)
 
     return files_to_export
@@ -483,6 +504,11 @@ def define_and_parse_args():
                              "with grid cells larger than typical buildings (~20-ish m). Must be followed by "
                              "'True', 'False', 'Yes', 'No', or any abbreviation thereof (case-insensitive). "
                              "(Default: False)")
+
+    parser.add_argument("-ml", "--mask_lakes", dest="mask_lakes",
+                        type=yes_no.interpret_yes_no, default=True,
+                        help="Whether to make out lakes, using Hydrolakes and the National Hydrologic Dataset. "
+                             "(Default: True)")
 
     parser.add_argument("-ind", "--individual_results", dest="individual_results",
                         type=yes_no.interpret_yes_no, default=True,
@@ -567,6 +593,10 @@ def main():
                           delete_datafiles=args.delete_datafiles,
                           include_photon_validation=args.include_photon_validation,
                           write_result_tifs=args.write_result_tifs,
+                          mask_osm_buildings=args.mask_osm_buildings,
+                          mask_bing_buildings=args.mask_bing_buildings,
+                          mask_wsf_urban=args.mask_wsf_urban,
+                          mask_out_lakes=args.mask_lakes,
                           omit_bad_granules=True,
                           measure_coverage=args.measure_coverage,
                           write_summary_csv=args.write_summary_csv,

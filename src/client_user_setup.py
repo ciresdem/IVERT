@@ -840,39 +840,59 @@ def define_and_parse_args(just_return_parser: bool = False,
     if not ivert_user_config_template:
         ivert_user_config_template = configfile.Config(ivert_config.ivert_user_config_template)
 
-    parser = argparse.ArgumentParser(description="Set up a new IVERT user on the local machine.")
-    parser.add_argument("email", type=is_email.return_email,
-                        help="The email address of the user.")
-    parser.add_argument("-u", "--username", dest="username", type=str, required=False, default="",
+    parser = argparse.ArgumentParser(description="Set up IVERT on the local machine.")
+    parser.add_argument("--offline", type=bool, required=False, default=True, action="store_true",
+                        help="Set up IVERT to run in 'offline' mode on the local machine (Default). "
+                            "This is ignored if '--online' is set.")
+    parser.add_argument("--online", type=bool, required=False, default=False, action="store_true",
+                        help="Set up IVERT to run in 'online' mode in the cloud. "
+                             "This requires a username and credentials to be provided. If you've never set up IVERT "
+                             "on this machine before, use the flags below. If you already have, your previous "
+                             "configuration files will be reused automatically. If set, this supersedes the 'offline' setting.")
+
+    # Online group, for settings that are used only when setting up in 'online' mode.
+    online_group = parser.add_argument_group("IVERT online setup prompts.",
+                                             description="If '--online' is chosen above and you're setting up for the "
+                                                         "first time on this machine, use the following prompts to "
+                                                         "connect your IVERT installation to the cloud. These are "
+                                                         "ignored if setup is run in 'offline' mode.")
+
+    online_group.add_argument("email", type=is_email.return_email, required=False, default="",
+                        help="The email address of the user (unneeded if running in offline mode, or if the email is already in the user's IVERT user_config.ini file.")
+    online_group.add_argument("-u", "--username", dest="username", type=str, required=False, default="",
                         help="The username of the new user. Only needed if you want to create a custom username. "
                              "Default: Derived from the left side of your email. It's recommended you just "
                              "use the default unless you have specific reasons to do otherwise.")
-    parser.add_argument("-c", "--creds", dest="creds", type=str, required=False, default="",
+    online_group.add_argument("-c", "--creds", dest="creds", type=str, required=False, default="",
                         help="The path to the 'ivert_s3_credentials.ini' file. "
                              "This file will be moved to your ~/.ivert/creds directory.")
-    parser.add_argument("-pc", "--personal_creds", dest="personal_creds", type=str, required=False, default="",
+    online_group.add_argument("-pc", "--personal_creds", dest="personal_creds", type=str, required=False, default="",
                         help="The path to the your personal credentials file for the export bucket. "
                              "Should contain an AWS access key ID and a secret access key.")
-    parser.add_argument("-ns", "--do_not_subscribe", dest="subscribe_to_sns", action="store_false",
+    # Note, this option is an "opt-out", but gets saved as a positive "opt-in" in the variable.
+    online_group.add_argument("-ns", "--do_not_subscribe", dest="subscribe_to_sns", action="store_false",
                         default=True, required=False,
                         help="Do not subscribe the new user to the IVERT SNS topic to receive email notifications. "
                              "Default: Subscribe to email notifications. (If you were already subscribed with the "
                              "same email, the subscription settings will just be overwritten. You will not be "
                              "'double-subscribed'.)")
     # Note, this option is an "opt-out", but gets saved as a positive "opt-in" in the variable.
-    parser.add_argument("-nf", "--no_sns_filter", dest="filter_sns", action="store_false",
+    online_group.add_argument("-nf", "--no_sns_filter", dest="filter_sns", action="store_false",
                         default=True, required=False,
                         help="Do not filter email notifications by username. "
                              "This will make you receive all emails from all jobs. "
                              "Does nothing if the -ns flag is used. "
                              "Default: Only get emails for jobs that *this* user submits.")
-    parser.add_argument("-p", "--prompt", dest="prompt", default=False, action="store_true",
+    online_group.add_argument("-p", "--prompt", dest="prompt", default=False, action="store_true",
                         help="Prompt the user to verify settings before setting up IVERT. Use if you'd like to have "
                              "'one last look' before the setup scripts complete. (If something was wrong, you can "
                              "always re-run this command and it will overwrite old settings. Default: False (no prompt)")
 
+    # Bucket group, for settings that are provided only if the user wants to manually feed bucket credentials to the tool
+    # rather than using a credentials INI file.
     bucket_group = parser.add_argument_group("IVERT S3 bucket settings",
-                                             description="Manually enter the IVERT S3 bucket settings and credentials. "
+                                             description="Manually enter the IVERT S3 bucket settings and credentials if"
+                                                         " setting up in 'online' mode. "
                                                          "It is FAR EASIER to copy the 'ivert_s3_credentials.ini' file "
                                                          "from the team's GDrive and use the --creds flag above. "
                                                          "The script will automatically pull these variables from there. "
