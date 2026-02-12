@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-"""coastline_mask.py -- Wrapper code for using the CUDEM "coastline" module for
+"""coastline_mask_OLD.py -- Wrapper code for using the CUDEM "coastline" module for
 creating resampled coastline masks for DEMs.
 
 TODO: Look into covering interior water bodies with this, which we don't currently do

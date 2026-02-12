@@ -1,7 +1,7 @@
 """A sub-module for running validation commands on the server."""
 import os
 
-import coastline_mask
+import coastline_mask_OLD
 import validate_dem
 import validate_dem_collection
 
@@ -52,15 +52,15 @@ def run_validate_command(ivert_job_obj):
         for dem_fn in dem_files:
             ivj.update_file_status(os.path.basename(dem_fn), "processing", upload_to_s3=False)
 
-            cfile = coastline_mask.create_coastline_mask(dem_fn,
-                                                         mask_out_lakes=True,
-                                                         mask_osm_buildings=cargs["mask_osm_buildings"],
-                                                         mask_bing_buildings=cargs["mask_bing_buildings"],
-                                                         mask_wsf_urban=cargs["mask_wsf_urban"],
-                                                         mask_out_nhd=True,
-                                                         run_in_tempdir=True,
-                                                         horizontal_datum_only=True,
-                                                         verbose=ivj.verbose)
+            cfile = coastline_mask_OLD.create_coastline_mask(dem_fn,
+                                                             mask_out_lakes=True,
+                                                             mask_osm_buildings=cargs["mask_osm_buildings"],
+                                                             mask_bing_buildings=cargs["mask_bing_buildings"],
+                                                             mask_wsf_urban=cargs["mask_wsf_urban"],
+                                                             mask_out_nhd=True,
+                                                             run_in_tempdir=True,
+                                                             horizontal_datum_only=True,
+                                                             verbose=ivj.verbose)
 
             if cfile is None or not os.path.exists(cfile):
                 ivj.update_file_status(os.path.basename(dem_fn), "error", upload_to_s3=False)

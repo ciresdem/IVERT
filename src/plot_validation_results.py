@@ -85,13 +85,316 @@ def get_data_from_h5_or_list(h5_name_or_list: typing.Union[str, typing.List[str]
 
     return data
 
+def plot_histograms_and_line(results_h5_or_list_or_df,
+                             output_figure_name,
+                             empty_val = ivert_config.dem_default_ndv,
+                             place_name=None,
+                             figsize = (10.0, 4.0), # Width/height, in inches
+                             labels_uppercase = True,
+                             dpi = 600,
+                             hist_cutoff_num_stddevs = 2.5,
+                             also_add_rmse_to_hist = False,
+                             verbose=True):
+    """Generate a 4-panel figure of error stats.
+    1) Histograms of mean errors land-only (green)
+    2) Histogram of mean errors bathy (blue)
+    3) 1:1 line of DEM vs ICESat-2 elevationss
+
+    If 'place_name' is provided, use it in the title of the plot.
+    """
+    # If we're writing a PNG file, use the "Agg" backend (no display).
+    # This helps avoid errors.
+    if os.path.splitext(output_figure_name)[1].lower() == ".png":
+        matplotlib.use("Agg")
+
+    if type(results_h5_or_list_or_df) == pandas.DataFrame:
+        data = results_h5_or_list_or_df
+    else:
+        data = get_data_from_h5_or_list(results_h5_or_list_or_df,
+                                        empty_val = empty_val)
+
+    meandiff        = data['diff_mean']
+    # numphotons      = data['numphotons']
+    # numphotons_intd = data['numphotons_intd']
+    numphotons_bathy = data['numphotons_bathy']
+    dem_elev        = data["dem_elev"]
+    mean_elev       = data["mean"]
+
+    if len(meandiff) < 3:
+        if verbose:
+            print("Not enough cells to plot statistics. Aborting.")
+        return
+
+    # Generate figure. If a figure size isn't given, use the matplotlib.rcParams default.
+    if figsize is None:
+        figsize = matplotlib.rcParams['figure.figsize']
+    fig, ((ax1, ax2, ax3)) = plt.subplots(1,3, dpi=dpi, figsize=figsize, tight_layout=True)
+
+    plot_label_margin = [0.015, 0.97]
+    plot_label_ha = "left"
+    plot_label_va = "top"
+    plot_label_size = "large"
+    plot_label_weight = "book"
+
+    nbins = 200
+
+    #############################################################################
+    # Plot 1, Histogram of differences from iceast-2 mean (land only).
+    # Subset to get land-only photons
+    land_only_mask = (numphotons_bathy == 0)
+    meandiff_land = meandiff[land_only_mask]
+    ax1.hist(meandiff_land, bins=nbins, color="darkred")
+    # Unicode "minus" sign is \u2212
+    ax1.set_title("DEM " + u"\u2212" + " ICESat-2 elevation: land")
+    ax1.set_ylabel("% of data cells")
+    ax1.set_xlabel("Elevation difference (m)")
+    ax1.yaxis.set_major_formatter(ticker.PercentFormatter(len(meandiff_land), decimals=0))
+
+    # Add the lines for mean +- std
+    center = numpy.mean(meandiff_land)
+    std = numpy.std(meandiff_land)
+    ax1.axvline(x=center, color="black", linewidth=0.75)
+    ax1.axvline(x=center+std, color="black", linestyle="--", linewidth=0.5)
+    ax1.axvline(x=center-std, color="black", linestyle="--", linewidth=0.5)
+
+    # Crop the left & right (only if greater than 20 points)
+    if len(meandiff_land) >= 20:
+        cutoffs = numpy.percentile(meandiff_land, [1, 99])
+    elif len(meandiff_land) > 0:
+        cutoffs = [min(meandiff_land), max(meandiff_land)]
+    else:
+        cutoffs = [-1, 1]
+
+    # If we have a zero-width range, arbitrarily buffer it by 1 m in each direction.
+    if cutoffs[0] == cutoffs[1]:
+        cutoffs[0] = cutoffs[0] - 1
+        cutoffs[1] = cutoffs[1] + 1
+
+    # cutoffs = [-max(numpy.abs(cutoffs)), max(numpy.abs(cutoffs))]
+    # Do not crop the photo to make the stddev lines fall outside the plot.
+    # If they do, reset the min/max cutoff to be 2 stddev away from the mean on that side.
+    if (center + std) >= cutoffs[1] or hist_cutoff_num_stddevs is not None:
+        cutoffs[1] = center + (std * hist_cutoff_num_stddevs)
+    if (center - std) <= cutoffs[0] or hist_cutoff_num_stddevs is not None:
+        cutoffs[0] = center - (std * hist_cutoff_num_stddevs)
+
+    # Just error checking, if any of the cutoffs come back with NaN or Inf, just clip it to -1, 1, debug later.
+    if numpy.any(numpy.isnan(cutoffs) | numpy.isinf(cutoffs)):
+        cutoffs = [-1, 1]
+
+    ax1.set_xlim(cutoffs)
+
+    # Pad the top by 10%
+    ylim = ax1.get_ylim()
+    ax1.set_ylim((ylim[0], ylim[1] * 1.1))
+
+    # Detect whether the mean line is closer to the left or the right (we'll put the text box on the other side)
+    # (In this case, since we're putting sub-panel letters in the upper-left, we'll just always put the other text in the upper-right.
+    text_left = False # not ((center - cutoffs[0]) < (cutoffs[1] - center))
+    txt = ax1.text(0.11, # if text_left else 0.97,
+                   0.95, # 0.85 if text_left else 0.95,
+                   r"{0:.2f} $\pm$ {1:.2f} m".format(center, std),
+                   ha="left", # if text_left else "right",
+                   va="top",
+                   fontsize="small",
+                   transform=ax1.transAxes)
+    txt.set_bbox(dict(facecolor="white", alpha=0.85, edgecolor="white", boxstyle="square,pad=0"))
+
+    # If requested, as the RMSE value to the figure.
+    if also_add_rmse_to_hist:
+        rmse = numpy.sqrt(numpy.mean(meandiff_land ** 2))
+        txt_std = ax1.text(0.97, #0.12 if text_left else 0.97,
+                           0.95,
+                           "RMSE: {0:0.2f} m".format(rmse),
+                           ha="right", #"left" if text_left else "right",
+                           va="top",
+                           fontsize="small",
+                           transform=ax1.transAxes)
+        txt_std.set_bbox(dict(facecolor="white", alpha=0.95, edgecolor="white", boxstyle="square,pad=0"))
+
+    # Add subplot label "a"
+    # Add it on the opposite (horizontal) side of wherever the other text has been placed, in this case.
+    # if text_left:
+    #     ax1_label_x = plot_label_margin[0] + 0.15
+    #     ax1_ha = "right"
+    # else:
+    #     ax1_label_x = plot_label_margin[0]
+    #     ax1_ha = "left"
+    ax1.text(*plot_label_margin,
+             "A" if labels_uppercase else "a",
+             ha = plot_label_ha,
+             va = plot_label_va,
+             fontsize = plot_label_size,
+             fontweight = plot_label_weight,
+             transform = ax1.transAxes)
+    # lbltxt.set_bbox(dict(facecolor="white", alpha=0.7, edgecolor="white", boxstyle="square,pad=0"))
+
+    #############################################################################
+    # Plot 2, Histogram of differences from iceast-2 mean (bathy only).
+    # Subset to get land-only photons
+    # Fewer points, use fewer bins.
+    nbins = int(nbins / 2)
+
+    bathy_mask = (numphotons_bathy > 0)
+    meandiff_bathy = meandiff[bathy_mask]
+    ax2.hist(meandiff_bathy, bins=nbins, color="blue")
+    # Unicode "minus" sign is \u2212
+    ax2.set_title("DEM " + u"\u2212" + " ICESat-2 elevation: bathy")
+    ax2.set_ylabel("% of data cells")
+    ax2.set_xlabel("Elevation difference (m)")
+    ax2.yaxis.set_major_formatter(ticker.PercentFormatter(len(meandiff_bathy), decimals=0))
+
+    # Add the lines for mean +- std
+    center = numpy.mean(meandiff_bathy)
+    std = numpy.std(meandiff_bathy)
+    ax2.axvline(x=center, color="black", linewidth=0.75)
+    ax2.axvline(x=center+std, color="black", linestyle="--", linewidth=0.5)
+    ax2.axvline(x=center-std, color="black", linestyle="--", linewidth=0.5)
+
+    # Crop the left & right (only if greater than 20 points)
+    if len(meandiff_bathy) >= 20:
+        cutoffs = numpy.percentile(meandiff_bathy, [1, 99])
+    elif len(meandiff_bathy) > 0:
+        cutoffs = [min(meandiff_bathy), max(meandiff_bathy)]
+    else:
+        cutoffs = [-1, 1]
+
+    # If we have a zero-width range, arbitrarily buffer it by 1 m in each direction.
+    if cutoffs[0] == cutoffs[1]:
+        cutoffs[0] = cutoffs[0] - 1
+        cutoffs[1] = cutoffs[1] + 1
+
+    # cutoffs = [-max(numpy.abs(cutoffs)), max(numpy.abs(cutoffs))]
+    # Do not crop the photo to make the stddev lines fall outside the plot.
+    # If they do, reset the min/max cutoff to be 2 stddev away from the mean on that side.
+    if (center + std) >= cutoffs[1] or hist_cutoff_num_stddevs is not None:
+        cutoffs[1] = center + (std * hist_cutoff_num_stddevs)
+    if (center - std) <= cutoffs[0] or hist_cutoff_num_stddevs is not None:
+        cutoffs[0] = center - (std * hist_cutoff_num_stddevs)
+
+    # Just error checking, if any of the cutoffs come back with NaN or Inf, just clip it to -1, 1, debug later.
+    if numpy.any(numpy.isnan(cutoffs) | numpy.isinf(cutoffs)):
+        cutoffs = [-1, 1]
+
+    ax2.set_xlim(cutoffs)
+
+    # Pad the top by 10%
+    ylim = ax2.get_ylim()
+    ax2.set_ylim((ylim[0], ylim[1] * 1.1))
+
+    # Detect whether the mean line is closer to the left or the right (we'll put the text box on the other side)
+    # (In this case, since we're putting sub-panel letters in the upper-left, we'll just always put the other text in the upper-right.
+    text_left = False # not ((center - cutoffs[0]) < (cutoffs[1] - center))
+    txt = ax2.text(0.11, # if text_left else 0.97,
+                   0.95, # 0.85 if text_left else 0.95,
+                   r"{0:.2f} $\pm$ {1:.2f} m".format(center, std),
+                   ha="left", # if text_left else "right",
+                   va="top",
+                   fontsize="small",
+                   transform=ax2.transAxes)
+    txt.set_bbox(dict(facecolor="white", alpha=0.85, edgecolor="white", boxstyle="square,pad=0"))
+
+    # If requested, as the RMSE value to the figure.
+    if also_add_rmse_to_hist:
+        rmse = numpy.sqrt(numpy.mean(meandiff_bathy ** 2))
+        txt_std = ax2.text(0.97, #0.12 if text_left else 0.97,
+                           0.95,
+                           "RMSE: {0:0.2f} m".format(rmse),
+                           ha="right", #"left" if text_left else "right",
+                           va="top",
+                           fontsize="small",
+                           transform=ax2.transAxes)
+        txt_std.set_bbox(dict(facecolor="white", alpha=0.95, edgecolor="white", boxstyle="square,pad=0"))
+
+    # Add subplot label "a"
+    # Add it on the opposite (horizontal) side of wherever the other text has been placed, in this case.
+    # if text_left:
+    #     ax1_label_x = plot_label_margin[0] + 0.15
+    #     ax1_ha = "right"
+    # else:
+    #     ax1_label_x = plot_label_margin[0]
+    #     ax1_ha = "left"
+    ax2.text(*plot_label_margin,
+             "B" if labels_uppercase else "b",
+             ha = plot_label_ha,
+             va = plot_label_va,
+             fontsize = plot_label_size,
+             fontweight = plot_label_weight,
+             transform = ax2.transAxes)
+    # lbltxt.set_bbox(dict(facecolor="white", alpha=0.7, edgecolor="white", boxstyle="square,pad=0"))
+
+
+    # 3) Plot 1:1 line of DEM/ICESat-2 elevations.
+    #############################################################################
+    # Subplot 2, elev-elev correlation line
+    dotsize=3
+    # Adjust the alpha depending how many points there are (more points == lighter dots)
+    alpha = 0.35 * max(0.0025, min(4, (math.log10(100)/math.log10(len(mean_elev)))))
+    # Can't have an alpha > 1.0, so cap it there.
+    alpha = min(alpha, 1.0)
+
+    # Scatter plots of both land and elev
+    ax3.scatter(mean_elev[land_only_mask], dem_elev[land_only_mask], c="darkred", s=dotsize, linewidth=0, alpha=alpha)
+    ax3.scatter(mean_elev[~land_only_mask], dem_elev[~land_only_mask], c="blue", s=dotsize, linewidth=0, alpha=min(alpha * 2, 0.35))
+    ax3.set_title("DEM vs. ICESat-2")
+    ax3.set_ylabel("DEM elevation (m)")
+    ax3.set_xlabel("ICESat-2 elevation (m)")
+    # ax2.autoscale(False) # Keep the line-plotting from expanding the x,y-axes
+    xlim = ax3.get_xlim()
+    ylim = ax3.get_ylim()
+
+    plotlim =( min(xlim[0], ylim[0]), max(xlim[1],ylim[1]))
+    ax3.set_xlim(plotlim)
+    ax3.set_ylim(plotlim)
+    ax3.plot(plotlim, plotlim, ls="--", c=".3", lw=0.5, alpha=0.6)
+    # ax2.plot(xlim, xlim, ls="--", c=".3", lw=1, alpha=0.6)
+    # Set the y-ticks the same as the x-ticks.
+    xticks = ax3.get_xticks()
+    ax3.set_yticks(xticks)
+
+    # Add subplot label "b"
+    ax3.text(*plot_label_margin,
+             "C"  if labels_uppercase else "c",
+             ha=plot_label_ha,
+             va=plot_label_va,
+             fontsize=plot_label_size,
+             fontweight=plot_label_weight,
+             transform=ax3.transAxes)
+    # lbltxt.set_bbox(dict(facecolor="white", alpha=0.7, edgecolor="white", boxstyle="square,pad=0"))
+
+    # Figure title
+    if place_name is None:
+        place_name = "DEM"
+
+    rmse = (numpy.sum(meandiff ** 2) / len(meandiff)) ** 0.5
+
+    fig.suptitle(f"{place_name}: Errors and Distributions\nRMSE = {rmse:0.3f} m,   N = {len(meandiff):,} cells")
+    fig.tight_layout()
+
+    # Save the figure to disk.
+    fig.savefig(output_figure_name)
+    if verbose:
+        print(output_figure_name, "written.")
+
+        # Compute the RMSE and spit that out too.
+        print("\tRMSE: {0:0.3f} m".format(rmse))
+
+    # Clear the figure and close the plot.
+    # If the plot is not "plt.close()"'ed, MatPlotLib keeps it in memory indefinitely
+    # even after it's no longer referenced, which is... annoying. Gotta close it explicitly here.
+    plt.clf()
+    plt.close(fig)
+
+    return
+
+
 def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
                                             output_figure_name,
                                             empty_val = ivert_config.dem_default_ndv,
                                             place_name=None,
                                             figsize=None,
                                             labels_uppercase = True,
-                                            error_max_cutoff = None,
+                                            # error_max_cutoff = None,
                                             dpi = 600,
                                             hist_cutoff_num_stddevs = 2,
                                             also_add_rmse_to_hist = False,
@@ -105,7 +408,7 @@ def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
     If 'place_name' is provided, use it in the title of the plot.
     """
     # If we're writing a PNG file, use the "Agg" backend (no display).
-    # This helps avoid
+    # This helps avoid errors.
     if os.path.splitext(output_figure_name)[1].lower() == ".png":
         matplotlib.use("Agg")
 
@@ -440,4 +743,14 @@ def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
     #     plot_error_stats(fname)
     #     # input("<Press <Enter> to continue>")
 
-    print("Done")
+
+if __name__ == '__main__':
+    results_df = pandas.read_hdf("/home/mmacferrin/Research/DEMs/CUDEMs_1_9_Oregon_2025/dems/2025.10.10_w_metadata/icesat2/ncei19_n45x50_w124x00_2025v1_results.h5")
+    plot_histograms_and_line(results_df,
+                             output_figure_name="/home/mmacferrin/Research/DEMs/CUDEMs_1_9_Oregon_2025/dems/2025.10.10_w_metadata/icesat2/ncei19_n45x50_w124x00_2025v1_plot.png",
+                             figsize=(10.0, 3.3),
+                             dpi=600,
+                             place_name="ncei19_n45x50_w124x00_2025v1",
+                             hist_cutoff_num_stddevs = 2.5,
+                             also_add_rmse_to_hist=True,
+                             verbose=True)

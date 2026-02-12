@@ -7,7 +7,7 @@ import argparse
 import geopandas
 import shapely.geometry
 
-import icesat2_photon_database
+import icesat2_photon_database_OLD
 
 
 def get_polygon_from_dem_files(dem_filenames: list,

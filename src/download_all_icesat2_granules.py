@@ -663,7 +663,7 @@ def generate_all_photon_tiles(map_interval = 25,
     # is2db.fill_in_missing_tile_entries(delete_csvs = True,
     #                                    save_to_disk = True,
     #                                    verbose=verbose)
-    # gdf = is2db.get_gdf(verbose=verbose)
+    # gdf = is2db.open_gdf(verbose=verbose)
 
     if numprocs <= 0:
         numprocs = 1
@@ -675,7 +675,7 @@ def generate_all_photon_tiles(map_interval = 25,
     y_iter = numpy.array(list(zip(numpy.arange(0,90,2), numpy.arange(-2, -92, -2)))).flatten()
     xvals, yvals = numpy.meshgrid(x_iter, y_iter)
 
-    N = len(is2db.get_gdf())
+    N = len(is2db.open_gdf())
     if overwrite:
         N_so_far = 0
     else:
@@ -832,7 +832,7 @@ def generate_all_photon_tiles(map_interval = 25,
                     mapping_process.start()
                     # create_tiling_progress_map(icesat2_db = is2db, verbose=verbose)
                     tiles_built_since_last_map_output_counter = 0
-                    # total_tiles_done = numpy.count_nonzero(is2db.get_gdf()["is_populated"])
+                    # total_tiles_done = numpy.count_nonzero(is2db.open_gdf()["is_populated"])
 
                     # if total_tiles_done > (N_so_far + tile_built_counter):
                     #     if verbose:
@@ -905,7 +905,7 @@ def clean_up_icesat2_photon_tile_database_and_directory():
     # fnames = [fn for fn in fnames if fn != "ATL03_EMPTY_TILE.h5"]
 
     is2db = icesat2_photon_database.ICESat2_Database()
-    gdf = is2db.get_gdf()
+    gdf = is2db.open_gdf()
     N = len(gdf)
     prev_str = ""
     for idx, row in gdf.iterrows():
@@ -952,7 +952,7 @@ def clean_up_icesat2_photon_tile_database_and_directory():
 def convert_h5_to_feather_parallel(numprocs=10):
     """Convert remaining h5 files to feather files."""
     is2db = icesat2_photon_database.ICESat2_Database()
-    gdf = is2db.get_gdf()
+    gdf = is2db.open_gdf()
 
     print("Compiling list of .h5's to convert.")
     gdf["h5_exists"] = gdf.apply(lambda row: os.path.exists(row.filename), axis=1)

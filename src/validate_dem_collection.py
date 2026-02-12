@@ -19,8 +19,9 @@ import typing
 # import import_parent_dir; import_parent_dir.import_src_dir_via_pythonpath()
 ####################################
 import clean_ivert_files as clean_ivert_files
-import icesat2_photon_database as icesat2_photon_database
-import ivert_jobs
+import icesat2_database_v2
+# import icesat2_photon_database_OLD as icesat2_photon_database
+# import ivert_jobs
 import jobs_database
 import server_file_export
 import plot_validation_results as plot_validation_results
@@ -53,7 +54,7 @@ def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFra
     rmses = numpy.empty((N,), dtype=float)
     n_cells = numpy.empty((N,), dtype=int)
     photons_per_cell = numpy.empty((N,), dtype=float)
-    canopy_mean = numpy.empty((N,), dtype=float)
+    # canopy_mean = numpy.empty((N,), dtype=float)
     canopy_mean_gt0 = numpy.empty((N,), dtype=float)
 
     # Fill in the values
@@ -65,8 +66,8 @@ def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFra
             rmses[i] = (sum((temp_df['diff_mean'] ** 2)) / (len(temp_df) - 1)) ** 0.5
             n_cells[i] = len(temp_df)
             photons_per_cell[i] = temp_df['numphotons_intd'].mean()
-            canopy_mean[i] = temp_df['canopy_fraction'].mean()
-            canopy_mean_gt0[i] = temp_df[temp_df['canopy_fraction'] > 0]['canopy_fraction'].mean()
+            # canopy_mean[i] = temp_df['canopy_fraction'].mean()
+            # canopy_mean_gt0[i] = temp_df[temp_df['canopy_fraction'] > 0]['canopy_fraction'].mean()
 
         else:
             # For files with no results, just list n/a for this.
@@ -76,8 +77,8 @@ def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFra
             rmses[i] = numpy.nan
             n_cells[i] = 0
             photons_per_cell[i] = numpy.nan
-            canopy_mean[i] = numpy.nan
-            canopy_mean_gt0[i] = numpy.nan
+            # canopy_mean[i] = numpy.nan
+            # canopy_mean_gt0[i] = numpy.nan
 
     output_df = pandas.DataFrame(data={'filename': all_filenames,
                                        "rmse": rmses,
@@ -85,8 +86,8 @@ def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFra
                                        "stddev_from_mean": stds,
                                        "n_cells_validated": n_cells,
                                        "mean_photons_per_cell": photons_per_cell,
-                                       "canopy_mean": canopy_mean,
-                                       "canopy_mean_gt0": canopy_mean_gt0
+                                       # "canopy_mean": canopy_mean,
+                                       # "canopy_mean_gt0": canopy_mean_gt0
                                        }
                                  )
 
@@ -102,21 +103,21 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
                           fname_filter: typing.Union[str, None] = r"\.tif\Z",
                           fname_omit: typing.Union[str, None] = None,
                           ivert_job_name: typing.Union[str, None] = None,
-                          band_num: int = 1,
+                          # band_num: int = 1,
                           input_vdatum: str = "egm2008",
                           output_vdatum: str = "egm2008",
                           overwrite: bool = False,
                           place_name: typing.Union[str, None] = None,
-                          mask_osm_buildings: bool = True,
-                          mask_bing_buildings: bool = True,
-                          mask_wsf_urban: bool = False,
-                          mask_out_lakes: bool = True,
+                          # mask_osm_buildings: bool = True,
+                          # mask_bing_buildings: bool = True,
+                          # mask_wsf_urban: bool = False,
+                          # mask_out_lakes: bool = True,
                           create_individual_results: bool = True,
-                          export_coastline_masks: bool = True,
+                          # export_coastline_masks: bool = True,
                           delete_datafiles: bool = False,
                           include_photon_validation: bool = True,
                           write_result_tifs: bool = False,
-                          omit_bad_granules: bool = True,
+                          # omit_bad_granules: bool = True,
                           write_summary_csv: bool = True,
                           measure_coverage: bool = False,
                           outliers_sd_threshold: float = 2.5,
@@ -272,7 +273,8 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
     # if use_icesat2_photon_database:
     # Generate a single photon database object and pass it repeatedly to all the objects.
     # This saves us a lot of re-reading the geodataframe repeatedly.
-    photon_db_obj = icesat2_photon_database.ICESat2_Database()
+    # photon_db_obj = icesat2_photon_database.ICESat2_Database()
+    photon_db_obj = icesat2_database_v2.IS2Database()
 
     files_to_export = []
     list_of_results_dfs = []
@@ -307,7 +309,7 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
             # whole directory.
             validate_dem.validate_dem(dem_path,
                                       output_dir,
-                                      band_num=band_num,
+                                      # band_num=band_num,
                                       shared_ret_values=shared_ret_values,
                                       icesat2_photon_database_obj=photon_db_obj,
                                       ivert_job_name=ivert_job_name,
@@ -317,17 +319,17 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
                                       overwrite=overwrite,
                                       delete_datafiles=delete_datafiles,
                                       write_result_tifs=write_result_tifs,
-                                      mask_osm_buildings=mask_osm_buildings,
-                                      mask_bing_buildings=mask_bing_buildings,
-                                      mask_wsf_urban=mask_wsf_urban,
-                                      mask_out_lakes=mask_out_lakes,
+                                      # mask_osm_buildings=mask_osm_buildings,
+                                      # mask_bing_buildings=mask_bing_buildings,
+                                      # mask_wsf_urban=mask_wsf_urban,
+                                      # mask_out_lakes=mask_out_lakes,
                                       write_summary_stats=create_individual_results,
-                                      export_coastline_mask=export_coastline_masks,
+                                      # export_coastline_mask=export_coastline_masks,
                                       include_photon_level_validation=include_photon_validation,
                                       plot_results=create_individual_results,
                                       outliers_sd_threshold=outliers_sd_threshold,
                                       mark_empty_results=True,
-                                      omit_bad_granules=omit_bad_granules,
+                                      # omit_bad_granules=omit_bad_granules,
                                       measure_coverage=measure_coverage,
                                       verbose=verbose)
         except MemoryError:
@@ -379,7 +381,7 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
         # On the IVERT server, the local EC2 instance has limited disk space. If it's more than the maximnum disk usage
         # threshold outlined in ivert_config, clean it up. BUT ONLY IF IT'S AN AWS INSTANCE AND
         # NO OTHER JOBS BESIDES THIS ONE ARE RUNNING.
-        ivert_config = configfile.get_ivert_config()
+        ivert_config = configfile.Config()
         if is_aws.is_aws() and \
                 clean_ivert_files.disk_usage_pct() >= ivert_config.ivert_disk_usage_max_percent and \
                 len(ivert_jobs.list_running_ivert_jobs()) <= 1:
@@ -420,10 +422,14 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
     files_to_export.append(statsfile_name)
 
     # Output the validation results plot.
-    plot_validation_results.plot_histogram_and_error_stats_4_panels(total_results_df,
-                                                                    plot_file_name,
-                                                                    place_name=place_name,
-                                                                    verbose=verbose)
+    # plot_validation_results.plot_histogram_and_error_stats_4_panels(total_results_df,
+    #                                                                 plot_file_name,
+    #                                                                 place_name=place_name,
+    #                                                                 verbose=verbose)
+    plot_validation_results.plot_histograms_and_line(total_results_df,
+                                                     plot_file_name,
+                                                     place_name=place_name,
+                                                     verbose=verbose)
 
     files_to_export.append(plot_file_name)
 
@@ -464,12 +470,11 @@ def define_and_parse_args():
                              "input directory.")
 
     parser.add_argument("--input_vdatum", "-ivd", default="egm2008",
-                        help="The vertical datum of the input DEMs. [TODO: List possibilities here.] "
+                        help="The vertical datum of the input DEMs. "
                              "Default: 'egm2008'")
 
     parser.add_argument("--output_vdatum", "-ovd", default="egm2008",
-                        help="The vertical datume of the output analysis. Must be a vdatum compatible with Icesat-2 "
-                             "granules. Default: 'egm2008'.")
+                        help="The vertical datume of the output analysis. Default: If the DEM has a vertical datum assigned in its metadata, use that. If not, assume 'egm2008' and process using that.")
 
     parser.add_argument("--place_name", "-name", type=str, default=None,
                         help="Readable name of the location being validated. Will be used in output summary plots and "
@@ -485,30 +490,30 @@ def define_and_parse_args():
                              "-photon_h5, if they do not already exist. Otherwise will raise errors if directories "
                              "don't already exist. Default: True.")
 
-    parser.add_argument("-mob", "--mask_osm_buildings", dest="mask_osm_buildings",
-                        type=yes_no.interpret_yes_no, default=True,
-                        help="Whether to mask out OSM-derived building footprints in the coastline mask. "
-                             "Must be followed by 'True', 'False', 'Yes', 'No', or any abbreviation thereof "
-                             "(case-insensitive). (Default: True)")
-
-    parser.add_argument("-mbb", "--mask_bing_buildings", dest="mask_bing_buildings",
-                        type=yes_no.interpret_yes_no, default=True,
-                        help="Whether to mask out Bing-derived building footprints in the coastline mask. "
-                             "Must be followed by 'True', 'False', 'Yes', 'No', or any abbreviation thereof "
-                             "(case-insensitive). (Default: True)")
-
-    parser.add_argument("-mwsf", "--mask_wsf_urban", dest="mask_wsf_urban",
-                        type=yes_no.interpret_yes_no, default=False,
-                        help="Whether to mask out World-Settlement-Footprint heavy urban areas in the "
-                             "coastline mask. Typically used instead of building footprints for coarse DEMs "
-                             "with grid cells larger than typical buildings (~20-ish m). Must be followed by "
-                             "'True', 'False', 'Yes', 'No', or any abbreviation thereof (case-insensitive). "
-                             "(Default: False)")
-
-    parser.add_argument("-ml", "--mask_lakes", dest="mask_lakes",
-                        type=yes_no.interpret_yes_no, default=True,
-                        help="Whether to make out lakes, using Hydrolakes and the National Hydrologic Dataset. "
-                             "(Default: True)")
+    # parser.add_argument("-mob", "--mask_osm_buildings", dest="mask_osm_buildings",
+    #                     type=yes_no.interpret_yes_no, default=True,
+    #                     help="Whether to mask out OSM-derived building footprints in the coastline mask. "
+    #                          "Must be followed by 'True', 'False', 'Yes', 'No', or any abbreviation thereof "
+    #                          "(case-insensitive). (Default: True)")
+    #
+    # parser.add_argument("-mbb", "--mask_bing_buildings", dest="mask_bing_buildings",
+    #                     type=yes_no.interpret_yes_no, default=True,
+    #                     help="Whether to mask out Bing-derived building footprints in the coastline mask. "
+    #                          "Must be followed by 'True', 'False', 'Yes', 'No', or any abbreviation thereof "
+    #                          "(case-insensitive). (Default: True)")
+    #
+    # parser.add_argument("-mwsf", "--mask_wsf_urban", dest="mask_wsf_urban",
+    #                     type=yes_no.interpret_yes_no, default=False,
+    #                     help="Whether to mask out World-Settlement-Footprint heavy urban areas in the "
+    #                          "coastline mask. Typically used instead of building footprints for coarse DEMs "
+    #                          "with grid cells larger than typical buildings (~20-ish m). Must be followed by "
+    #                          "'True', 'False', 'Yes', 'No', or any abbreviation thereof (case-insensitive). "
+    #                          "(Default: False)")
+    #
+    # parser.add_argument("-ml", "--mask_lakes", dest="mask_lakes",
+    #                     type=yes_no.interpret_yes_no, default=True,
+    #                     help="Whether to make out lakes, using Hydrolakes and the National Hydrologic Dataset. "
+    #                          "(Default: True)")
 
     parser.add_argument("-ind", "--individual_results", dest="individual_results",
                         type=yes_no.interpret_yes_no, default=True,
@@ -573,9 +578,9 @@ def main():
                                     "Create directory or use the --create_folders flag upon execution.")
 
     # NOTE: This code assumes that if we create the directory here, it will
-    # not be erased befor the code gets to putting files there later. Seems
+    # not be erased before the code gets to putting files there later. Seems
     # like a generally safe assumption, and behavior is okay if another process
-    # or the user manually deletes directories during execusion, it will cause
+    # or the user manually deletes directories during execution, it will cause
     # the program to crash when it tries to write files there. That's a user error.
 
     # Set up multiprocessing. 'spawn' is the slowest but the most reliable. Otherwise, file handlers are fucking us up.
@@ -593,11 +598,11 @@ def main():
                           delete_datafiles=args.delete_datafiles,
                           include_photon_validation=args.include_photon_validation,
                           write_result_tifs=args.write_result_tifs,
-                          mask_osm_buildings=args.mask_osm_buildings,
-                          mask_bing_buildings=args.mask_bing_buildings,
-                          mask_wsf_urban=args.mask_wsf_urban,
-                          mask_out_lakes=args.mask_lakes,
-                          omit_bad_granules=True,
+                          # mask_osm_buildings=args.mask_osm_buildings,
+                          # mask_bing_buildings=args.mask_bing_buildings,
+                          # mask_wsf_urban=args.mask_wsf_urban,
+                          # mask_out_lakes=args.mask_lakes,
+                          # omit_bad_granules=True,
                           measure_coverage=args.measure_coverage,
                           write_summary_csv=args.write_summary_csv,
                           outliers_sd_threshold=ast.literal_eval(args.outlier_sd_threshold),

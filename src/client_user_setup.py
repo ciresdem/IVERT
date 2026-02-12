@@ -841,16 +841,18 @@ def define_and_parse_args(just_return_parser: bool = False,
         ivert_user_config_template = configfile.Config(ivert_config.ivert_user_config_template)
 
     parser = argparse.ArgumentParser(description="Set up IVERT on the local machine.")
-    parser.add_argument("--offline", type=bool, required=False, default=True, action="store_true",
-                        help="Set up IVERT to run in 'offline' mode on the local machine (Default). "
-                            "This is ignored if '--online' is set.")
-    parser.add_argument("--online", type=bool, required=False, default=False, action="store_true",
-                        help="Set up IVERT to run in 'online' mode in the cloud. "
-                             "This requires a username and credentials to be provided. If you've never set up IVERT "
-                             "on this machine before, use the flags below. If you already have, your previous "
-                             "configuration files will be reused automatically. If set, this supersedes the 'offline' setting.")
+    # No longer operating in "online" mode. Just offline (for now)
+    # parser.add_argument("--offline", type=bool, required=False, default=True, action="store_true",
+    #                     help="Set up IVERT to run in 'offline' mode on the local machine (Default). "
+    #                         "This is ignored if '--online' is set.")
+    # parser.add_argument("--online", type=bool, required=False, default=False, action="store_true",
+    #                     help="Set up IVERT to run in 'online' mode in the cloud. "
+    #                          "This requires a username and credentials to be provided. If you've never set up IVERT "
+    #                          "on this machine before, use the flags below. If you already have, your previous "
+    #                          "configuration files will be reused automatically. If set, this supersedes the 'offline' setting.")
 
     # Online group, for settings that are used only when setting up in 'online' mode.
+
     online_group = parser.add_argument_group("IVERT online setup prompts.",
                                              description="If '--online' is chosen above and you're setting up for the "
                                                          "first time on this machine, use the following prompts to "
