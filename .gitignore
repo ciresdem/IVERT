@@ -164,3 +164,4 @@ data/*
 scratch_data/*
 src/tests/
 src/tests_old/
+CLAUDE.md

@@ -359,6 +359,7 @@ def define_and_parse_args(return_parser: bool = False):
     ###############################################################
     upgrade_help_msg = "Upgrade the IVERT client to the lasest version."
     parser_upgrade = subparsers.add_parser("upgrade", help=upgrade_help_msg, description=upgrade_help_msg)
+    # The "upgrade" command has no sub-arguments. It's just a simple "upgrade to the latest version" functionality.
 
     # Not implemented yet.
     # ###############################################################
@@ -379,12 +380,12 @@ def define_and_parse_args(return_parser: bool = False):
         return parser.parse_args()
 
 
-def prompt_for_latest_version():
-    """Prompt the user to upgrade the IVERT client."""
-    return yes_no.query_yes_no(f"Your IVERT client (v{version.__version__}) is out of date with the IVERT server "
-                               f"that requires v{version_check_client.fetch_min_client_from_server()} or higher. "
-                               f"Would you like to upgrade?",
-                               default="y")
+# def prompt_for_latest_version():
+#     """Prompt the user to upgrade the IVERT client."""
+#     return yes_no.query_yes_no(f"Your IVERT client (v{version.__version__}) is out of date with the IVERT server "
+#                                f"that requires v{version_check_client.fetch_min_client_from_server()} or higher. "
+#                                f"Would you like to upgrade?",
+#                                default="y")
 
 
 def ivert_client_cli():
@@ -410,48 +411,51 @@ def ivert_client_cli():
     # For all other commands, make sure the IVERT client is up-to-date enough to be compatible with the server.
     # If not, prompt if they want to upgrade before continuing.
     # ONLY do this if we're running as a package, not as a script.
-    if (vars(sys.modules[__name__])['__package__'] == 'ivert') and not version_check_client.is_this_client_compatible():
-        if prompt_for_latest_version():
-            client_upgrade.upgrade()
-            print("You may now re-run your command.")
-        sys.exit(0)
+    # if (vars(sys.modules[__name__])['__package__'] == 'ivert') and not version_check_client.is_this_client_compatible():
+    #     if prompt_for_latest_version():
+    #         client_upgrade.upgrade()
+    #         print("You may now re-run your command.")
+    #     sys.exit(0)
 
     # Subscribe to IVERT email notifications
-    elif args.command == "subscribe":
-        client_subscriptions.run_subscribe_command(args)
+    # elif args.command == "subscribe":
+    #     client_subscriptions.run_subscribe_command(args)
 
     # Unsubscribe from IVERT email notifications
-    elif args.command == "unsubscribe":
-        client_subscriptions.run_unsubscribe_command(args)
+    # elif args.command == "unsubscribe":
+    #     client_subscriptions.run_unsubscribe_command(args)
 
     # Validate a set of DEMs
     elif args.command == "validate":
         client_job_validate.run_validate_command(args)
 
+    elif args.command == "build":
+        raise NotImplementedError("'ivert build' command not yet implemented.")
+
     # Download results from IVERT
-    elif args.command == "download":
-        client_job_download.run_download_command(args)
+    # elif args.command == "download":
+    #     client_job_download.run_download_command(args)
 
     # Update part of the IVERT database.
-    elif args.command == "update":
-        if args.listdir:
-            client_job_update.run_update_command(args)
-        else:
-            # TODO: Implement this
-            raise NotImplementedError("Command 'update' not yet implemented.")
-            pass
+    # elif args.command == "update":
+    #     if args.listdir:
+    #         client_job_update.run_update_command(args)
+    #     else:
+    #         # TODO: Implement this
+    #         raise NotImplementedError("Command 'update' not yet implemented.")
+    #         pass
 
     # Test the IVERT client and server in an end-to-end "test run."
-    elif args.command == "test":
-        client_job_test.run_test_command(args)
+    # elif args.command == "test":
+    #     client_job_test.run_test_command(args)
 
     # Check on the status of a running job
-    elif args.command == "status":
-        client_job_status.run_job_status_command(args)
+    # elif args.command == "status":
+    #     client_job_status.run_job_status_command(args)
 
     # Import data into the IVERT tool (for setup purposes only)
-    elif args.command == "import":
-        client_job_import.run_import_command(args)
+    # elif args.command == "import":
+    #     client_job_import.run_import_command(args)
 
     # Raise an error if the command doesn't exist.
     else:
