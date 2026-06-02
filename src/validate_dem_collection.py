@@ -12,7 +12,6 @@ import os
 import pandas
 import re
 import traceback
-import typing
 
 ####################################
 # # Include the base /src/ directory of thie project, to add all the other modules.
@@ -24,8 +23,8 @@ import validate_dem as validate_dem
 import utils.query_yes_no as yes_no
 
 
-def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFrame, str],
-                           list_of_empty_files: typing.List[str],
+def write_summary_csv_file(total_results_df_or_file: pandas.DataFrame | str,
+                           list_of_empty_files: list[str] | tuple[str],
                            csv_name: str,
                            verbose: bool = True) -> pandas.DataFrame:
     """Write a summary csv of all the results in a collection, after they've been run."""
@@ -93,13 +92,13 @@ def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFra
 
 def validate_list_of_dems(dem_list_or_dir: str | list[str],
                           classes: list[int] | tuple[int] = [1, 6, 40],
-                          output_dir: typing.Union[str, None] = None,
-                          fname_filter: typing.Union[str, None] = r"\.tif\Z",
-                          fname_omit: typing.Union[str, None] = None,
+                          output_dir: str | None = None,
+                          fname_filter: str | None = r"\.tif\Z",
+                          fname_omit: str | None = None,
                           band_num: int = 1,
                           input_vdatum: str = "egm2008",
                           overwrite: bool = False,
-                          place_name: typing.Union[str, None] = None,
+                          place_name: str | None = None,
                           create_individual_results: bool = True,
                           delete_datafiles: bool = False,
                           include_photon_validation: bool = True,

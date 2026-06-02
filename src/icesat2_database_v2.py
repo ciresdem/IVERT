@@ -9,7 +9,6 @@ import os
 import pandas
 import shapely
 import shutil
-import typing
 import xarray
 
 import fetchez
@@ -29,7 +28,7 @@ logger = logging.getLogger(__name__)
 _ICESAT2_EPOCH = datetime.datetime(2018, 1, 1, 0, 0, 0)
 
 
-def _yyyymmdd_to_delta_time(yyyymmdd: typing.Union[int, str]) -> float:
+def _yyyymmdd_to_delta_time(yyyymmdd: int | str) -> float:
     """Convert a YYYYMMDD integer to ICESat-2 delta_time (seconds since 2018-01-01)."""
     return (datetime.datetime.strptime(str(int(yyyymmdd)), "%Y%m%d") - _ICESAT2_EPOCH).total_seconds()
 
@@ -42,7 +41,7 @@ def _delta_time_to_yyyymmdd(delta_time: float) -> int:
 class IS2Database:
 
     def __init__(self,
-                 ivert_config: typing.Union[utils.configfile.Config, None] = None):
+                 ivert_config: utils.configfile.Config | None = None):
         # Define the structure of the object.
         if ivert_config is None:
             self.config = utils.configfile.Config()
@@ -165,7 +164,7 @@ class IS2Database:
         }
 
     @staticmethod
-    def _read_nc_metadata(nc_fn: str) -> typing.Union[dict, None]:
+    def _read_nc_metadata(nc_fn: str) -> dict | None:
         """Read metadata attrs from a NetCDF granule file without loading photon arrays.
 
         This is deliberately fast: xarray reads only the file header, not the data.
@@ -230,7 +229,7 @@ class IS2Database:
                            nc_fn: str,
                            query_bbox: tuple,
                            classes_to_keep: tuple = (1, 2, 3, 7, 40, 41),
-                           overwrite: bool = False) -> typing.Union[dict, None]:
+                           overwrite: bool = False) -> dict | None:
         """Classify an ATL03 HDF5 file with globato and save the result as NetCDF.
 
         The output .nc file contains only the photon classes in classes_to_keep, plus
@@ -327,9 +326,9 @@ class IS2Database:
         return db_record
 
     def open_gdf(self,
-                 read_compressed: typing.Union[str, bool] = "only_if_newer",
+                 read_compressed: str | bool = "only_if_newer",
                  force_reread: bool = False,
-                 verbose: bool = True) -> typing.Union[geopandas.GeoDataFrame, None]:
+                 verbose: bool = True) -> geopandas.GeoDataFrame | None:
         """Get a GeoDataFrame from the database.
 
         Parameters
@@ -373,8 +372,8 @@ class IS2Database:
         return self.gdf
 
     def read_database_file(self,
-                           bbox: typing.Union[list, tuple, None] = None,
-                           date_range: typing.Union[list, tuple, None] = None):
+                           bbox: list | tuple | None = None,
+                           date_range: list | tuple | None = None):
         """Read the master database into a GeoDataFrame.
 
         Subset list of granules by bounding box and date range of the data (not the query box).
@@ -427,8 +426,8 @@ class IS2Database:
 
     @staticmethod
     def read_granule(granule_fn: str,
-                     subset_bbox: typing.Union[list, tuple, None] = None,
-                     photon_classes: typing.Union[list, tuple, None] = None) \
+                     subset_bbox: list | tuple | None = None,
+                     photon_classes: list | tuple | None = None) \
             -> pandas.DataFrame:
         """Read classified photons from a NetCDF granule file.
 
@@ -479,13 +478,13 @@ class IS2Database:
 
 
     def query_photons(self,
-                      bbox: typing.Union[list, tuple, None] = None,
-                      photon_classes: typing.Union[list, tuple, None] = (1, 6, 40),
+                      bbox: list | tuple | None = None,
+                      photon_classes: list | tuple | None = (1, 6, 40),
                       min_bathy_confidence = 0.75,
                       omit_bboxes = [],
                       # download_new_data: bool = False,
                       ) \
-            -> typing.Union[pandas.DataFrame, None]:
+            -> pandas.DataFrame | None:
         """Query the database for photons in a given bounding box and date range.
 
         Parameters
@@ -563,7 +562,7 @@ class IS2Database:
 
 
     def convert_date_range(self,
-                           date_range: typing.Union[list, tuple, None]) -> typing.Union[list, tuple, None]:
+                           date_range: list | tuple | None) -> list | tuple | None:
         """Convert date range to the format required by the database."""
         if date_range is None:
             return None
@@ -573,7 +572,7 @@ class IS2Database:
             raise ValueError("Date range must be a list or tuple of length 2.")
 
 
-    def convert_date_to_yyyymmdd(self, date: typing.Union[int, str, datetime.datetime, datetime.date]) -> int:
+    def convert_date_to_yyyymmdd(self, date: int | str | datetime.datetime | datetime.date) -> int:
         """Convert date to the YYYYMMDD integer format required by the database."""
         if isinstance(date, int):
             # If it's an integer, make sure it's 8 digits and then return as-is.
@@ -595,8 +594,8 @@ class IS2Database:
 
 
     def query_granules(self,
-                       bbox: typing.Union[list, tuple]) \
-            -> typing.Union[pandas.DataFrame, None]:
+                       bbox: list | tuple) \
+            -> pandas.DataFrame | None:
         """Return a sub-dataframe of granules in the database that possibly intersect the bounding box, using data bounding boxes."""
         gdf = self.open_gdf()
         if gdf is None or len(gdf) == 0:
@@ -620,13 +619,13 @@ class IS2Database:
 
 
     def download_new_granules(self,
-                              bbox: typing.Union[list, tuple],
+                              bbox: list | tuple,
                               classes_to_keep=(1, 2, 3, 7, 40, 41),
                               split_big_bboxes: bool = True,
                               tile_size_deg=2.0,
                               max_tile_scale_factor=1.5,
                               min_bathy_confidence=0.01,
-                              cache_subdir: typing.Union[str, None] = None):
+                              cache_subdir: str | None = None):
         """Download ICESat-2 ATL03 granules from NASA using fetchez and register them in the database.
 
         Downloads raw HDF5 files into granules_dir; classification is deferred to read time via globato.
@@ -762,7 +761,7 @@ class IS2Database:
 
     def bounds(self,
                axis: str,
-               data_or_query: str = "data") -> typing.Union[tuple, None]:
+               data_or_query: str = "data") -> tuple | None:
         """Return the min, max bounds of each entry in the database, on the axis requested ('x', 'y', or 't').
         
         Parameters
@@ -812,8 +811,8 @@ class IS2Database:
 
 
     def unique_bboxes(self,
-                      gdf: typing.Union[geopandas.GeoDataFrame, None] = None,
-                      data_or_query: str = "query") -> typing.Union[list, None]:
+                      gdf: geopandas.GeoDataFrame | None = None,
+                      data_or_query: str = "query") -> list | None:
         """Return a numpy array of unique query bounding boxes in the database.
 
         This is useful to see what query bounding-boxes have already been populated in the database.
@@ -863,7 +862,7 @@ class IS2Database:
                      delete_cmr: bool = True,
                      delete_already_processed_txt: bool = True,
                      delete_cudem_cache: bool = True,
-                     cache_subdir: typing.Union[str, None] = None) -> None:
+                     cache_subdir: str | None = None) -> None:
         """Delete the icesat-2 data downloads and clears the cache directory."""
         # If we only want to get rid of previous ICESat-2 downloads, clearing the CMR sub-directory will do that.
         if cache_subdir is None:
@@ -891,7 +890,7 @@ class IS2Database:
 
 
     @staticmethod
-    def bbox_valid(bbox: typing.Union[list, tuple]) -> bool:
+    def bbox_valid(bbox: list | tuple) -> bool:
         """Validate a bounding box. Make sure all min-max values are correctly ordered.
 
         Parameters:
@@ -912,7 +911,7 @@ class IS2Database:
 
 
     def filter_query_bbox(self,
-                          query_bbox: typing.Union[list, tuple]) -> list[tuple]:
+                          query_bbox: list | tuple) -> list[tuple]:
         """Given an (x,y,t) ICESat-2 bounding box, remove existing regions and return bboxes for the rest of the data.
         
         Parameters
@@ -969,7 +968,7 @@ class IS2Database:
 
 
     @staticmethod
-    def increment_yyyymmdd_by_n(yyyymmdd: typing.Union[int, float, str],
+    def increment_yyyymmdd_by_n(yyyymmdd: int | float | str,
                                 days: int) -> int:
         """Increment a YYYYMMDD integer by N calendar days (positive or negative).."""
         ymd = int(yyyymmdd)
@@ -977,9 +976,9 @@ class IS2Database:
         return int(ymd_dt.strftime("%Y%m%d"))
 
 
-def split_bbox_into_parts(bbox: typing.Union[list, tuple],
+def split_bbox_into_parts(bbox: list | tuple,
                           tile_size_deg: float = 2.0,
-                          max_tile_scale_factor: float = 1.5) -> typing.Union[list, None]:
+                          max_tile_scale_factor: float = 1.5) -> list | None:
     """Split a bounding box into parts of size approximately deg_size degrees.."""
     # if we included a 6-value bbox, save the last two and append them at the end.
     tmin, tmax = None, None

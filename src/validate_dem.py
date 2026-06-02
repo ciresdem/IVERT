@@ -19,7 +19,6 @@ import re
 import signal
 import sys
 import time
-import typing
 
 import utils.progress_bar as progress_bar
 import utils.parallel_funcs as parallel_funcs
@@ -368,7 +367,7 @@ def kick_off_new_child_process(height_array_name,
 
 def subdivide_dem(dem_name: str,
                   factor: int = 2,
-                  output_dir: typing.Union[str, None] = None,
+                  output_dir: str | None = None,
                   verbose: bool = False) -> list[str]:
     """Split a DEM into 4 smaller parts.
 

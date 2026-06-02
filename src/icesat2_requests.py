@@ -9,7 +9,6 @@ import ast
 import datetime
 import os
 import time
-import typing
 
 import dateparser
 import numpy
@@ -49,7 +48,7 @@ class ICESat2RequestsCSV:
                               only_unexpired: bool = True,
                               tolerance: float = 1e-9,
                               return_rows: bool = False
-                              ) -> typing.Union[dict, pandas.DataFrame, None]:
+                              ) -> dict | pandas.DataFrame | None:
         """Return the cached Harmony JSON for a matching request, or None.
 
         Parameters
