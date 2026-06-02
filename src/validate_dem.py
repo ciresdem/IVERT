@@ -6,16 +6,6 @@ Created on Tue Jun 22 16:06:21 2021
 @author: mmacferrin
 """
 
-
-try:
-    # We don't actually use the cudem modules here, but we make command-line
-    # calls to "waffles", so check here to make sure cudem is installed on this
-    # machine. If we can import the waffles module, we can use it from the command-line.
-    from cudem import waffles
-except:
-    raise ModuleNotFoundError("Module 'cudem/waffles.py' required. Update paths, or refer to https://github.com/ciresdem/cudem for installation instructions.")
-# EMPTY_VAL = -9999
-
 import argparse
 import ast
 import multiprocessing as mp
@@ -25,10 +15,8 @@ import numpy
 from osgeo import gdal, osr
 import os
 import pandas
-import pyproj
 import re
 import signal
-import subprocess
 import sys
 import time
 import typing
@@ -38,19 +26,11 @@ import utils.parallel_funcs as parallel_funcs
 import utils.configfile
 import utils.pickle_blosc
 import utils.split_dem
-import convert_vdatum
 import plot_validation_results
-import jobs_database
-import server_file_export
 import icesat2_database_v2
 import icesat2_query
 import transform_points
-import utils.query_yes_no as yes_no
 import utils.loggerproc
-
-# # Just for debugging memory issues. TODO: Remove later.
-# import psutil
-# import utils.sizeof_format as sizeof
 
 
 # NOTE: This eliminates a Deprecation error in GDAL v3.x. In GDAL 4.0, they will use Exceptions by default and this
@@ -454,36 +434,29 @@ def reset_results_indexes_after_merge(sub_results_df: pandas.DataFrame,
 
 
 def validate_dem(dem_name: str,
-                 output_dir: typing.Union[str, None] = None,
-                 shared_ret_values: typing.Union[dict, None] = None,
-                 icesat2_photon_database_obj: typing.Union[icesat2_database_v2.IS2Database, None] = None,
+                 output_dir: str | None = None,
+                 dates: None | list[int, int] | tuple[int, int] = None,
+                 classes: list[int] | tuple[int] = [1, 6, 40],
+                 shared_ret_values: dict | None = None,
+                 icesat2_photon_database_obj: icesat2_database_v2.IS2Database | None = None,
                  band_num: int = 1,
-                 dem_vertical_datum: typing.Union[str, int] = "egm2008",
-                 output_vertical_datum: typing.Union[str, int] = "egm2008",
-                 ivert_job_name: typing.Union[str, None] = None,
-                 interim_data_dir: typing.Union[str, None] = None,
+                 dem_vertical_datum: str | int = "egm2008",
+                 interim_data_dir: str | None = None,
                  overwrite: bool = False,
                  delete_datafiles: bool = False,
-                 # mask_out_lakes: bool = True,
-                 # mask_osm_buildings: bool = True,
-                 # mask_bing_buildings: bool = True,
-                 # mask_wsf_urban: bool = True,
-                 # include_gmrt_mask: bool = False,
                  write_result_tifs: bool = True,
                  write_summary_stats: bool = True,
-                 # export_coastline_mask: bool = True,
-                 outliers_sd_threshold: float = 2.5,
+                 outliers_sd_threshold: float | None = 2.5,
                  include_photon_level_validation: bool = False,
                  plot_results: bool = True,
-                 location_name: typing.Union[str, None] = None,
+                 location_name: str | None = None,
                  mark_empty_results: bool = True,
-                 # omit_bad_granules: bool = True,
                  measure_coverage: bool = False,
-                 max_photons_per_cell: typing.Union[int, None] = None,
+                 max_photons_per_cell: int | None = None,
                  numprocs: int = parallel_funcs.physical_cpu_count(),
                  max_subdivides: int = 4,
                  subdivision_number: int = 0,
-                 orig_dem_name: typing.Union[str, None] = None,
+                 orig_dem_name: str | None = None,
                  verbose: bool = True):
     """Validate a DEM and produce output results.
 
@@ -494,6 +467,10 @@ def validate_dem(dem_name: str,
     Args:
         dem_name (str): Name of the DEM file to validate.
         output_dir (str): Output directory for results.
+        dates (None, list, tuple): 2-tuple of photon dates (mutually inclusive) for ICESat-2 data to use in this
+            validation. Default: use all dates available in the database.
+        classes (list, tuple): The ICESat-2 classes to use for validation. Default: [1,5,40], meaning land (1),
+            ice surface (5), and bathy_floor (40)
         shared_ret_values (dict, None): Shared return values from validate_dem_parallel. This is an analagous way to get
             the return values back from the calling function if this is called as a sub-process.
         icesat2_photon_database_obj (icesat2_database_v2.IS2Database): icesat-2 photon database object. Only
@@ -501,25 +478,16 @@ def validate_dem(dem_name: str,
             Typically ignored for a single DEM validation.
         band_num (int): The raster band to use in the DEMs. 1-indexed. Defaults to 1 (first band).
         dem_vertical_datum: (str, int): The vertical datum of the DEM. Defaults to "egm2008".
-        output_vertical_datum: (str, int): The vertical datum of the results. Defaults to "egm2008".
-        ivert_job_name (str): The name of an ivert_server job to update file status and export results.
         interim_data_dir (str): Output directory for intermediate data. Defaults to the same as the output_dir.
         overwrite (bool): Overwrite existing files.
         delete_datafiles (bool): Delete intermediate data files after validation is complete.
-        mask_out_lakes (bool): Mask out lakes using NHD and HydroLakes.
-        mask_osm_buildings (bool): Mask out OSM buildings.
-        mask_bing_buildings (bool): Mask out Bing buildings.
-        mask_wsf_urban (bool): Mask out WSF urban areas.
-        include_gmrt_mask (bool): Include GMRT mask for coastline masking (typically not used).
         write_result_tifs (bool): Write result geotifs with ICESat-2 derived errors.
         write_summary_stats (bool): Write summary statistics of results to a textfile.
-        export_coastline_mask (bool): Export a geotiff of the coastline mask along with results.
         outliers_sd_threshold (float): Threshold for outlier detection in errors. Defaults to 2.5.
         include_photon_level_validation (bool): Include photon level validation (not just cell-level validation).
         plot_results (bool): Plot results.
         location_name (str): Name of the location being validated.
         mark_empty_results (bool): Mark results that are empty in an "_EMPTY.txt" file.
-        omit_bad_granules (bool): Check for 'bad_granules' in the photon database, and exclude them before validation.
         measure_coverage (bool): Measure the coverage of ICESat-2 photons within each grid-cell.
         max_photons_per_cell (int): Maximum number of photons per cell.
         numprocs (int): Number of processes to use for parallelized validation.
@@ -529,22 +497,6 @@ def validate_dem(dem_name: str,
         orig_dem_name (str): Name of the original DEM file. Only used for error messages.
         verbose (bool): Be verbose.
     """
-    # If we're running this on the ivert AWS server it'll have an "ivert_job_name" parameter.
-    # Create the necessary support objects.
-    if ivert_job_name:
-        ivert_jobs_db = jobs_database.JobsDatabaseServer() # Jobs database object.
-        ivert_exporter = server_file_export.IvertExporter(s3_manager=None, jobs_db=ivert_jobs_db)  # Exporter object
-        ivert_username = server_file_export.get_username(ivert_job_name)
-        ivert_job_id = server_file_export.get_job_id(ivert_job_name)
-
-        ivert_jobs_db.update_file_status(ivert_username, ivert_job_id, os.path.basename(dem_name), "processing",
-                                         upload_to_s3=True)
-    else:
-        ivert_jobs_db = None
-        ivert_exporter = None
-        ivert_username = None
-        ivert_job_id = None
-
     if shared_ret_values is None:
         shared_ret_values = {}
 
@@ -557,25 +509,18 @@ def validate_dem(dem_name: str,
               'icesat2_photon_database_obj': icesat2_photon_database_obj,
               'band_num': band_num,
               'dem_vertical_datum': dem_vertical_datum,
-              'output_vertical_datum': output_vertical_datum,
-              'ivert_job_name': ivert_job_name,
               'interim_data_dir': interim_data_dir,
               'overwrite': overwrite,
               'delete_datafiles': delete_datafiles,
-              # 'mask_out_lakes': mask_out_lakes,
-              # 'mask_osm_buildings': mask_osm_buildings,
-              # 'mask_bing_buildings': mask_bing_buildings,
-              # 'mask_wsf_urban': mask_wsf_urban,
-              # 'include_gmrt_mask': include_gmrt_mask,
+              'dates': dates,
+              'classes': classes,
               'write_result_tifs': write_result_tifs,
               'write_summary_stats': write_summary_stats,
-              # 'export_coastline_mask': export_coastline_mask,
               'outliers_sd_threshold': outliers_sd_threshold,
               'include_photon_level_validation': include_photon_level_validation,
               'plot_results': plot_results,
               'location_name': location_name,
               'mark_empty_results': mark_empty_results,
-              # 'omit_bad_granules': omit_bad_granules,
               'measure_coverage': measure_coverage,
               'max_photons_per_cell': max_photons_per_cell,
               'numprocs': numprocs,
@@ -595,8 +540,6 @@ def validate_dem(dem_name: str,
                              kwargs=kwargs)
 
     subproc.start()
-    # while subproc.is_alive():
-    #     time.sleep(0.1)
     subproc.join(timeout=None)
     exitcode = subproc.exitcode
     subproc.close()
@@ -607,10 +550,6 @@ def validate_dem(dem_name: str,
     if exitcode == 0:
         shared_ret_values.update(sub_shared_ret_values)
 
-        if ivert_job_name is not None and subdivision_number == 0:
-            ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
-                                             os.path.basename(dem_name), "processed", upload_to_s3=False)
-
         return list(shared_ret_values.values())
 
     elif abs(exitcode) == abs(signal.SIGKILL):
@@ -618,19 +557,11 @@ def validate_dem(dem_name: str,
 
         # Unless we've already hit max recursion. In that case, error-out.
         if subdivision_number == max_subdivides:
-            if ivert_job_name is not None and subdivision_number == 0:
-                ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
-                                                 os.path.basename(orig_dem_name), "error", upload_to_s3=False)
-
             raise MemoryError(f"validate_dem.validate_dem('{orig_dem_name}', ...) was terminated, "
                               f"likely due to a memory error.")
 
         # Make sure the DEM exists that we're trying to sub-divide
         if not os.path.exists(dem_name):
-            if ivert_job_name is not None and subdivision_number == 0:
-                ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
-                                                 os.path.basename(orig_dem_name), "error", upload_to_s3=False)
-
             raise FileNotFoundError(f"validate_dem.validate_dem_parallell({orig_dem_name},...) could not find {dem_name}.")
 
         # Split up the DEM into 4 parts.
@@ -647,29 +578,22 @@ def validate_dem(dem_name: str,
         for sub_dem_name, sub_shared_ret_dict in zip(sub_dem_names, sub_shared_ret_values):
             validate_dem(sub_dem_name,
                          output_dir=output_dir,
-                         shared_ret_values=sub_shared_ret_dict,
+                         shared_ret_values=dict(sub_shared_ret_dict),
                          icesat2_photon_database_obj=icesat2_photon_database_obj,
                          band_num=band_num,
                          dem_vertical_datum=dem_vertical_datum,
-                         output_vertical_datum=output_vertical_datum,
-                         ivert_job_name=None, # Don't use an ivert_job_name to export sub-results.
                          interim_data_dir=interim_data_dir,
                          overwrite=overwrite,
                          delete_datafiles=delete_datafiles,
-                         # mask_out_lakes=mask_out_lakes,
-                         # mask_osm_buildings=mask_osm_buildings,
-                         # mask_bing_buildings=mask_bing_buildings,
-                         # mask_wsf_urban=mask_wsf_urban,
-                         # include_gmrt_mask=include_gmrt_mask,
+                         dates=dates,
+                         classes=classes,
                          write_result_tifs=False, # No need to write the results tifs for subsets.
                          write_summary_stats=False, # No need to write the summary stats file for subsets.
-                         # export_coastline_mask=False, # No need to export the coastline mask for subsets.
                          outliers_sd_threshold=None, # Don't filter outliers until we get all the results back.
                          include_photon_level_validation=include_photon_level_validation,
                          plot_results=False, # Don't bother plotting the sub-results.
                          location_name=location_name,
                          mark_empty_results=mark_empty_results,
-                         # omit_bad_granules=omit_bad_granules,
                          measure_coverage=measure_coverage,
                          max_photons_per_cell=max_photons_per_cell,
                          numprocs=numprocs,
@@ -717,8 +641,6 @@ def validate_dem(dem_name: str,
             shared_results_df.to_hdf(output_fname, key="icesat2", complib="zlib", mode='w')
 
             shared_ret_values[common_key] = output_fname
-            if ivert_job_name is not None and subdivision_number == 0:
-                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_fname, upload_to_s3=False)
 
             if verbose:
                 print(os.path.basename(output_fname), "written and exported.")
@@ -731,39 +653,10 @@ def validate_dem(dem_name: str,
                                     output_fname, verbose=verbose)
 
             shared_ret_values[common_key] = output_fname
-            if ivert_job_name is not None and subdivision_number == 0:
-                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_fname, upload_to_s3=False)
 
         # Merge the coastline masks, only if it needs to be exported and the parent coastline mask hasn't already been created.
         output_coastline_fname = os.path.join(output_dir,
                                               os.path.splitext(os.path.basename(dem_name))[0] + "_coastline_mask.tif")
-
-        # Third, merge the coastline masks if they were called to be returned.
-        # This first block probably won't be entered because the coastline mask was already created, but in case not,
-        # re-create it.
-        # if (("coastline_mask_filename" in common_keys)
-        #         and export_coastline_mask
-        #         and not os.path.exists(output_coastline_fname)):
-        #     common_key = "coastline_mask_filename"
-        #     all_fnames = [sub_shared_ret_values[i][common_key] for i in range(len(sub_shared_ret_values)) if
-        #                   common_key in sub_shared_ret_values[i]]
-        #     gdal_cmd = ["gdal_merge.py",
-        #                 "-of", "GTiff",
-        #                 "-o", output_coastline_fname,
-        #                 "-co", "COMPRESS=DEFLATE",
-        #                 "-co", "PREDICTOR=2",
-        #                 "-co", "TILED=YES"] + all_fnames
-
-            # if verbose:
-            #     print(" ".join(gdal_cmd))
-            #
-            # subprocess.run(gdal_cmd, capture_output=not verbose, check=True)
-
-        # Export the coastline mask if it was called to be returned.
-        # if export_coastline_mask:
-        #     shared_ret_values["coastline_mask_filename"] = output_coastline_fname
-        #     if ivert_job_name is not None and subdivision_number == 0:
-        #         ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_coastline_fname, upload_to_s3=False)
 
         # If we're doing an empty results file, create one in the output directory if no results were returned.
         if mark_empty_results and (shared_results_df is None) and subdivision_number == 0:
@@ -772,8 +665,6 @@ def validate_dem(dem_name: str,
             with open(empty_fname, "w") as f:
                 f.write(os.path.basename(dem_name) + f" had no IVERT results.")
             shared_ret_values["empty_results_filename"] = empty_fname
-            if ivert_job_name is not None and subdivision_number == 0:
-                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_fname, upload_to_s3=False)
 
         # Create the overall summary stats text file.
         if write_summary_stats and shared_results_df is not None and subdivision_number == 0:
@@ -782,8 +673,6 @@ def validate_dem(dem_name: str,
                                         os.path.splitext(os.path.basename(dem_name))[0] + "_summary_stats.txt")
             write_summary_stats_file(shared_results_df, output_fname, verbose=verbose)
             shared_ret_values["summary_stats_filename"] = output_fname
-            if ivert_job_name is not None and subdivision_number == 0:
-                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_fname, upload_to_s3=False)
 
         # Export the photon dataframe if it was called to be returned.
         if "photon_results_dataframe_file" in common_keys:
@@ -794,8 +683,6 @@ def validate_dem(dem_name: str,
             output_fname = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_photons.h5")
             results_df.to_hdf(output_fname, key="icesat2", complib="zlib", mode='w')
             shared_ret_values[common_key] = output_fname
-            if ivert_job_name is not None and subdivision_number == 0:
-                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_fname, upload_to_s3=False)
 
         # Plot the results.
         if plot_results and (shared_results_df is not None) and (subdivision_number == 0):
@@ -805,13 +692,6 @@ def validate_dem(dem_name: str,
                                                                             place_name=location_name,
                                                                             verbose=verbose)
             shared_ret_values["plot_filename"] = output_fname
-            if ivert_job_name is not None and subdivision_number == 0:
-                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, output_fname, upload_to_s3=False)
-
-        # Update the job status.
-        if ivert_job_name is not None and subdivision_number == 0:
-            ivert_jobs_db.update_file_status(ivert_username, ivert_job_id, os.path.basename(orig_dem_name),
-                                             "processed", upload_to_s3=True)
 
         return list(shared_ret_values.values())
 
@@ -829,37 +709,31 @@ def get_dem_dataset_and_vars(dem_fn) -> tuple:
     dem_step_xy = (gt[1], gt[5])
     dem_bbox = (gt[0], gt[3] + (dem_ds.RasterYSize + 1) * gt[5], gt[0] + (dem_ds.RasterXSize + 1) * gt[1], gt[3])
 
-    return (dem_ds, dem_array, dem_bbox, dem_step_xy)
+    return dem_ds, dem_array, dem_bbox, dem_step_xy
 
 
 def validate_dem_parallel(dem_name: str,
-                          output_dir: typing.Union[str, None] = None,
-                          shared_ret_values: typing.Union[dict, None] = None,
-                          icesat2_photon_database_obj: typing.Union[icesat2_database_v2.IS2Database, None] \
+                          output_dir: str | None = None,
+                          dates: None | list[int, int] | tuple[int, int] = None,
+                          classes: list[int] | tuple[int] = [1, 6, 40],
+                          shared_ret_values: dict | None = None,
+                          icesat2_photon_database_obj: icesat2_database_v2.IS2Database | None \
                                                       = None, # Used only if we've already created this, for efficiency.
                           band_num: int = 1,
-                          dem_vertical_datum: typing.Union[str, int] = "egm2008",
-                          output_vertical_datum: typing.Union[str, int] = "egm2008",
-                          ivert_job_name: typing.Union[str, None] = None,
-                          interim_data_dir: typing.Union[str, None] = None,
+                          dem_vertical_datum: str | int = "egm2008",
+                          interim_data_dir: str | None = None,
                           overwrite: bool = False,
                           delete_datafiles: bool = False,
-                          # mask_out_lakes: bool = True,
-                          # mask_osm_buildings: bool = True,
-                          # mask_bing_buildings: bool = True,
-                          # mask_wsf_urban: bool = True,
-                          # include_gmrt_mask: bool = False,
                           write_result_tifs: bool = True,
                           write_summary_stats: bool = True,
-                          # export_coastline_mask: bool = True,
                           outliers_sd_threshold: float = 2.5,
                           include_photon_level_validation: bool = False,
                           plot_results: bool = True,
-                          location_name: typing.Union[str, None] = None,
+                          location_name: str | None = None,
                           mark_empty_results: bool = True,
-                          # omit_bad_granules: bool = True,
+                          omit_bboxes: None | list[float] | tuple[float] = None,
                           measure_coverage: bool = False,
-                          max_photons_per_cell: typing.Union[int, None] = None,
+                          max_photons_per_cell: int | None = None,
                           numprocs: int = parallel_funcs.physical_cpu_count(),
                           verbose: bool = True):
     """Validate a single DEM.
@@ -869,11 +743,6 @@ def validate_dem_parallel(dem_name: str,
     if not os.path.exists(dem_name):
         file_not_found_msg = f"Could not find file {dem_name}."
         raise FileNotFoundError(file_not_found_msg)
-
-    if ivert_job_name:
-        ivert_exporter = server_file_export.IvertExporter()
-    else:
-        ivert_exporter = None
 
     if shared_ret_values is None:
         shared_ret_values = {}
@@ -916,9 +785,6 @@ def validate_dem_parallel(dem_name: str,
     if plot_results:
         plot_filename = re.sub(r"_results\.h5\Z", "_plot.png", results_dataframe_file)
 
-    # coastline_mask_filename = os.path.join(output_dir if export_coastline_mask else interim_data_dir,
-    #     re.sub(r"_results\.h5\Z", "_coastline_mask.tif", os.path.basename(results_dataframe_file)))
-
     files_to_export = []
 
     if overwrite:
@@ -934,13 +800,8 @@ def validate_dem_parallel(dem_name: str,
         if os.path.exists(plot_filename):
             os.remove(plot_filename)
 
-        # if os.path.exists(coastline_mask_filename):
-        #     os.remove(coastline_mask_filename)
-
     elif os.path.exists(results_dataframe_file):
         results_dataframe = None
-        if ivert_job_name is not None:
-            ivert_exporter.upload_file_to_export_bucket(ivert_job_name, results_dataframe_file)
         files_to_export.append(results_dataframe_file)
         shared_ret_values["results_dataframe_file"] = results_dataframe_file
 
@@ -955,8 +816,6 @@ def validate_dem_parallel(dem_name: str,
 
                 write_summary_stats_file(results_dataframe, summary_stats_filename, verbose=verbose)
 
-            if ivert_job_name is not None:
-                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, summary_stats_filename)
             files_to_export.append(summary_stats_filename)
             shared_ret_values["summary_stats_filename"] = summary_stats_filename
 
@@ -974,8 +833,6 @@ def validate_dem_parallel(dem_name: str,
 
                 generate_result_geotiff(results_dataframe, dem_ds, result_tif_filename, verbose=verbose)
 
-            if ivert_job_name is not None:
-                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, result_tif_filename)
             files_to_export.append(result_tif_filename)
             shared_ret_values["result_tif_filename"] = result_tif_filename
 
@@ -991,42 +848,13 @@ def validate_dem_parallel(dem_name: str,
                     if verbose:
                         print("done.")
 
-                # plot_validation_results.plot_histogram_and_error_stats_4_panels(results_dataframe,
-                #                                                                 plot_filename,
-                #                                                                 place_name=location_name,
-                #                                                                 verbose=verbose)
                 plot_validation_results.plot_histograms_and_line(results_dataframe,
                                                                  plot_filename,
                                                                  place_name=location_name,
                                                                  verbose=verbose)
 
-            if ivert_job_name is not None:
-                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, plot_filename)
             files_to_export.append(plot_filename)
             shared_ret_values["plot_filename"] = plot_filename
-
-        # if export_coastline_mask:
-        #     if not os.path.exists(coastline_mask_filename):
-        #         if results_dataframe is None:
-        #             if verbose:
-        #                 print("Reading", results_dataframe_file, '...', end="")
-        #             results_dataframe = read_dataframe_file(results_dataframe_file)
-        #             if verbose:
-        #                 print("done.")
-        #
-        #         coastline_mask.create_coastline_mask(dem_name,
-        #                                              mask_out_lakes = mask_out_lakes,
-        #                                              mask_osm_buildings = mask_osm_buildings,
-        #                                              mask_bing_buildings = mask_bing_buildings,
-        #                                              mask_wsf_urban = mask_wsf_urban,
-        #                                              include_gmrt = include_gmrt_mask,
-        #                                              output_file = coastline_mask_filename,
-        #                                              verbose=verbose)
-
-            # if ivert_job_name is not None:
-            #     ivert_exporter.upload_file_to_export_bucket(ivert_job_name, coastline_mask_filename)
-            # files_to_export.append(coastline_mask_filename)
-            # shared_ret_values["coastline_mask_filename"] = coastline_mask_filename
 
         # If we didn't have to open the dataframe or export anything, it was all already done.
         if results_dataframe is None and verbose:
@@ -1039,116 +867,41 @@ def validate_dem_parallel(dem_name: str,
             print("No valid data produced during previous ICESat-2 analysis of", os.path.basename(dem_name) + ". Returning.")
         return files_to_export
 
-    # Collect the metadata from the DEM.
-    # dem_ds, dem_array, dem_bbox, dem_epsg, dem_step_xy, \
-        # coastline_mask_filename, coastline_mask_array = \
-        # coastline_mask.get_coastline_mask_and_other_dem_data(dem_name,
-        #                                                      mask_out_lakes=mask_out_lakes,
-        #                                                      mask_osm_buildings=mask_osm_buildings,
-        #                                                      mask_bing_buildings=mask_bing_buildings,
-        #                                                      mask_wsf_urban=mask_wsf_urban,
-        #                                                      include_gmrt=include_gmrt_mask,
-        #                                                      target_fname_or_dir=coastline_mask_filename,
-        #                                                      band_num=band_num,
-        #                                                      verbose=verbose)
-
     dem_ds, dem_array, dem_bbox, dem_step_xy = \
         get_dem_dataset_and_vars(dem_name,)
 
-    # Export the coastline mask if we've been asked to.
-    # if export_coastline_mask:
-    #     if ivert_job_name is not None:
-    #         ivert_exporter.upload_file_to_export_bucket(ivert_job_name, coastline_mask_filename)
-    #     files_to_export.append(coastline_mask_filename)
-    #     shared_ret_values["coastline_mask_filename"] = coastline_mask_filename
-
-    # If the mask is empty (all 0's), there's nothing to validate. Just return an empty file. We're done here.
-    # if numpy.count_nonzero(coastline_mask_array) == 0:
-    #     error_msg = f"Coastline mask file '{os.path.basename(coastline_mask_filename)}' contains all 0's. No land data to validate."
-    #     if verbose:
-    #         print(error_msg)
-    #     with open(empty_results_filename, "w") as f:
-    #         f.write(error_msg)
-    #     if ivert_job_name is not None:
-    #         ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_results_filename)
-    #     shared_ret_values["empty_results_filename"] = empty_results_filename
-    #     files_to_export.append(empty_results_filename)
-    #     return files_to_export
-
-    # Test for compound CRSs. If it's that, just get the horizontal crs from it.
-    # dem_crs_obj = pyproj.CRS.from_epsg(4269) # TODO: Modify this to get it from the file itself.
-    # if dem_crs_obj.is_compound:
-    #     dem_epsg = dem_crs_obj.sub_crs_list[0].to_epsg()
-
-    # The dem_array and the coastline_mask_array should have the same shape
-    # try:
-    #     assert coastline_mask_array.shape == dem_array.shape
-    # except AssertionError as e:
-    #     print("dem file:", dem_name)
-    #     print("coastline file:", coastline_mask_filename)
-    #     print("coastline:", coastline_mask_array.shape, "dem:", dem_array.shape)
-    #     raise e
-    # # If the coastline mask is all 1's, warn about that.
-    # if coastline_mask_array.size == numpy.count_nonzero(coastline_mask_array):
-    #     print("WARNING: Coastline mask file", coastline_mask_filename, "contains all 1's.")
-
-    # # Assert that the both the dem vertical datum and the output vertical datum are valid values.
-    # if isinstance(dem_vertical_datum, str):
-    #     dem_vertical_datum = dem_vertical_datum.strip().lower()
-    # # assert dem_vertical_datum in convert_vdatum.SUPPORTED_VDATUMS
-    # if isinstance(output_vertical_datum, str):
-    #     output_vertical_datum = output_vertical_datum.strip().lower()
-    # assert output_vertical_datum in convert_vdatum.SUPPORTED_VDATUMS
-    #
-    # # Convert the vdatum of the input dem to be the same as the output process.
-    # if dem_vertical_datum != output_vertical_datum:
-    #     dem_base, dem_ext = os.path.splitext(os.path.split(dem_name)[1])
-    #     converted_dem_name = os.path.join(interim_data_dir, dem_base + "_" + output_vertical_datum + dem_ext)
-    #
-    #     if not os.path.exists(converted_dem_name):
-    #         retval = convert_vdatum.convert_vdatum(dem_name,
-    #                                                converted_dem_name,
-    #                                                input_vertical_datum=dem_vertical_datum,
-    #                                                output_vertical_datum=output_vertical_datum,
-    #                                                verbose=verbose)
-    #         if (retval != 0) or (not os.path.exists(converted_dem_name)):
-    #             raise FileNotFoundError(f"{dem_name} not converted correctly to {converted_dem_name}. Aborting.")
-    # else:
-    #     converted_dem_name = dem_name
 
     # Get the dem array from the new dataset.
     # dem_ds = gdal.Open(converted_dem_name, gdal.GA_ReadOnly)
     dem_ds = gdal.Open(dem_name, gdal.GA_ReadOnly)
-    dem_array = dem_ds.GetRasterBand(1).ReadAsArray()
+    dem_array = dem_ds.GetRasterBand(band_num).ReadAsArray()
 
-    dem_epsg_str = icesat2_query.get_dem_srs_string(*icesat2_query.get_dem_reference_frame_from_file(dem_name))
+    # Get the dem's horizontal and vertical reference frame.
+    dem_horz_ref_frame, dem_vert_ref_frame = icesat2_query.get_dem_reference_frame_from_file(dem_name)
+    # If the calling function specified the vertical reference datum, use it (override what's in the file)
+    if dem_vertical_datum is not None:
+        dem_vert_ref_frame = dem_vertical_datum
+
+    dem_epsg_str = icesat2_query.get_dem_srs_string(dem_horz_ref_frame, dem_vert_ref_frame)
     dem_wgs84_bbox = icesat2_query.get_wgs84_bounding_box(dem_name)
 
     # elif use_icesat2_photon_database:
     if icesat2_photon_database_obj is None:
         icesat2_photon_database_obj = icesat2_database_v2.IS2Database()
 
-    # photon_df = icesat2_query.get_photon_dataframe(converted_dem_name,
-    #                                                None,
-    #                                                None,
-    #                                                start_date="20240101",
-    #                                                end_date="20250101",
-    #                                                other_columns=None,
-    #                                                classify_bathymetry=True,
-    #                                                classify_buildings=True,
-    #                                                )
+    # Put the bbox in (xmin, xmax, ymin, ymax, tmin, tmax) orientation.
+    # dates=None means use all available ICESat-2 data (mission start through far future).
+    date_min, date_max = dates if dates is not None else (20180101, 20991231)
+    dem_3d_bbox = (dem_wgs84_bbox[0],
+                   dem_wgs84_bbox[1],
+                   dem_wgs84_bbox[2],
+                   dem_wgs84_bbox[3],
+                   date_min,
+                   date_max)
 
-    # Put the bbox in (xmin, xmax, ymin, ymax, tmin, tmax) orientation
-    # TODO: The dates are hard-coded right now, change that soon!
-    dem_3d_bbox = (dem_wgs84_bbox[0], dem_wgs84_bbox[1], dem_wgs84_bbox[2], dem_wgs84_bbox[3], 20240301, 20250301)
-    # TODO: Also, choosing to omit these little bounding boxes manually for now, add this to command line later.
-    # These offshore bboxes were accidentally omitted from the CRM Vol 8 coastline masks. Mask out all photons within these.
-    omit_bboxes = [(-124.26, -124.01, 45.74, 45.99, 2018_01_01, 2100_01_01),
-                   (-125.01, -124.76, 47.99, 48.24, 2018_01_01, 2100_01_01),
-                   (-124.42, -124.28, 47.00, 47.28, 2018_01_01, 2100_01_01), # A few bad points in Matt's tiles.
-                   (-124.72, -124.71, 48.25, 48.26, 2018_01_01, 2100_01_01)
-                    ]
-    photon_df = icesat2_photon_database_obj.query_photons(dem_3d_bbox, omit_bboxes=omit_bboxes)
+    photon_df = icesat2_photon_database_obj.query_photons(dem_3d_bbox,
+                                                          photon_classes=classes,
+                                                          omit_bboxes=omit_bboxes if omit_bboxes is not None else [])
 
     if photon_df is None or len(photon_df) == 0:
         if mark_empty_results:
@@ -1157,8 +910,6 @@ def validate_dem_parallel(dem_name: str,
             if verbose:
                 print("Created", empty_results_filename, "to indicate no valid ICESat-2 data was returned here.")
 
-            if ivert_job_name is not None:
-                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_results_filename)
             shared_ret_values["empty_results_filename"] = empty_results_filename
             files_to_export.append(empty_results_filename)
             return files_to_export
@@ -1167,30 +918,6 @@ def validate_dem_parallel(dem_name: str,
 
     if verbose:
         print("{0:,}".format(len(photon_df)), "ICESat-2 photons present in photon dataframe.")
-
-    # if len(photon_df) == 0:
-    #     if mark_empty_results:
-    #         # Just create an empty file to mark this dataset as done.
-    #         with open(empty_results_filename, 'w') as f:
-    #             f.write(os.path.basename(dem_name) + " had no ICESat-2 results.")
-    #         if verbose:
-    #             print("Created", empty_results_filename, "to indicate no data was returned here.")
-    #
-    #         if ivert_job_name is not None:
-    #             ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_results_filename)
-    #         shared_ret_values["empty_results_filename"] = empty_results_filename
-    #         return [empty_results_filename]
-    #     else:
-    #         return []
-
-    # Convert points both horizontally and vertically into the reference coordinate system.
-
-    # print(photon_df['x'].min(), photon_df['x'].max(), photon_df['y'].min(), photon_df['y'].max())
-
-    # Temporarily trim it down for testing purposes.
-    # photon_df = photon_df.head(n = 20)
-    # print(dem_epsg_str)
-    # print(dem_wgs84_bbox)
 
     # Now transform points into same spatial reference (horz + vert) as DEMs. Assign to "dem_x", "dem_y", "dem_z".
     try:
@@ -1207,111 +934,9 @@ def validate_dem_parallel(dem_name: str,
         photon_df["dem_x"] = photon_df['x']
         photon_df["dem_y"] = photon_df['y']
         photon_df["dem_z"] = photon_df['z']
-                                          # src_region=dem_wgs84_bbox,)
-
-    # Try using a pyproj transformer with the combined CRS coordinates.
-    # transformer = pyproj.Transformer.from_crs("EPSG:9518",
-    #                                           "EPSG:5498",
-    #                                           always_xy=True)
-    # dem_x, dem_y, dem_z = transformer.transform(photon_df['x'], photon_df['y'], photon_df['z'])
-    # photon_df['dem_x'] = dem_x
-    # photon_df['dem_y'] = dem_y
-    # photon_df['dem_z'] = dem_z
-    # print(photon_df[["x", "dem_x", "y", "dem_y", "z", "dem_z"]])
-
-    # Try changing it into a geodataframe
-    # gdf_orig = geopandas.GeoDataFrame(photon_df, geometry=geopandas.points_from_xy(photon_df['x'], photon_df['y']), crs="EPSG:4326")
-    # gdf_trans = gdf_orig.to_crs(epsg="4269")
-    # print(gdf_orig.geometry)
-    # print(gdf_trans.geometry)
-
-    #
-    # # # First, write the points to XYZ text file.
-    # xyz_file = os.path.join(interim_data_dir, os.path.splitext(os.path.basename(dem_name))[0] + ".xyz")
-    # if os.path.exists(xyz_file):
-    #     print("Removing previous", os.path.basename(xyz_file))
-    #     os.remove(xyz_file)
-    # if not os.path.exists(xyz_file):
-    #     if verbose:
-    #         print("Writing", xyz_file, "...", end="")
-    #     # print(photon_df)
-    #     # print(photon_df.columns)
-    #     photon_df[["x","y","z"]].to_csv(xyz_file, sep=" ", header=False, index=False)
-    #     assert os.path.exists(xyz_file)
-    #     if verbose:
-    #         print("done.")
-
-    #
-    # dlist_file = xyz_file + ".datalist"
-    # if os.path.exists(dlist_file):
-    #     print("Removing previous", os.path.basename(dlist_file))
-    #     os.remove(dlist_file)
-    # if not os.path.exists(dlist_file):
-    #     if verbose:
-    #         print("Writing", dlist_file, "...", end="")
-    #     with open(dlist_file, "w") as f:
-    #         f.write(f"{xyz_file} 168 1.0 0.0")
-    #     assert os.path.exists(dlist_file)
-    #     if verbose:
-    #         print("done.")
-    #
-    # xyz_base, xyz_ext = os.path.splitext(xyz_file)
-    # xyz_output = xyz_base + "_EPSG_4269_5703" + xyz_ext
-
-    # assert abs(dem_step_xy[0]) == abs(dem_step_xy[1])
-    # # Now run dlim to convert it.
-    # # "-R", f"{dem_bbox[0]}/{dem_bbox[2]}/{dem_bbox[1]}/{dem_bbox[3]}",
-    # subproc = ["dlim",
-    #            "-R", f"{dem_bbox[0]}/{dem_bbox[2]}/{dem_bbox[1]}/{dem_bbox[3]}",
-    #            "--s_srs", "EPSG:4326+3855", "--t_srs", "EPSG:4269+5703",
-    #            "-D", interim_data_dir,
-    #            "268",
-    #            dlist_file, ">", xyz_output]
-
-    # if verbose:
-    #     print(" ".join(subproc))
-    # subprocess.call(subproc, shell=True)
-    #
-    # convert_df = pandas.read_csv(xyz_output, sep=" ", header=None, names=["dem_x", "dem_y", "dem_z"])
-    #
-    # photon_df = photon_df.merge(convert_df, left_index=True, right_index=True)
-
-    # print(photon_df)
-    # print(photon_df.columns)
-    # print(photon_df[["x", "dem_x", "y", "dem_y", "z", "dem_z"]])
-    # print((photon_df["x"] - photon_df["dem_x"]).mean())
-    # print((photon_df["y"] - photon_df["dem_y"]).mean())
-    # print((photon_df["z"] - photon_df["dem_z"]).mean())
-    # foobar
 
     ph_xcoords = photon_df["dem_x"]
     ph_ycoords = photon_df["dem_y"]
-
-    # Omit any photons from "bad granules" found from find_bad_icesat2_granules.py
-    # NOTE: After we've filtered out bad granules from the ICESat-2 database, we can
-    # un-set the "omit_bad_granules" flag because the database will have already globally been
-    # filtered out of bad-granule entries.
-    # if omit_bad_granules:
-    #     bad_granules_gid_list = \
-    #         find_bad_icesat2_granules.get_list_of_granules_to_reject(refind_bad_granules=False,
-    #                                                                  return_as_gid_numbers=True,
-    #                                                                  verbose=verbose)
-    #
-    #     if len(bad_granules_gid_list) > 0:
-    #         ph_bad_granule_mask = None
-    #         for gid1, gid2 in bad_granules_gid_list:
-    #             bad_g_mask = (photon_df["granule_id1"] == gid1) & (photon_df["granule_id2"] == gid2)
-    #             if ph_bad_granule_mask is None:
-    #                 ph_bad_granule_mask = bad_g_mask
-    #             elif numpy.count_nonzero(bad_g_mask) > 0:
-    #                 ph_bad_granule_mask = ph_bad_granule_mask | bad_g_mask
-    #
-    #         # If we found some bad photons in bad granules (bad granules!), mask them out.
-    #         if (ph_bad_granule_mask is not None) and (numpy.count_nonzero(ph_bad_granule_mask) > 0):
-    #             n_ph_bad_granules_mask = ~ph_bad_granule_mask
-    #             photon_df = photon_df[n_ph_bad_granules_mask].copy()
-    #             ph_xcoords = ph_xcoords[n_ph_bad_granules_mask]
-    #             ph_ycoords = ph_ycoords[n_ph_bad_granules_mask]
 
     # Assign a dem (i,j) index location for each photon. We use this for computing.
     xstart, xstep, _, ystart, _, ystep = dem_ds.GetGeoTransform()
@@ -1321,6 +946,9 @@ def validate_dem_parallel(dem_name: str,
     # Only use photons that are within the bounds of the DEM. Some may not be actually.
     photon_df = photon_df[(photon_df["i"] >= 0) & (photon_df["i"] < dem_array.shape[0]) &
                           (photon_df["j"] >= 0) & (photon_df["j"] < dem_array.shape[1])]
+
+    # Assign height_field after filtering so its length stays consistent with photon_df.
+    height_field = photon_df["dem_z"]
 
     # Get the nodata value for the array, if it exists.
     dem_ndv = dem_ds.GetRasterBand(1).GetNoDataValue()
@@ -1333,18 +961,10 @@ def validate_dem_parallel(dem_name: str,
     else:
         dem_goodpixel_mask = numpy.ones(dem_array.shape, dtype=bool)
 
-    # if dem_ndv is None:
-    #     dem_goodpixel_mask = (coastline_mask_array > 0)
-    # else:
-    #     dem_goodpixel_mask = (coastline_mask_array > 0) & (dem_array != dem_ndv)
-
     # Create an (i,j) multi-index into the array.
     photon_df = photon_df.set_index(["i", "j"], drop=False)
 
-    # Make sure that we only look at cells that have at least 1 ground photon in them.
-    # TODO: Don't hard-code in classes 1 & 40. Leave up to the calling function.
-    # ph_mask_ground_only = (photon_df["class_code"] == 1) | (photon_df["class_code"] == 40)
-    ph_mask_ground_only = numpy.isin(photon_df["class_code"], [1, 40])
+    ph_mask_ground_only = numpy.isin(photon_df["class_code"], classes)
     dem_mask_w_ground_photons = numpy.zeros(dem_array.shape, dtype=bool)
 
     dem_mask_w_ground_photons[photon_df.i[ph_mask_ground_only],
@@ -1375,8 +995,6 @@ def validate_dem_parallel(dem_name: str,
                 if verbose:
                     print("Created", empty_results_filename, "to indicate no data was returned here.")
 
-                if ivert_job_name is not None:
-                    ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_results_filename)
                 files_to_export.append(empty_results_filename)
                 shared_ret_values["empty_results_filename"] = empty_results_filename
 
@@ -1400,8 +1018,6 @@ def validate_dem_parallel(dem_name: str,
             if verbose:
                 print("Created", empty_results_filename, "to indicate no data was returned here.")
 
-            if ivert_job_name is not None:
-                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_results_filename)
             shared_ret_values["empty_results_filename"] = empty_results_filename
             files_to_export.append(empty_results_filename)
             return files_to_export
@@ -1433,7 +1049,6 @@ def validate_dem_parallel(dem_name: str,
         if verbose:
             print("Done with {0} records.".format(len(dem_elev_df)))
 
-        # print(dem_elev_df)
 
         # Join the dataframes by their i,j values, which will add the "dem_i", "dem_j",
         # and "dem_elevations" columns to the photon dataframe.
@@ -1442,18 +1057,11 @@ def validate_dem_parallel(dem_name: str,
         if verbose:
             print("\tJoining photon_df and DEM elevation tables... ", end="")
         photon_df_with_dem_elevs = photon_df_ground_only.join(dem_elev_df, how='left') # on=('i','j')
-        # Then, drop all photons that didn't line up with a valid land cell according to the coastline mask (dem_elevation values would be NaN)
+        # Then, drop all photons that didn't line up with a valid land cell according to the coastline mask
+        # (dem_elevation values would be NaN)
         photon_df_with_dem_elevs = photon_df_with_dem_elevs[pandas.notna(photon_df_with_dem_elevs["dem_elevation"])]
         if verbose:
             print("Done with {0} records.".format(len(photon_df_with_dem_elevs)))
-
-        # Get the correct height field from the database.
-        if output_vertical_datum in ("ellipsoid", "wgs84"):
-            height_field = photon_df_with_dem_elevs.h_ellipsoid
-        elif output_vertical_datum in ("geoid", "egm2008"):
-            height_field = photon_df_with_dem_elevs.h_geoid
-        else:
-            raise ValueError("Should not have gotten here. Unhandled vdatum: {}".format(output_vertical_datum))
 
         # Subtract the elevations and give us a photon_level error bar.
         # This is a single-column subtraction, should be pretty quick.
@@ -1473,8 +1081,6 @@ def validate_dem_parallel(dem_name: str,
             # Add an extra newline at the end to visually separate it from the next set of steps.
             print("Done.\n")
 
-        if ivert_job_name is not None:
-            ivert_exporter.upload_file_to_export_bucket(ivert_job_name, photon_results_dataframe_file)
         files_to_export.append(photon_results_dataframe_file)
         shared_ret_values["photon_results_dataframe_file"] = photon_results_dataframe_file
 
@@ -1493,20 +1099,6 @@ def validate_dem_parallel(dem_name: str,
     # Set up subprocessing data structures for parallelization.
     cpu_count = numprocs
     dt_dict = parallel_funcs.dtypes_dict
-
-    # Create a multiprocessing shared-memory objects for photon heights, i, j. and codes.
-    # if output_vertical_datum in ("ellipsoid", "wgs84"):
-    #     height_field = photon_df.h_ellipsoid
-    # elif output_vertical_datum in ("geoid", "egm2008"):
-    #     height_field = photon_df.h_geoid
-    # else:
-    #     raise ValueError("Should not have gotten here. Unhandled vdatum: {}".format(output_vertical_datum))
-    height_field = photon_df["dem_z"]
-
-    # height_array = manager.Array(dt_dict[height_field.dtype], height_field)
-    # i_array = manager.Array(dt_dict[photon_df.i.dtype], photon_df.i)
-    # j_array = manager.Array(dt_dict[photon_df.j.dtype], photon_df.j)
-    # code_array = manager.Array(dt_dict[photon_df.class_code.dtype], photon_df.class_code)
 
     # Create "shared memory" arrays for the sub-processes to read.
     proc_id = os.getpid()
@@ -1791,8 +1383,6 @@ def validate_dem_parallel(dem_name: str,
             if verbose:
                 print("Created", empty_results_filename, "to indicate no data was returned here.")
 
-            if ivert_job_name is not None:
-                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_results_filename)
             files_to_export.append(empty_results_filename)
             shared_ret_values["empty_results_filename"] = empty_results_filename
 
@@ -1811,8 +1401,6 @@ def validate_dem_parallel(dem_name: str,
         if verbose:
             print(results_dataframe_file, "written.")
 
-        if ivert_job_name is not None:
-            ivert_exporter.upload_file_to_export_bucket(ivert_job_name, results_dataframe_file)
         files_to_export.append(results_dataframe_file)
         shared_ret_values["results_dataframe_file"] = results_dataframe_file
 
@@ -1821,8 +1409,6 @@ def validate_dem_parallel(dem_name: str,
                                  summary_stats_filename,
                                  verbose=verbose)
 
-        if ivert_job_name is not None:
-            ivert_exporter.upload_file_to_export_bucket(ivert_job_name, summary_stats_filename)
         files_to_export.append(summary_stats_filename)
         shared_ret_values["summary_stats_filename"] = summary_stats_filename
 
@@ -1834,8 +1420,6 @@ def validate_dem_parallel(dem_name: str,
                                 result_tif_filename,
                                 verbose=verbose)
 
-        if ivert_job_name is not None:
-            ivert_exporter.upload_file_to_export_bucket(ivert_job_name, result_tif_filename)
         files_to_export.append(result_tif_filename)
         shared_ret_values["result_tif_filename"] = result_tif_filename
 
@@ -1848,29 +1432,9 @@ def validate_dem_parallel(dem_name: str,
                                                          place_name=location_name,
                                                          figsize=(10, 4), # (12, 4.8)
                                                          verbose=verbose)
-        # plot_validation_results.plot_histogram_and_error_stats_4_panels(results_dataframe,
-        #                                                                 plot_filename,
-        #                                                                 place_name=location_name,
-        #                                                                 verbose=verbose)
-
-        if ivert_job_name is not None:
-            ivert_exporter.upload_file_to_export_bucket(ivert_job_name, plot_filename)
 
         files_to_export.append(plot_filename)
         shared_ret_values["plot_filename"] = plot_filename
-
-    # if delete_datafiles:
-    #     del dem_ds
-    #     if verbose:
-    #         print("Cleaning up...", end="")
-    #
-    #     # if os.path.exists(coastline_mask_filename) and not export_coastline_mask:
-    #     #     os.remove(coastline_mask_filename)
-    #     # if (converted_dem_name is not None) and os.path.exists(converted_dem_name):
-    #     #     os.remove(converted_dem_name)
-    #
-    #     if verbose:
-    #         print("Done.")
 
     return files_to_export
 
@@ -1980,44 +1544,21 @@ def read_and_parse_args():
                         help='The input DEM.')
     parser.add_argument('output_dir', type=str, nargs="?", default="",
                         help='Directory to write output results. Default: Will put in the same directory as input filename')
+    parser.add_argument('--classes', '-c', type=str, default="1/6/40",
+                        help="ICESat-2 photon classes to include in validation, separated by slashes. Default '1/6/40',"
+                             "which are 'ground', 'land_ice', and 'bathy_floor'.")
     parser.add_argument('--input_vdatum', '-ivd', type=str, default="egm2008",
-                        help="Input DEM vertical datum. (Default: 'egm2008')"
-                             " Currently supported datum arguments, not case-sensitive: ({})".format(
-                                ",".join([str(vd) for vd in convert_vdatum.SUPPORTED_VDATUMS])))
-    parser.add_argument('--output_vdatum', '-ovd', type=str, default="egm2008",
-                        help="Output vertical datum. ICESat-2 only supports 'wgs84' and 'egm2008'. (Default: 'egm2008')")
+                        help="Input DEM vertical datum, as a string or 'EPSG:code'. (Default: 'egm2008')")
     parser.add_argument('--datadir', type=str, default="",
                         help="A scratch directory to write interim data files. Useful if user would like to save temp files elsewhere. Defaults to the output_dir directory.")
     parser.add_argument('--band_num', type=int, default=1,
                         help="The band number (1-indexed) of the input_dem. (Default: 1)")
-    parser.add_argument("--export_coastline_mask", "--coast", "-c", action='store_true', default=False,
-                        help="Export a geotiff of the coastline mask.")
     parser.add_argument('--place_name', '-name', type=str, default=None,
                         help='A text name of the location, to put in the title of the plot (if --plot_results is selected)')
     parser.add_argument("--numprocs", '-np', type=int, default=parallel_funcs.physical_cpu_count(),
                         help='The number of sub-processes to run for this validation. Default to the maximum physical CPU count on this machine.')
     parser.add_argument('--delete_datafiles', action='store_true', default=False,
                         help='Delete the interim data files generated. Reduces storage requirements. (Default: keep them all.)')
-    parser.add_argument("-mob", "--mask_osm_buildings", dest="mask_osm_buildings",
-                        type=yes_no.interpret_yes_no, default=True,
-                        help="Whether to mask out OSM-derived building footprints in the coastline mask. "
-                             "Must be followed by 'True', 'False', 'Yes', 'No', or any abbreviation thereof "
-                             "(case-insensitive). (Default: True)")
-
-    parser.add_argument("-mbb", "--mask_bing_buildings", dest="mask_bing_buildings",
-                        type=yes_no.interpret_yes_no, default=True,
-                        help="Whether to mask out Bing-derived building footprints in the coastline mask. "
-                             "Must be followed by 'True', 'False', 'Yes', 'No', or any abbreviation thereof "
-                             "(case-insensitive). (Default: True)")
-
-    parser.add_argument("-mwsf", "--mask_wsf_urban", dest="mask_wsf_urban",
-                        type=yes_no.interpret_yes_no, default=False,
-                        help="Whether to mask out World-Settlement-Footprint heavy urban areas in the "
-                             "coastline mask. Typically used instead of building footprints for coarse DEMs "
-                             "with grid cells larger than typical buildings (~20-ish m). Must be followed by "
-                             "'True', 'False', 'Yes', 'No', or any abbreviation thereof (case-insensitive). "
-                             "(Default: False)")
-
     parser.add_argument("--measure_coverage", "-mc", action="store_true", default=False,
                         help="Measure the coverage %age of icesat-2 data in each of the output DEM cells.")
     parser.add_argument('--write_result_tifs', action='store_true', default=False,
@@ -2033,12 +1574,6 @@ def read_and_parse_args():
 
     return parser.parse_args()
 
-
-# def args_from_script():
-#     """For running from an editor, just provide the args manually here."""
-#     args = argparse.Namespace
-#     args.input_dem = "../../"
-
 if __name__ == "__main__":
     args = read_and_parse_args()
 
@@ -2050,14 +1585,21 @@ if __name__ == "__main__":
     if not args.datadir:
         args.datadir = args.output_dir
 
+    classes_list = args.classes.split("/")
+    try:
+        [int(c) for c in classes_list]
+    except ValueError:
+        print("ERROR: 'classes' must be a list of integer values separated by forward-slashes (/)")
+        sys.exit(1)
+
     # Set up multiprocessing. 'spawn' is the slowest but the most reliable. Otherwise, file handlers are fucking us up.
     mp.set_start_method('spawn')
 
     # Run the validation
     validate_dem(args.input_dem,
                  output_dir=args.output_dir,
+                 classes=classes_list,
                  dem_vertical_datum=args.input_vdatum,
-                 output_vertical_datum=args.output_vdatum,
                  interim_data_dir=(None if not args.datadir else args.datadir),
                  overwrite=args.overwrite,
                  delete_datafiles=args.delete_datafiles,
@@ -2065,9 +1607,6 @@ if __name__ == "__main__":
                  plot_results=args.plot_results,
                  location_name=args.place_name,
                  outliers_sd_threshold=ast.literal_eval(args.outlier_sd_threshold),
-                 # mask_osm_buildings=args.mask_osm_buildings,
-                 # mask_bing_buildings=args.mask_bing_buildings,
-                 # mask_wsf_urban=args.mask_wsf_urban,
                  measure_coverage=args.measure_coverage,
                  numprocs=args.numprocs,
                  band_num=args.band_num,

@@ -480,7 +480,7 @@ class IS2Database:
 
     def query_photons(self,
                       bbox: typing.Union[list, tuple, None] = None,
-                      photon_classes: typing.Union[list, tuple, None] = (1,40),
+                      photon_classes: typing.Union[list, tuple, None] = (1, 6, 40),
                       min_bathy_confidence = 0.75,
                       omit_bboxes = [],
                       # download_new_data: bool = False,
@@ -491,11 +491,11 @@ class IS2Database:
         Parameters
         ----------
             bbox : list, tuple, or None
-                Bounding box to limit the data to, in [xmin, ymin, xmax, ymax, tmin, tmax]. Must be in WGS84 (EPSG: 4326)
+                Bounding box to limit the data to, in [xmin, xmax, ymin, ymax, tmin, tmax]. Must be in WGS84 (EPSG: 4326)
                 coordinates, and yyyymmdd integers for the date. Date range is not inclusive of the max date.
             photon_classes : list, tuple, or None
-                Photon classes to include in the query. Type "dlim --modules icesat2" to see all options. Defaults to
-                (1,40) (ground and bathy_floor photons only).
+                Photon classes to include in the query. See globato/streams/readers/icesat2.py for the full list.
+                Defaults to (1, 6, 40) (ground, land_ice, and bathy_floor photons).
             min_bathy_confidence : float
                 The minimum confidence for bathymetric points to use.
             # download_new_data : bool
@@ -536,6 +536,9 @@ class IS2Database:
         if min_bathy_confidence > 0.0:
             photons_df = photons_df[(photons_df['class_code'] != 40) |
                                     ((photons_df['class_code'] == 40) & (photons_df['bathy_confidence'] >= min_bathy_confidence))]
+
+        if omit_bboxes is None:
+            omit_bboxes = []
 
         # If we're given a single bounding box of exclusions as a 4- or 6-tuple of numbers (not iterables), put it in a 1-length list.
         if len(omit_bboxes) in (4,6) and not numpy.any([self.is_iterable(num) for num in omit_bboxes]):
@@ -1017,121 +1020,4 @@ def split_bbox_into_parts(bbox: typing.Union[list, tuple],
     return bboxes
 
 if __name__ == "__main__":
-    ivert_db = IS2Database()
-
-    # gdf = ivert_db.open_gdf()
-    #
-    # print(gdf["geometry"].iloc[0])
-    #
-    # print(gdf)
-    # print(f"{gdf["numphotons"].sum():,}", "total photons.")
-    # print(f"{gdf["numphotons_ground"].sum():,}", "total ground photons.")
-    # print(f"{gdf["numphotons_bathy_floor"].sum():,}", "total bathy floor photons.")
-    # print(f"{gdf["numphotons_bathy_surface"].sum():,}", "total bathy surface photons.")
-
-    # print(ivert_db.bounds("t"))
-    gdf = ivert_db.create_new_database(populate=True, overwrite=True)
-    print(gdf)
-
-    # Create a new database and populate it over the CRM vol8 extent.
-    # ivert_db.create_new_database(populate=True, overwrite=True)
-    # print(ivert_db.unique_bboxes(data_or_query="query"))
-
-    # Get a set of CUDEM tiles to validate.
-    # Mike's tiles (N Oregon)
-    # dem_dir = "/home/mmacferrin/Research/DEMs/CUDEMs_1_9_Oregon_2025/dems/2025.10.10_w_metadata"
-    # dems = [os.path.join(dem_dir, fn) for fn in os.listdir(dem_dir) if fn.endswith("2025v1.tif")]
-    # Chris' tiles (S Oregon)
-    # dem_dir = "/home/mmacferrin/Research/DEMs/CUDEMs_1_9_Oregon_2025/chris/9-29-2025"
-    # dems = [os.path.join(dem_dir, fn) for fn in os.listdir(dem_dir) if fn.endswith(".tif")]
-    # Matt's tiles (N WA)
-    # dem_dir = "/home/mmacferrin/Research/DEMs/CUDEMs_1_9_Oregon_2025/matt/9-26-2025/DEM"
-    # dems = [os.path.join(dem_dir, fn) for fn in os.listdir(dem_dir) if fn.endswith("2025v1.tif")]
-
-    # print(len(dems), "total DEMs.")
-
-    # gdf = ivert_db.open_gdf()
-    # print(gdf)
-    # print(gdf.columns)
-    # Get the x,y bounding box of each DEM file
-    # def get_dem_bbox(fn):
-    #     with rasterio.open(fn) as r:
-    #         # print(os.path.basename(fn), r.bounds)
-    #         return (r.bounds[0], r.bounds[2], r.bounds[1], r.bounds[3], 20240301, 20250301)
-    #
-    # bboxes = [get_dem_bbox(fn) for fn in dems]
-    # for dem, bbox in zip(dems, bboxes):
-    #     print(dem, bbox)
-    #     ivert_db.query_photons(bbox)
-
-    # NOTE: The best CUDEM is:
-    # Mike's DEMs: ncei19_n45x50_w124x00_2025v1.tif (104,757 ground, 3,974 bathy)
-    # Matt's DEMs: ncei19_n48x25_w125x00_2025v1.tif (63,737 ground, 2,090 bathy)
-    # Chris' DEMs: B3.tif (74,662 ground, 1,651 bathy)
-    #              C2.tif (6,111 ground, 3,177 bathy)
-    #              B2.tif (40,634 ground, 2,145 bathy)
-
-    # Small test area on the Oregon coast.
-    # ivert_db.download_new_granules(bbox=(-124.15, -123.85, 45.0, 45.25, 2024_07_20, 2024_08_10)) # Smaller test area
-    # CRM, volume 8 data (all)
-
-    # import sys
-    # do_i = int(sys.argv[1])
-
-    # CRM Vol8 total area, split into 9 parts.
-    # bbox = (-127.01, -121.74, 43.99, 49.01, 2024_03_01, 2025_03_01)
-    bbox = (-127.0, -126.75, 44.0, 44.25, 2025_03_15, 2026_03_26) # Smaller date window for testing.
-    # bboxes = split_bbox_into_parts(bbox, tile_size_deg=2.0, max_tile_scale_factor=1.5)
-    # Order bboxes to go from right to left (descending longitude), to process land first.
-    bboxes = sorted(bboxes, key=lambda x: x[0], reverse=True)
-
-    # Test area over B.C. to flesh out coastline masking.
-    # bbox = (-122.93, -122.79, 48.68, 49.0, 2024_03_15, 2024_03_26)
-    # bboxes = [bbox]
-    # do_i = 0
-
-
-    # Smaller test area, partially bordering both Chris' and my CUDEM tiles.
-    # bbox = (-124.5, -123.75, 44.75, 45.25, 20241201, 20250301)
-    # bboxes = [bbox]
-    # do_i = 1
-
-    # for i, smaller_bbox in enumerate(bboxes):
-    #     if do_i > 0 and i != (do_i - 1):
-    #         continue
-
-        # if do_i in []: # (2,3,5,6,9):
-        #     # For some stupid fucking reason, subset #6 isn't working, just hangs on processing coastline.
-        #     # Try splitting it up into several smaller sections.
-        #     smaller_boxes = split_bbox_into_parts(smaller_bbox, tile_size_deg=1.0, max_tile_scale_factor=1.5)
-        #
-        #     for j, even_smaller_bbox in enumerate(smaller_boxes):
-        #         print()
-        #         print(f"=================== {i + 1} of {len(bboxes)} ({j + 1} of {len(smaller_boxes)}) ====================")
-        #         # clear_cache_cmd = ["rm", "-rf", os.path.expanduser("~/.ivert/cache/*")]
-        #         # print(" ".join(clear_cache_cmd))
-        #         # subprocess.run(clear_cache_cmd)
-        #         ivert_db.download_new_granules(bbox=even_smaller_bbox,
-        #                                        split_big_bboxes=False,
-        #                                        subset_granules=True,
-        #                                        classes_to_keep=(1, 40),
-        #                                        tile_size_deg=1.0,
-        #                                        cache_subdir=f"{do_i}{j+1}",
-        #                                        max_tile_scale_factor=1.5)
-        #
-        # else:
-
-        # print()
-        # print(f"=================== {i+1} of {len(bboxes)} ===================")
-        # clear_cache_cmd = ["rm", "-rf", os.path.expanduser("~/.ivert/cache/*")]
-        # print(" ".join(clear_cache_cmd))
-        # subprocess.run(clear_cache_cmd)
-        # ivert_db.download_new_granules(bbox=(-127.0, -121.75, 43.9, 49.1, 20240301, 20250301),
-    ivert_db.download_new_granules(bbox=bbox,
-                                   split_big_bboxes=False,
-                                   classes_to_keep=(1, 2, 3, 40),
-                                   tile_size_deg=2.0,
-                                   cache_subdir=str(do_i),
-                                   min_bathy_confidence=0.9,
-                                   max_tile_scale_factor=1.5,
-                                   )
+    pass
