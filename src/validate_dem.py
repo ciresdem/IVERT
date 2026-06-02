@@ -711,6 +711,581 @@ def get_dem_dataset_and_vars(dem_fn) -> tuple:
     return dem_ds, dem_array, dem_bbox, dem_step_xy
 
 
+def _setup_output_paths(dem_name, output_dir, interim_data_dir, mark_empty_results,
+                         write_summary_stats, write_result_tifs, plot_results, verbose):
+    """Create output directories and derive all output filenames.
+
+    Returns (output_dir, interim_data_dir, results_dataframe_file,
+             empty_results_filename, summary_stats_filename, result_tif_filename, plot_filename).
+    """
+    if not output_dir:
+        output_dir = os.path.dirname(os.path.abspath(dem_name))
+    if not os.path.exists(output_dir):
+        if verbose:
+            print("Creating output directory", output_dir)
+        os.makedirs(output_dir)
+
+    results_dataframe_file = os.path.join(output_dir,
+                                           os.path.splitext(os.path.basename(dem_name))[0] + "_results.h5")
+
+    if interim_data_dir is None:
+        interim_data_dir = output_dir
+    if not os.path.exists(interim_data_dir):
+        if verbose:
+            print("Creating interim data directory", interim_data_dir)
+        os.makedirs(interim_data_dir)
+
+    empty_results_filename = ""
+    if mark_empty_results:
+        base, _ = os.path.splitext(results_dataframe_file)
+        empty_results_filename = base + "_EMPTY.txt"
+
+    summary_stats_filename = ""
+    if write_summary_stats:
+        summary_stats_filename = re.sub(r"_results\.h5\Z", "_summary_stats.txt", results_dataframe_file)
+
+    result_tif_filename = ""
+    if write_result_tifs:
+        result_tif_filename = re.sub(r"_results\.h5\Z", "_ICESat2_error_map.tif", results_dataframe_file)
+
+    plot_filename = ""
+    if plot_results:
+        plot_filename = re.sub(r"_results\.h5\Z", "_plot.png", results_dataframe_file)
+
+    return (output_dir, interim_data_dir, results_dataframe_file,
+            empty_results_filename, summary_stats_filename, result_tif_filename, plot_filename)
+
+
+def _check_existing_outputs(dem_name, results_dataframe_file, empty_results_filename,
+                              summary_stats_filename, result_tif_filename, plot_filename,
+                              write_summary_stats, write_result_tifs, plot_results,
+                              location_name, overwrite, mark_empty_results, shared_ret_values, verbose,
+                              include_photon_level_validation=False):
+    """Handle overwrite deletion or early return when outputs already exist.
+
+    Returns a files_to_export list if work is already done (caller should return it),
+    or None to continue processing.
+    """
+    if overwrite:
+        for fn in (results_dataframe_file, summary_stats_filename,
+                   result_tif_filename, plot_filename):
+            if fn and os.path.exists(fn):
+                os.remove(fn)
+        return None
+
+    files_to_export = []
+
+    if os.path.exists(results_dataframe_file):
+        # Photon-level results can't be regenerated from the results dataframe alone — they require
+        # the raw photon data. If they're missing, signal the caller to run the full pipeline.
+        photon_results_file = ""
+        if include_photon_level_validation:
+            base, ext = os.path.splitext(results_dataframe_file)
+            photon_results_file = base.replace("_results", "_photons") + ext
+            if not os.path.exists(photon_results_file):
+                return None
+
+        results_dataframe = None
+        files_to_export.append(results_dataframe_file)
+        shared_ret_values["results_dataframe_file"] = results_dataframe_file
+
+        if write_summary_stats:
+            if not os.path.exists(summary_stats_filename):
+                if results_dataframe is None:
+                    if verbose:
+                        print("Reading", results_dataframe_file, '...', end="")
+                    results_dataframe = read_dataframe_file(results_dataframe_file)
+                    if verbose:
+                        print("done.")
+                write_summary_stats_file(results_dataframe, summary_stats_filename, verbose=verbose)
+            files_to_export.append(summary_stats_filename)
+            shared_ret_values["summary_stats_filename"] = summary_stats_filename
+
+        if write_result_tifs:
+            if not os.path.exists(result_tif_filename):
+                dem_ds_tmp = gdal.Open(dem_name, gdal.GA_ReadOnly)
+                if results_dataframe is None:
+                    if verbose:
+                        print("Reading", results_dataframe_file, '...', end="")
+                    results_dataframe = read_dataframe_file(results_dataframe_file)
+                    if verbose:
+                        print("done.")
+                generate_result_geotiff(results_dataframe, dem_ds_tmp, result_tif_filename, verbose=verbose)
+            files_to_export.append(result_tif_filename)
+            shared_ret_values["result_tif_filename"] = result_tif_filename
+
+        if plot_results:
+            if not os.path.exists(plot_filename):
+                if location_name is None:
+                    location_name = os.path.split(dem_name)[1]
+                if results_dataframe is None:
+                    if verbose:
+                        print("Reading", results_dataframe_file, '...', end="")
+                    results_dataframe = read_dataframe_file(results_dataframe_file)
+                    if verbose:
+                        print("done.")
+                plot_validation_results.plot_histograms_and_line(results_dataframe,
+                                                                  plot_filename,
+                                                                  place_name=location_name,
+                                                                  verbose=verbose)
+            files_to_export.append(plot_filename)
+            shared_ret_values["plot_filename"] = plot_filename
+
+        if photon_results_file:
+            files_to_export.append(photon_results_file)
+            shared_ret_values["photon_results_dataframe_file"] = photon_results_file
+
+        if results_dataframe is None and verbose:
+            print("Work already done here. Moving on.")
+
+        return files_to_export
+
+    elif mark_empty_results and os.path.exists(empty_results_filename):
+        if verbose:
+            print("No valid data produced during previous ICESat-2 analysis of",
+                  os.path.basename(dem_name) + ". Returning.")
+        return files_to_export
+
+    return None
+
+
+def _fetch_photons(dem_name, band_num, dem_vertical_datum, icesat2_photon_database_obj,
+                    dates, classes, omit_bboxes, verbose):
+    """Open the DEM and query overlapping ICESat-2 photons.
+
+    Returns (dem_ds, dem_array, photon_df, dem_epsg_str) or None if no photons found.
+    """
+    get_dem_dataset_and_vars(dem_name)  # result unused; preserved for validation side-effects
+
+    dem_ds = gdal.Open(dem_name, gdal.GA_ReadOnly)
+    dem_array = dem_ds.GetRasterBand(band_num).ReadAsArray()
+
+    dem_horz_ref_frame, dem_vert_ref_frame = dem_geom.get_dem_reference_frame_from_file(dem_name)
+    if dem_vertical_datum is not None:
+        dem_vert_ref_frame = dem_vertical_datum
+    dem_epsg_str = dem_geom.get_dem_srs_string(dem_horz_ref_frame, dem_vert_ref_frame)
+    dem_wgs84_bbox = dem_geom.get_wgs84_bounding_box(dem_name)
+
+    if icesat2_photon_database_obj is None:
+        icesat2_photon_database_obj = icesat2_database_v2.IS2Database()
+
+    date_min, date_max = dates if dates is not None else (20180101, 20991231)
+    dem_3d_bbox = (dem_wgs84_bbox[0], dem_wgs84_bbox[1],
+                   dem_wgs84_bbox[2], dem_wgs84_bbox[3],
+                   date_min, date_max)
+
+    photon_df = icesat2_photon_database_obj.query_photons(
+        dem_3d_bbox,
+        photon_classes=classes,
+        omit_bboxes=omit_bboxes if omit_bboxes is not None else [])
+
+    if photon_df is None or len(photon_df) == 0:
+        return None
+
+    if verbose:
+        print("{0:,}".format(len(photon_df)), "ICESat-2 photons present in photon dataframe.")
+
+    return dem_ds, dem_array, photon_df, dem_epsg_str
+
+
+def _compute_photon_overlap(dem_ds, dem_array, photon_df, classes, dem_epsg_str,
+                              measure_coverage, verbose):
+    """Transform photon coordinates into DEM space and compute cell-level overlap.
+
+    Returns (photon_df, height_field, ph_mask_ground_only, dem_overlap_i, dem_overlap_j,
+             dem_overlap_elevs, N, coverage_coords) or None if no valid overlap exists.
+    coverage_coords is (xmin_arr, xmax_arr, ymin_arr, ymax_arr) when measure_coverage=True, else None.
+    """
+    try:
+        photon_df["dem_x"], photon_df["dem_y"], photon_df["dem_z"] = \
+            transform_points.transform_points(photon_df['x'], photon_df['y'], photon_df['z'],
+                                              src_epsg="EPSG:4326+3855",
+                                              dst_epsg=dem_epsg_str)
+    except (ValueError, RuntimeError):
+        print("Warning: Unable to perform transformation. Using original points.")
+        # TODO: Try to convert just horizontally (even if we can't do it vertically).
+        photon_df["dem_x"] = photon_df['x']
+        photon_df["dem_y"] = photon_df['y']
+        photon_df["dem_z"] = photon_df['z']
+
+    xstart, xstep, _, ystart, _, ystep = dem_ds.GetGeoTransform()
+    photon_df["i"] = numpy.floor((photon_df["dem_y"] - ystart) / ystep).astype(int)
+    photon_df["j"] = numpy.floor((photon_df["dem_x"] - xstart) / xstep).astype(int)
+
+    photon_df = photon_df[(photon_df["i"] >= 0) & (photon_df["i"] < dem_array.shape[0]) &
+                          (photon_df["j"] >= 0) & (photon_df["j"] < dem_array.shape[1])]
+    height_field = photon_df["dem_z"]
+
+    dem_ndv = dem_ds.GetRasterBand(1).GetNoDataValue()
+    if dem_ndv is not None:
+        if not numpy.isnan(dem_ndv):
+            dem_goodpixel_mask = (dem_array != dem_ndv)
+        else:
+            dem_goodpixel_mask = (numpy.isnan(dem_array) == False)
+    else:
+        dem_goodpixel_mask = numpy.ones(dem_array.shape, dtype=bool)
+
+    photon_df = photon_df.set_index(["i", "j"], drop=False)
+    ph_mask_ground_only = numpy.isin(photon_df["class_code"], classes)
+    dem_mask_w_ground_photons = numpy.zeros(dem_array.shape, dtype=bool)
+    dem_mask_w_ground_photons[photon_df.i[ph_mask_ground_only],
+                               photon_df.j[ph_mask_ground_only]] = 1
+
+    dem_overlap_mask = dem_goodpixel_mask & dem_mask_w_ground_photons
+    dem_overlap_i, dem_overlap_j = numpy.where(dem_overlap_mask)
+    dem_overlap_elevs = dem_array[dem_overlap_mask]
+
+    if verbose:
+        num_goodpixels = numpy.count_nonzero(dem_goodpixel_mask)
+        print("{:,}".format(num_goodpixels), "land cells exist in the DEM.")
+        if num_goodpixels == 0:
+            print("No land cells found in DEM with overlapping ICESat-2 data. Stopping and moving on.")
+            return None
+        print("{:,} ICESat-2 photons overlap".format(len(photon_df)),
+              "{:,}".format(len(dem_overlap_i)),
+              "DEM cells ({:0.2f}% of total DEM data).".format(
+                  numpy.count_nonzero(dem_overlap_mask) * 100 / num_goodpixels))
+
+    if numpy.count_nonzero(dem_overlap_mask) == 0:
+        if verbose:
+            print("No overlapping ICESat-2 data with valid land cells. Stopping and moving on.")
+        return None
+
+    N = len(dem_overlap_i)
+    coverage_coords = None
+    if measure_coverage:
+        xmin_arr = xstart + (xstep * dem_overlap_j)
+        xmax_arr = xmin_arr + xstep
+        ymax_arr = ystart + (ystep * dem_overlap_i)
+        ymin_arr = ymax_arr + ystep
+        coverage_coords = (xmin_arr, xmax_arr, ymin_arr, ymax_arr)
+
+    return (photon_df, height_field, ph_mask_ground_only, dem_overlap_i, dem_overlap_j,
+            dem_overlap_elevs, N, coverage_coords)
+
+
+def _run_photon_level_validation(photon_df, height_field, ph_mask_ground_only,
+                                  dem_overlap_i, dem_overlap_j, dem_overlap_elevs,
+                                  results_dataframe_file, verbose):
+    """Compute photon-level DEM minus ICESat-2 differences and write an HDF5 results file.
+
+    Returns the photon results file path.
+    """
+    if verbose:
+        print("Performing photon-level validation...")
+        print("\tSubsetting ground-only photons... ", end="")
+    photon_df_ground_only = photon_df[ph_mask_ground_only]
+    if verbose:
+        print("Done.")
+        print("\tGenerating DEM elevation dataframe... ", end="")
+
+    dem_elev_df = pandas.DataFrame(
+        {"dem_elevation": dem_overlap_elevs},
+        index=pandas.MultiIndex.from_arrays((dem_overlap_i, dem_overlap_j), names=("i", "j")))
+    if verbose:
+        print("Done with {0} records.".format(len(dem_elev_df)))
+        print("\tJoining photon_df and DEM elevation tables... ", end="")
+
+    photon_df_with_dem_elevs = photon_df_ground_only.join(dem_elev_df, how='left')
+    photon_df_with_dem_elevs = photon_df_with_dem_elevs[
+        pandas.notna(photon_df_with_dem_elevs["dem_elevation"])]
+    if verbose:
+        print("Done with {0} records.".format(len(photon_df_with_dem_elevs)))
+        print("\tCalculating elevation differences... ", end="")
+
+    photon_df_with_dem_elevs["dem_minus_is2_m"] = \
+        photon_df_with_dem_elevs["dem_elevation"] - height_field
+    if verbose:
+        print("Done.")
+
+    base, ext = os.path.splitext(results_dataframe_file)
+    photon_results_dataframe_file = base.replace("_results", "_photons") + ext
+    if verbose:
+        print("\tWriting", os.path.split(photon_results_dataframe_file)[1] + "... ", end="")
+    photon_df_with_dem_elevs.to_hdf(photon_results_dataframe_file, "icesat2", complib="zlib", complevel=3)
+    if verbose:
+        print("Done.\n")
+
+    return photon_results_dataframe_file
+
+
+def _run_parallel_cell_validation(photon_df, height_field, dem_overlap_i, dem_overlap_j,
+                                   dem_overlap_elevs, N, max_photons_per_cell,
+                                   measure_coverage, coverage_coords, numprocs, verbose):
+    """Run the parallel ICESat-2/DEM cell validation using child processes.
+
+    Returns a list of per-chunk result DataFrames (possibly empty on error or no data).
+    """
+    if verbose:
+        if max_photons_per_cell is not None:
+            print("Limiting processing to {0} photons per grid cell.".format(max_photons_per_cell))
+        print("Performing ICESat-2/DEM cell validation...")
+
+    results_dataframes_list = []
+    t_start = time.perf_counter()
+
+    cpu_count = numprocs
+    proc_id = os.getpid()
+    height_array_name = f"heights_{proc_id}"
+    i_array_name      = f"i_{proc_id}"
+    j_array_name      = f"j_{proc_id}"
+    code_array_name   = f"codes_{proc_id}"
+    assert height_field.shape == photon_df.i.shape == photon_df.j.shape == photon_df.class_code.shape
+
+    height_smo = shared_memory.SharedMemory(size=height_field.nbytes, name=height_array_name, create=True)
+    height_smo.buf[:] = height_field.to_numpy().tobytes()
+    height_dtype = height_field.dtype
+
+    i_smo = shared_memory.SharedMemory(size=photon_df.i.nbytes, name=i_array_name, create=True)
+    i_smo.buf[:] = photon_df.i.to_numpy().tobytes()
+    i_dtype = photon_df.i.dtype
+
+    j_smo = shared_memory.SharedMemory(size=photon_df.j.nbytes, name=j_array_name, create=True)
+    j_smo.buf[:] = photon_df.j.to_numpy().tobytes()
+    j_dtype = photon_df.j.dtype
+
+    code_smo = shared_memory.SharedMemory(size=photon_df.class_code.nbytes, name=code_array_name, create=True)
+    code_smo.buf[:] = photon_df.class_code.to_numpy().tobytes()
+    code_dtype = photon_df.class_code.dtype
+
+    if measure_coverage:
+        assert height_field.shape == photon_df.dem_x.shape == photon_df.dem_y.shape
+        dem_overlap_xmin, dem_overlap_xmax, dem_overlap_ymin, dem_overlap_ymax = coverage_coords
+        x_array_name = f"x_{proc_id}"
+        x_smo = shared_memory.SharedMemory(size=photon_df.dem_x.nbytes, name=x_array_name, create=True)
+        x_smo.buf[:] = photon_df.dem_x.to_numpy().tobytes()
+        x_dtype = photon_df.dem_x.dtype
+
+        y_array_name = f"y_{proc_id}"
+        y_smo = shared_memory.SharedMemory(size=photon_df.dem_y.nbytes, name=y_array_name, create=True)
+        y_smo.buf[:] = photon_df.dem_y.to_numpy().tobytes()
+        y_dtype = photon_df.dem_y.dtype
+    else:
+        dem_overlap_xmin = dem_overlap_xmax = dem_overlap_ymin = dem_overlap_ymax = None
+        x_array_name = y_array_name = None
+        x_smo = y_smo = None
+        x_dtype = y_dtype = None
+
+    if measure_coverage:
+        memory_objs = [height_smo, i_smo, j_smo, code_smo, x_smo, y_smo]
+    else:
+        memory_objs = [height_smo, i_smo, j_smo, code_smo]
+
+    running_procs     = [None] * cpu_count
+    open_pipes_parent = [None] * cpu_count
+    open_pipes_child  = [None] * cpu_count
+
+    counter_started     = 0
+    counter_finished    = 0
+    num_chunks_started  = 0
+    num_chunks_finished = 0
+    items_per_process_chunk = 20
+
+    try:
+        for i in range(cpu_count):
+            if counter_started >= N:
+                running_procs     = running_procs[:i]
+                open_pipes_parent = open_pipes_parent[:i]
+                open_pipes_child  = open_pipes_child[:i]
+                break
+
+            running_procs[i], open_pipes_parent[i], open_pipes_child[i] = \
+                kick_off_new_child_process(height_array_name, height_dtype,
+                                           i_array_name, i_dtype,
+                                           j_array_name, j_dtype,
+                                           code_array_name, code_dtype,
+                                           height_field.shape,
+                                           photon_limit=max_photons_per_cell,
+                                           measure_coverage=measure_coverage,
+                                           x_array_name=x_array_name, x_dtype=x_dtype,
+                                           y_array_name=y_array_name, y_dtype=y_dtype)
+
+            counter_chunk_end = min(counter_started + items_per_process_chunk, N)
+            if measure_coverage:
+                open_pipes_parent[i].send((dem_overlap_i[counter_started:counter_chunk_end],
+                                           dem_overlap_j[counter_started:counter_chunk_end],
+                                           dem_overlap_elevs[counter_started:counter_chunk_end],
+                                           dem_overlap_xmin[counter_started:counter_chunk_end],
+                                           dem_overlap_xmax[counter_started:counter_chunk_end],
+                                           dem_overlap_ymin[counter_started:counter_chunk_end],
+                                           dem_overlap_ymax[counter_started:counter_chunk_end]))
+            else:
+                open_pipes_parent[i].send((dem_overlap_i[counter_started:counter_chunk_end],
+                                           dem_overlap_j[counter_started:counter_chunk_end],
+                                           dem_overlap_elevs[counter_started:counter_chunk_end]))
+            counter_started = counter_chunk_end
+            num_chunks_started += 1
+
+        while num_chunks_finished < num_chunks_started:
+            for i, (proc, pipe, pipe_child) in enumerate(zip(running_procs, open_pipes_parent, open_pipes_child)):
+                if proc is None:
+                    continue
+
+                elif not proc.is_alive():
+                    if verbose:
+                        print("\nSub-process terminated unexpectedly. Some data may be missing. Restarting a new process.")
+                    proc.join()
+                    pipe.close()
+                    pipe_child.close()
+                    proc, pipe, pipe_child = kick_off_new_child_process(
+                        height_array_name, height_dtype,
+                        i_array_name, i_dtype,
+                        j_array_name, j_dtype,
+                        code_array_name, code_dtype,
+                        height_field.shape,
+                        photon_limit=max_photons_per_cell,
+                        measure_coverage=measure_coverage,
+                        x_array_name=x_array_name, x_dtype=x_dtype,
+                        y_array_name=y_array_name, y_dtype=y_dtype)
+                    running_procs[i] = proc
+                    open_pipes_parent[i] = pipe
+                    open_pipes_child[i] = pipe_child
+                    num_chunks_finished += 1
+
+                if pipe.poll():
+                    chunk_result_df = pipe.recv()
+                    counter_finished += len(chunk_result_df)
+                    num_chunks_finished += 1
+                    results_dataframes_list.append(chunk_result_df)
+                    if verbose:
+                        progress_bar.ProgressBar(counter_finished, N,
+                                                 suffix=("{0:>" + str(len(str(N))) + "d}/{1:d}").format(counter_finished, N))
+
+                    if counter_started < N:
+                        counter_chunk_end = min(counter_started + items_per_process_chunk, N)
+                        if measure_coverage:
+                            pipe.send((dem_overlap_i[counter_started:counter_chunk_end],
+                                       dem_overlap_j[counter_started:counter_chunk_end],
+                                       dem_overlap_elevs[counter_started:counter_chunk_end],
+                                       dem_overlap_xmin[counter_started:counter_chunk_end],
+                                       dem_overlap_xmax[counter_started:counter_chunk_end],
+                                       dem_overlap_ymin[counter_started:counter_chunk_end],
+                                       dem_overlap_ymax[counter_started:counter_chunk_end]))
+                        else:
+                            pipe.send((dem_overlap_i[counter_started:counter_chunk_end],
+                                       dem_overlap_j[counter_started:counter_chunk_end],
+                                       dem_overlap_elevs[counter_started:counter_chunk_end]))
+                        counter_started = counter_chunk_end
+                        num_chunks_started += 1
+                    else:
+                        if measure_coverage:
+                            pipe.send(("STOP", None, None, None, None, None, None))
+                        else:
+                            pipe.send(("STOP", None, None))
+                        proc.join()
+                        pipe.close()
+                        pipe_child.close()
+                        running_procs[i] = None
+                        open_pipes_parent[i] = None
+                        open_pipes_child[i] = None
+
+    except Exception as e:
+        if verbose:
+            print("\nException encountered in ICESat-2 processing loop. Exiting.")
+        clean_procs_and_pipes(running_procs, open_pipes_parent, open_pipes_child, memory_objs)
+        print(e)
+        return results_dataframes_list
+
+    t_end = time.perf_counter()
+    if verbose:
+        total_time_s = t_end - t_start
+        if total_time_s >= 100:
+            total_time_m = int(total_time_s / 60)
+            partial_time_s = total_time_s % 60
+            print("{0:d} minute".format(total_time_m) + ("s" if total_time_m > 1 else "")
+                  + " {0:0.1f} seconds total, ({1:0.4f} s/iteration)".format(
+                      partial_time_s, (total_time_s / N) if N > 0 else 0))
+        else:
+            print("{0:0.1f} seconds total, ({1:0.4f} s/iteration)".format(
+                total_time_s, (total_time_s / N) if N > 0 else 0))
+
+    clean_procs_and_pipes(running_procs, open_pipes_parent, open_pipes_child, memory_objs)
+    return results_dataframes_list
+
+
+def _write_validation_outputs(results_dataframes_list, dem_ds, dem_name,
+                               results_dataframe_file, empty_results_filename,
+                               summary_stats_filename, result_tif_filename, plot_filename,
+                               write_summary_stats, write_result_tifs, plot_results,
+                               location_name, outliers_sd_threshold, mark_empty_results,
+                               shared_ret_values, verbose, files_to_export):
+    """Concatenate results, filter outliers, and write all output files.
+
+    Returns the final files_to_export list.
+    """
+    if len(results_dataframes_list) == 0:
+        return files_to_export
+
+    results_dataframe = pandas.concat(results_dataframes_list)
+    results_dataframe = results_dataframe[
+        (results_dataframe["mean"] != EMPTY_VAL)
+        & (~numpy.isnan(results_dataframe["mean"]))
+        & (results_dataframe["numphotons_intd"] >= 3)].copy()
+
+    if verbose:
+        print("{0:,} valid interdecile photon records in {1:,} DEM cells.".format(
+            results_dataframe["numphotons_intd"].sum(), len(results_dataframe)))
+
+    if outliers_sd_threshold is not None:
+        assert type(outliers_sd_threshold) in (int, float)
+        diff_mean = results_dataframe["diff_mean"]
+        meanval, stdval = diff_mean.mean(), diff_mean.std()
+        low_cutoff = meanval - (stdval * outliers_sd_threshold)
+        hi_cutoff  = meanval + (stdval * outliers_sd_threshold)
+        results_dataframe = results_dataframe[
+            (diff_mean >= low_cutoff) & (diff_mean <= hi_cutoff)].copy()
+        if verbose:
+            print("{0:,} DEM cells after removing outliers.".format(len(results_dataframe)))
+
+    if len(results_dataframe) == 0:
+        if verbose:
+            print("No valid results in results dataframe. No outputs computed.")
+        if mark_empty_results:
+            with open(empty_results_filename, 'w') as f:
+                f.write("No ICESat-2 data data overlapping this DEM to validate.")
+            if verbose:
+                print("Created", empty_results_filename, "to indicate no data was returned here.")
+            files_to_export.append(empty_results_filename)
+            shared_ret_values["empty_results_filename"] = empty_results_filename
+        return files_to_export
+
+    base, ext = os.path.splitext(results_dataframe_file)
+    ext = ext.lower().strip()
+    if ext in (".txt", ".csv"):
+        results_dataframe.to_csv(results_dataframe_file)
+    else:
+        results_dataframe.to_hdf(results_dataframe_file, key="icesat2", complib="zlib", mode='w')
+    if verbose:
+        print(results_dataframe_file, "written.")
+    files_to_export.append(results_dataframe_file)
+    shared_ret_values["results_dataframe_file"] = results_dataframe_file
+
+    if write_summary_stats:
+        write_summary_stats_file(results_dataframe, summary_stats_filename, verbose=verbose)
+        files_to_export.append(summary_stats_filename)
+        shared_ret_values["summary_stats_filename"] = summary_stats_filename
+
+    if write_result_tifs:
+        if dem_ds is None:
+            dem_ds = gdal.Open(dem_name, gdal.GA_ReadOnly)
+        generate_result_geotiff(results_dataframe, dem_ds, result_tif_filename, verbose=verbose)
+        files_to_export.append(result_tif_filename)
+        shared_ret_values["result_tif_filename"] = result_tif_filename
+
+    if plot_results:
+        if location_name is None:
+            location_name = os.path.split(dem_name)[1]
+        plot_validation_results.plot_histograms_and_line(results_dataframe,
+                                                          plot_filename,
+                                                          place_name=location_name,
+                                                          figsize=(10, 4),
+                                                          verbose=verbose)
+        files_to_export.append(plot_filename)
+        shared_ret_values["plot_filename"] = plot_filename
+
+    return files_to_export
+
+
 def validate_dem_parallel(dem_name: str,
                           output_dir: str | None = None,
                           dates: None | list[int, int] | tuple[int, int] = None,
@@ -738,704 +1313,70 @@ def validate_dem_parallel(dem_name: str,
     """Validate a single DEM.
 
     Parameters are described above in the vdalite_dem() docstring."""
-    # If we don't have the input dem, raise an error.
     if not os.path.exists(dem_name):
-        file_not_found_msg = f"Could not find file {dem_name}."
-        raise FileNotFoundError(file_not_found_msg)
+        raise FileNotFoundError(f"Could not find file {dem_name}.")
 
     if shared_ret_values is None:
         shared_ret_values = {}
 
-    # Just get this variable defined so all the code-branches can use it.
-    dem_ds = None
+    output_dir, interim_data_dir, results_dataframe_file, empty_results_filename, \
+        summary_stats_filename, result_tif_filename, plot_filename = \
+        _setup_output_paths(dem_name, output_dir, interim_data_dir, mark_empty_results,
+                             write_summary_stats, write_result_tifs, plot_results, verbose)
 
-    if not output_dir:
-        output_dir = os.path.dirname(os.path.abspath(dem_name))
-    if not os.path.exists(output_dir):
-        if verbose:
-            print("Creating output directory", output_dir)
-        os.makedirs(output_dir)
-
-    # Get the results dataframe filename
-    results_dataframe_file = os.path.join(output_dir, os.path.splitext(os.path.basename(dem_name))[0] + "_results.h5")
-
-    # Get the interim data directory (if not already set)
-    if interim_data_dir is None:
-        interim_data_dir = output_dir
-    if not os.path.exists(interim_data_dir):
-        if verbose:
-            print("Creating interim data directory", interim_data_dir)
-        os.makedirs(interim_data_dir)
-
-    empty_results_filename = ""
-    if mark_empty_results:
-        base, ext = os.path.splitext(results_dataframe_file)
-        empty_results_filename = base + "_EMPTY.txt"
-
-    summary_stats_filename = ""
-    if write_summary_stats:
-        summary_stats_filename = re.sub(r"_results\.h5\Z", "_summary_stats.txt", results_dataframe_file)
-
-    result_tif_filename = ""
-    if write_result_tifs:
-        result_tif_filename = re.sub(r"_results\.h5\Z", "_ICESat2_error_map.tif", results_dataframe_file)
-
-    plot_filename = ""
-    if plot_results:
-        plot_filename = re.sub(r"_results\.h5\Z", "_plot.png", results_dataframe_file)
+    early = _check_existing_outputs(dem_name, results_dataframe_file, empty_results_filename,
+                                     summary_stats_filename, result_tif_filename, plot_filename,
+                                     write_summary_stats, write_result_tifs, plot_results,
+                                     location_name, overwrite, mark_empty_results, shared_ret_values, verbose,
+                                     include_photon_level_validation=include_photon_level_validation)
+    if early is not None:
+        return early
 
     files_to_export = []
 
-    if overwrite:
-        if os.path.exists(results_dataframe_file):
-            os.remove(results_dataframe_file)
-
-        if os.path.exists(summary_stats_filename):
-            os.remove(summary_stats_filename)
-
-        if os.path.exists(result_tif_filename):
-            os.remove(result_tif_filename)
-
-        if os.path.exists(plot_filename):
-            os.remove(plot_filename)
-
-    elif os.path.exists(results_dataframe_file):
-        results_dataframe = None
-        files_to_export.append(results_dataframe_file)
-        shared_ret_values["results_dataframe_file"] = results_dataframe_file
-
-        if write_summary_stats:
-            if not os.path.exists(summary_stats_filename):
-                if results_dataframe is None:
-                    if verbose:
-                        print("Reading", results_dataframe_file, '...', end="")
-                    results_dataframe = read_dataframe_file(results_dataframe_file)
-                    if verbose:
-                        print("done.")
-
-                write_summary_stats_file(results_dataframe, summary_stats_filename, verbose=verbose)
-
-            files_to_export.append(summary_stats_filename)
-            shared_ret_values["summary_stats_filename"] = summary_stats_filename
-
-        if write_result_tifs:
-            if not os.path.exists(result_tif_filename):
-                if dem_ds is None:
-                    dem_ds = gdal.Open(dem_name, gdal.GA_ReadOnly)
-
-                if results_dataframe is None:
-                    if verbose:
-                        print("Reading", results_dataframe_file, '...', end="")
-                    results_dataframe = read_dataframe_file(results_dataframe_file)
-                    if verbose:
-                        print("done.")
-
-                generate_result_geotiff(results_dataframe, dem_ds, result_tif_filename, verbose=verbose)
-
-            files_to_export.append(result_tif_filename)
-            shared_ret_values["result_tif_filename"] = result_tif_filename
-
-        if plot_results:
-            if not os.path.exists(plot_filename):
-                if location_name is None:
-                    location_name = os.path.split(dem_name)[1]
-
-                if results_dataframe is None:
-                    if verbose:
-                        print("Reading", results_dataframe_file, '...', end="")
-                    results_dataframe = read_dataframe_file(results_dataframe_file)
-                    if verbose:
-                        print("done.")
-
-                plot_validation_results.plot_histograms_and_line(results_dataframe,
-                                                                 plot_filename,
-                                                                 place_name=location_name,
-                                                                 verbose=verbose)
-
-            files_to_export.append(plot_filename)
-            shared_ret_values["plot_filename"] = plot_filename
-
-        # If we didn't have to open the dataframe or export anything, it was all already done.
-        if results_dataframe is None and verbose:
-            print("Work already done here. Moving on.")
-
-        return files_to_export
-
-    elif mark_empty_results and os.path.exists(empty_results_filename):
-        if verbose:
-            print("No valid data produced during previous ICESat-2 analysis of", os.path.basename(dem_name) + ". Returning.")
-        return files_to_export
-
-    dem_ds, dem_array, dem_bbox, dem_step_xy = \
-        get_dem_dataset_and_vars(dem_name,)
-
-
-    # Get the dem array from the new dataset.
-    # dem_ds = gdal.Open(converted_dem_name, gdal.GA_ReadOnly)
-    dem_ds = gdal.Open(dem_name, gdal.GA_ReadOnly)
-    dem_array = dem_ds.GetRasterBand(band_num).ReadAsArray()
-
-    # Get the dem's horizontal and vertical reference frame.
-    dem_horz_ref_frame, dem_vert_ref_frame = dem_geom.get_dem_reference_frame_from_file(dem_name)
-    # If the calling function specified the vertical reference datum, use it (override what's in the file)
-    if dem_vertical_datum is not None:
-        dem_vert_ref_frame = dem_vertical_datum
-
-    dem_epsg_str = dem_geom.get_dem_srs_string(dem_horz_ref_frame, dem_vert_ref_frame)
-    dem_wgs84_bbox = dem_geom.get_wgs84_bounding_box(dem_name)
-
-    # elif use_icesat2_photon_database:
-    if icesat2_photon_database_obj is None:
-        icesat2_photon_database_obj = icesat2_database_v2.IS2Database()
-
-    # Put the bbox in (xmin, xmax, ymin, ymax, tmin, tmax) orientation.
-    # dates=None means use all available ICESat-2 data (mission start through far future).
-    date_min, date_max = dates if dates is not None else (20180101, 20991231)
-    dem_3d_bbox = (dem_wgs84_bbox[0],
-                   dem_wgs84_bbox[1],
-                   dem_wgs84_bbox[2],
-                   dem_wgs84_bbox[3],
-                   date_min,
-                   date_max)
-
-    photon_df = icesat2_photon_database_obj.query_photons(dem_3d_bbox,
-                                                          photon_classes=classes,
-                                                          omit_bboxes=omit_bboxes if omit_bboxes is not None else [])
-
-    if photon_df is None or len(photon_df) == 0:
+    fetch_result = _fetch_photons(dem_name, band_num, dem_vertical_datum,
+                                   icesat2_photon_database_obj, dates, classes, omit_bboxes, verbose)
+    if fetch_result is None:
         if mark_empty_results:
             with open(empty_results_filename, 'w') as f:
                 f.write(os.path.basename(dem_name) + " had no ICESat-2 results.")
             if verbose:
                 print("Created", empty_results_filename, "to indicate no valid ICESat-2 data was returned here.")
-
             shared_ret_values["empty_results_filename"] = empty_results_filename
             files_to_export.append(empty_results_filename)
-            return files_to_export
-        else:
-            return files_to_export
+        return files_to_export
+    dem_ds, dem_array, photon_df, dem_epsg_str = fetch_result
 
-    if verbose:
-        print("{0:,}".format(len(photon_df)), "ICESat-2 photons present in photon dataframe.")
-
-    # Now transform points into same spatial reference (horz + vert) as DEMs. Assign to "dem_x", "dem_y", "dem_z".
-    try:
-        photon_df["dem_x"], photon_df["dem_y"], photon_df["dem_z"] = \
-            transform_points.transform_points(photon_df['x'],
-                                              photon_df['y'],
-                                              photon_df['z'],
-                                              src_epsg="EPSG:4326+3855",
-                                              dst_epsg=dem_epsg_str)
-
-    except (ValueError, RuntimeError):
-        print("Warning: Unable to perform transformation. Using original points.")
-        # TODO: Try to convert just horizontally (even if we can't do it vertically).
-        photon_df["dem_x"] = photon_df['x']
-        photon_df["dem_y"] = photon_df['y']
-        photon_df["dem_z"] = photon_df['z']
-
-    ph_xcoords = photon_df["dem_x"]
-    ph_ycoords = photon_df["dem_y"]
-
-    # Assign a dem (i,j) index location for each photon. We use this for computing.
-    xstart, xstep, _, ystart, _, ystep = dem_ds.GetGeoTransform()
-    photon_df["i"] = numpy.floor((ph_ycoords - ystart) / ystep).astype(int)
-    photon_df["j"] = numpy.floor((ph_xcoords - xstart) / xstep).astype(int)
-
-    # Only use photons that are within the bounds of the DEM. Some may not be actually.
-    photon_df = photon_df[(photon_df["i"] >= 0) & (photon_df["i"] < dem_array.shape[0]) &
-                          (photon_df["j"] >= 0) & (photon_df["j"] < dem_array.shape[1])]
-
-    # Assign height_field after filtering so its length stays consistent with photon_df.
-    height_field = photon_df["dem_z"]
-
-    # Get the nodata value for the array, if it exists.
-    dem_ndv = dem_ds.GetRasterBand(1).GetNoDataValue()
-    # Generate a mask of photons that are (1) on land, (2) within the bounding box, and (3) not no-data
-    if dem_ndv is not None:
-        if not numpy.isnan(dem_ndv):
-            dem_goodpixel_mask = (dem_array != dem_ndv)
-        else:
-            dem_goodpixel_mask = (numpy.isnan(dem_array) == False)
-    else:
-        dem_goodpixel_mask = numpy.ones(dem_array.shape, dtype=bool)
-
-    # Create an (i,j) multi-index into the array.
-    photon_df = photon_df.set_index(["i", "j"], drop=False)
-
-    ph_mask_ground_only = numpy.isin(photon_df["class_code"], classes)
-    dem_mask_w_ground_photons = numpy.zeros(dem_array.shape, dtype=bool)
-
-    dem_mask_w_ground_photons[photon_df.i[ph_mask_ground_only],
-                              photon_df.j[ph_mask_ground_only]] = 1
-
-    dem_overlap_mask = dem_goodpixel_mask & dem_mask_w_ground_photons
-
-    dem_overlap_i, dem_overlap_j = numpy.where(dem_overlap_mask)
-    dem_overlap_elevs = dem_array[dem_overlap_mask]
-
-    if measure_coverage:
-        dem_overlap_xmin = xstart + (xstep * dem_overlap_j)
-        dem_overlap_xmax = dem_overlap_xmin + xstep
-        dem_overlap_ymax = ystart + (ystep * dem_overlap_i)
-        dem_overlap_ymin = dem_overlap_ymax + ystep
-    N = len(dem_overlap_i)
-
-    if verbose:
-        num_goodpixels = numpy.count_nonzero(dem_goodpixel_mask)
-        print("{:,}".format(num_goodpixels), "land cells exist in the DEM.")
-        if num_goodpixels == 0:
-            print("No land cells found in DEM with overlapping ICESat-2 data. Stopping and moving on.")
-
-            if mark_empty_results:
-                # Just create an empty file to mark this dataset as done.
-                with open(empty_results_filename, 'w') as f:
-                    f.write(os.path.basename(dem_name) + " had no ICESat-2 results.")
-                if verbose:
-                    print("Created", empty_results_filename, "to indicate no data was returned here.")
-
-                files_to_export.append(empty_results_filename)
-                shared_ret_values["empty_results_filename"] = empty_results_filename
-
-            return files_to_export
-
-        else:
-            print("{:,} ICESat-2 photons overlap".format(len(photon_df)),
-                  "{:,}".format(N),
-                  "DEM cells ({:0.2f}% of total DEM data).".format(
-                      numpy.count_nonzero(dem_overlap_mask) * 100 / num_goodpixels))
-
-    # If we have no data overlapping the valid land DEM cells, just return None
-    if numpy.count_nonzero(dem_overlap_mask) == 0:
-        if verbose:
-            print("No overlapping ICESat-2 data with valid land cells. Stopping and moving on.")
-
+    overlap_result = _compute_photon_overlap(dem_ds, dem_array, photon_df, classes,
+                                              dem_epsg_str, measure_coverage, verbose)
+    if overlap_result is None:
         if mark_empty_results:
-            # Just create an empty file to makre this dataset as done.
             with open(empty_results_filename, 'w') as f:
                 f.write(os.path.basename(dem_name) + " had no ICESat-2 results.")
             if verbose:
                 print("Created", empty_results_filename, "to indicate no data was returned here.")
-
             shared_ret_values["empty_results_filename"] = empty_results_filename
             files_to_export.append(empty_results_filename)
-            return files_to_export
+        return files_to_export
+    photon_df, height_field, ph_mask_ground_only, dem_overlap_i, dem_overlap_j, \
+        dem_overlap_elevs, N, coverage_coords = overlap_result
 
-        else:
-            return files_to_export
-
-    # If requested, perform a validation on a photon-by-photon basis, in addition to the grid-cell
-    # analysis peformed later on down. First, create a dataframe with just the DEM elevations.
     if include_photon_level_validation:
-        if verbose:
-            print("Performing photon-level validation...")
+        photon_file = _run_photon_level_validation(photon_df, height_field, ph_mask_ground_only,
+                                                    dem_overlap_i, dem_overlap_j, dem_overlap_elevs,
+                                                    results_dataframe_file, verbose)
+        files_to_export.append(photon_file)
+        shared_ret_values["photon_results_dataframe_file"] = photon_file
 
-        if verbose:
-            print("\tSubsetting ground-only photons... ", end="")
-        # Get the subset of the dataframe with ground-only photons.
-        photon_df_ground_only = photon_df[ph_mask_ground_only]
-        if verbose:
-            print("Done.")
+    results_list = _run_parallel_cell_validation(
+        photon_df, height_field, dem_overlap_i, dem_overlap_j, dem_overlap_elevs, N,
+        max_photons_per_cell, measure_coverage, coverage_coords, numprocs, verbose)
 
-        if verbose:
-            print("\tGenerating DEM elevation dataframe... ", end="")
-
-        # # Generate a dataframe of the dem elevations, indexed by their i,j coordinates.
-        dem_elev_df = pandas.DataFrame({"dem_elevation": dem_overlap_elevs},
-                                       index=pandas.MultiIndex.from_arrays((dem_overlap_i, dem_overlap_j),
-                                                                           names=("i", "j"))
-                                       )
-        if verbose:
-            print("Done with {0} records.".format(len(dem_elev_df)))
-
-
-        # Join the dataframes by their i,j values, which will add the "dem_i", "dem_j",
-        # and "dem_elevations" columns to the photon dataframe.
-        # This could take a while to run, depending on the sizes of the dataframes.
-        # Both dataframes have (i,j) as their index, so this should be good, I shouldn't need to specify the "on=" parameter.
-        if verbose:
-            print("\tJoining photon_df and DEM elevation tables... ", end="")
-        photon_df_with_dem_elevs = photon_df_ground_only.join(dem_elev_df, how='left') # on=('i','j')
-        # Then, drop all photons that didn't line up with a valid land cell according to the coastline mask
-        # (dem_elevation values would be NaN)
-        photon_df_with_dem_elevs = photon_df_with_dem_elevs[pandas.notna(photon_df_with_dem_elevs["dem_elevation"])]
-        if verbose:
-            print("Done with {0} records.".format(len(photon_df_with_dem_elevs)))
-
-        # Subtract the elevations and give us a photon_level error bar.
-        # This is a single-column subtraction, should be pretty quick.
-        if verbose:
-            print("\tCalculating elevation differences... ", end="")
-        photon_df_with_dem_elevs["dem_minus_is2_m"] = photon_df_with_dem_elevs["dem_elevation"] - height_field
-        if verbose:
-            print("Done.")
-
-        # Write out the photon level elevation difference dataset.
-        base, ext = os.path.splitext(results_dataframe_file)
-        photon_results_dataframe_file = base.replace("_results", "_photons") + ext
-        if verbose:
-            print("\tWriting", os.path.split(photon_results_dataframe_file)[1] + "... ", end="")
-        photon_df_with_dem_elevs.to_hdf(photon_results_dataframe_file, "icesat2", complib="zlib", complevel=3)
-        if verbose:
-            # Add an extra newline at the end to visually separate it from the next set of steps.
-            print("Done.\n")
-
-        files_to_export.append(photon_results_dataframe_file)
-        shared_ret_values["photon_results_dataframe_file"] = photon_results_dataframe_file
-
-    if verbose:
-        if max_photons_per_cell is not None:
-            print("Limiting processing to {0} photons per grid cell.".format(max_photons_per_cell))
-
-        print("Performing ICESat-2/DEM cell validation...")
-
-    # Gather a list of all the little results mini-dataframes from all the sub-processes running.
-    # Concatenate them into a master results dataframe at the end.
-    results_dataframes_list = []
-
-    t_start = time.perf_counter()
-
-    # Set up subprocessing data structures for parallelization.
-    cpu_count = numprocs
-    dt_dict = parallel_funcs.dtypes_dict
-
-    # Create "shared memory" arrays for the sub-processes to read.
-    proc_id = os.getpid()
-    height_array_name = f"heights_{proc_id}"
-    i_array_name = f"i_{proc_id}"
-    j_array_name = f"j_{proc_id}"
-    code_array_name = f"codes_{proc_id}"
-    assert height_field.shape == photon_df.i.shape == photon_df.j.shape == photon_df.class_code.shape
-
-    # Create the shared memory arrays and copy the data into them.
-    height_smo = shared_memory.SharedMemory(size=height_field.nbytes,
-                                            name=height_array_name,
-                                            create=True)
-    height_smo.buf[:] = height_field.to_numpy().tobytes()
-    height_dtype = height_field.dtype
-
-    i_smo = shared_memory.SharedMemory(size=photon_df.i.nbytes,
-                                       name=i_array_name,
-                                       create=True)
-    i_smo.buf[:] = photon_df.i.to_numpy().tobytes()
-    i_dtype = photon_df.i.dtype
-
-    j_smo = shared_memory.SharedMemory(size=photon_df.j.nbytes,
-                                       name=j_array_name,
-                                       create=True)
-    j_smo.buf[:] = photon_df.j.to_numpy().tobytes()
-    j_dtype = photon_df.j.dtype
-
-    code_smo = shared_memory.SharedMemory(size=photon_df.class_code.nbytes,
-                                          name=code_array_name,
-                                          create=True)
-    code_smo.buf[:] = photon_df.class_code.to_numpy().tobytes()
-    code_dtype = photon_df.class_code.dtype
-
-    if measure_coverage:
-        # If we're trying to measure coverage, then we really do need the floating point x and y locations as well.
-        # x_array = manager.Array(dt_dict[photon_df.dem_x.dtype], photon_df.dem_x)
-        # y_array = manager.Array(dt_dict[photon_df.dem_y.dtype], photon_df.dem_y)
-        assert height_field.shape == photon_df.dem_x.shape == photon_df.dem_y.shape
-        x_array_name = f"x_{proc_id}"
-        x_smo = shared_memory.SharedMemory(size=photon_df.dem_x.nbytes,
-                                           name=x_array_name,
-                                           create=True)
-        x_smo.buf[:] = photon_df.dem_x.to_numpy().tobytes()
-        x_dtype = photon_df.dem_x.dtype
-
-        y_array_name = f"y_{proc_id}"
-        y_smo = shared_memory.SharedMemory(size=photon_df.dem_y.nbytes,
-                                           name=y_array_name,
-                                           create=True)
-        y_smo.buf[:] = photon_df.dem_y.to_numpy().tobytes()
-        y_dtype = photon_df.dem_y.dtype
-
-    else:
-        x_array_name = None
-        y_array_name = None
-        x_smo = None
-        y_smo = None
-        x_dtype = None
-        y_dtype = None
-
-    # Keep a list of the active shared memory objects, so we can close them later.
-    if measure_coverage:
-        memory_objs = [height_smo, i_smo, j_smo, code_smo, x_smo, y_smo]
-    else:
-        memory_objs = [height_smo, i_smo, j_smo, code_smo]
-
-    running_procs     = [None] * cpu_count
-    open_pipes_parent = [None] * cpu_count
-    open_pipes_child  = [None] * cpu_count
-
-    counter_started = 0 # The number of data cells handed off to child processes.
-    counter_finished = 0 # The number of data cells completed by child processes.
-    num_chunks_started = 0
-    num_chunks_finished = 0
-    items_per_process_chunk = 20
-
-    # Set up the processes and pipes, then start them.
-    try:
-        # First, set up each child process and start it (importing arguments)
-        for i in range(cpu_count):
-            if counter_started >= N:
-                # If the number of processes we need for this job is less than the number of cores available, just
-                # shorten the list of processes we are using.
-                running_procs     = running_procs[:i]
-                open_pipes_parent = open_pipes_parent[:i]
-                open_pipes_child  = open_pipes_child[:i]
-                break
-
-            # Generate a new parallel subprocess to handle the data.
-            running_procs[i], open_pipes_parent[i], open_pipes_child[i] = \
-                kick_off_new_child_process(height_array_name,
-                                           height_dtype,
-                                           i_array_name,
-                                           i_dtype,
-                                           j_array_name,
-                                           j_dtype,
-                                           code_array_name,
-                                           code_dtype,
-                                           height_field.shape,
-                                           photon_limit=max_photons_per_cell,
-                                           measure_coverage=measure_coverage,
-                                           x_array_name=x_array_name,
-                                           x_dtype=x_dtype,
-                                           y_array_name=y_array_name,
-                                           y_dtype=y_dtype)
-
-            # Send the first batch of (i,j) pixel locations & elevs to processes now.
-            # Kick off the computations.
-            counter_chunk_end = min(counter_started + items_per_process_chunk, N)
-            if measure_coverage:
-                open_pipes_parent[i].send((dem_overlap_i[counter_started: counter_chunk_end],
-                                           dem_overlap_j[counter_started: counter_chunk_end],
-                                           dem_overlap_elevs[counter_started: counter_chunk_end],
-                                           dem_overlap_xmin[counter_started: counter_chunk_end],
-                                           dem_overlap_xmax[counter_started: counter_chunk_end],
-                                           dem_overlap_ymin[counter_started: counter_chunk_end],
-                                           dem_overlap_ymax[counter_started: counter_chunk_end]))
-            else:
-                open_pipes_parent[i].send((dem_overlap_i[counter_started: counter_chunk_end],
-                                           dem_overlap_j[counter_started: counter_chunk_end],
-                                           dem_overlap_elevs[counter_started: counter_chunk_end]))
-            counter_started = counter_chunk_end
-            num_chunks_started += 1
-
-        # Delegate the work. Keep looping through until all processes have finished up.
-        # When everything is done, just send "STOP" connections to the remaining processes.
-        # while counter_finished < N:
-        while num_chunks_finished < num_chunks_started:
-            # First, look for processes that have returned values.
-            for i, (proc, pipe, pipe_child) in enumerate(zip(running_procs, open_pipes_parent, open_pipes_child)):
-
-                if proc is None:
-                    continue
-
-                elif not proc.is_alive():
-                    # If for some reason the child process has terminated (likely from an error), join it and kick off a new one.
-                    if verbose:
-                        # raise UserWarning("Sub-process terminated unexpectedly. Some data may be missing. Restarting a new process.")
-                        print("\nSub-process terminated unexpectedly. Some data may be missing. Restarting a new process.")
-                    # Close out the dead process and its pipes
-                    proc.join()
-                    pipe.close()
-                    pipe_child.close()
-                    # Kick off a shiny new process
-                    proc, pipe, pipe_child = kick_off_new_child_process(height_array_name,
-                                                                        height_dtype,
-                                                                        i_array_name,
-                                                                        i_dtype,
-                                                                        j_array_name,
-                                                                        j_dtype,
-                                                                        code_array_name,
-                                                                        code_dtype,
-                                                                        height_field.shape,
-                                                                        photon_limit=max_photons_per_cell,
-                                                                        measure_coverage=measure_coverage,
-                                                                        x_array_name=x_array_name,
-                                                                        x_dtype=x_dtype,
-                                                                        y_array_name=y_array_name,
-                                                                        y_dtype=y_dtype)
-                    # Put that process and pipes into the lists of active procs & pipes.
-                    running_procs[i] = proc
-                    open_pipes_parent[i] = pipe
-                    open_pipes_child[i] = pipe_child
-
-                    num_chunks_finished += 1
-
-                # Check to see if our receive pipe has any data sitting in it.
-                if pipe.poll():
-                    # Get the data from the pipe.
-                    chunk_result_df = pipe.recv()
-
-                    # Advance the "finished" counter.
-                    counter_finished += len(chunk_result_df)
-                    num_chunks_finished += 1
-                    results_dataframes_list.append(chunk_result_df)
-                    if verbose:
-                        progress_bar.ProgressBar(counter_finished, N, suffix=("{0:>" +str(len(str(N))) + "d}/{1:d}").format(counter_finished, N))
-
-                    # If we still have more data to process, send another chunk along.
-                    if counter_started < N:
-                        # Send a new task to the child process, consisting of the i,j pairs to process now.
-                        counter_chunk_end = min(counter_started + items_per_process_chunk, N)
-                        # DEBUG statement
-                        # print("counter_started:", counter_started, "counter_chunk_end", counter_chunk_end)
-                        if measure_coverage:
-                            pipe.send((dem_overlap_i[counter_started: counter_chunk_end],
-                                       dem_overlap_j[counter_started: counter_chunk_end],
-                                       dem_overlap_elevs[counter_started: counter_chunk_end],
-                                       dem_overlap_xmin[counter_started: counter_chunk_end],
-                                       dem_overlap_xmax[counter_started: counter_chunk_end],
-                                       dem_overlap_ymin[counter_started: counter_chunk_end],
-                                       dem_overlap_ymax[counter_started: counter_chunk_end]))
-                        else:
-                            pipe.send((dem_overlap_i[counter_started: counter_chunk_end],
-                                       dem_overlap_j[counter_started: counter_chunk_end],
-                                       dem_overlap_elevs[counter_started: counter_chunk_end]))
-                        # Increment the "started" counter. Let it run free on the data.
-                        counter_started = counter_chunk_end
-                        num_chunks_started += 1
-                    else:
-                        # Nothing more to send. Send a "STOP" command to the child proc.
-                        if measure_coverage:
-                            pipe.send(("STOP", None, None, None, None, None, None))
-                        else:
-                            pipe.send(("STOP", None, None))
-                        proc.join()
-                        pipe.close()
-                        pipe_child.close()
-                        running_procs[i] = None
-                        open_pipes_parent[i] = None
-                        open_pipes_child[i] = None
-
-    except Exception as e:
-        if verbose:
-            print("\nException encountered in ICESat-2 processing loop. Exiting.")
-
-        clean_procs_and_pipes(running_procs, open_pipes_parent, open_pipes_child, memory_objs)
-        print(e)
-        return files_to_export
-
-    t_end = time.perf_counter()
-    if verbose:
-        total_time_s = t_end - t_start
-        # If there's 100 or more seconds, state the time with minutes.
-        if total_time_s >= 100:
-            total_time_m = int(total_time_s / 60)
-            partial_time_s = total_time_s % 60
-            print("{0:d} minute".format(total_time_m) + ("s" if total_time_m > 1 else "")
-                  + " {0:0.1f} seconds total, ({1:0.4f} s/iteration)".format(partial_time_s,
-                                                                             ((total_time_s/N) if N>0 else 0)))
-        else:
-            print("{0:0.1f} seconds total, ({1:0.4f} s/iteration)".format(total_time_s,
-                                                                          ((total_time_s / N) if N > 0 else 0)))
-
-    # Clean up any remaining processes and pipes
-    clean_procs_and_pipes(running_procs, open_pipes_parent, open_pipes_child, memory_objs)
-
-    # Concatenate all the results dataframes
-    # If there were no overlappying photons, then just return none.
-    if len(results_dataframes_list) == 0:
-        return files_to_export
-
-    results_dataframe = pandas.concat(results_dataframes_list)
-    # Subset for only valid results out. Eliminate useless nodata values and any cell with not enough photons,
-    # or any nan values. DO NOT YET filter out cells outside the outlier threshold range. That's done later.
-    results_dataframe = results_dataframe[(results_dataframe["mean"] != EMPTY_VAL)
-                                          & (~numpy.isnan(results_dataframe["mean"]))
-                                          & (results_dataframe["numphotons_intd"] >= 3)].copy()
-
-    if verbose:
-        print("{0:,} valid interdecile photon records in {1:,} DEM cells.".format(results_dataframe["numphotons_intd"].sum(), len(results_dataframe)))
-
-    # The outliers_sd_threshold is the # of standard deviations outside the mean to call outliers in the data, and omit
-    # results of those outliers. "None" does not omit anything. Default is 2.5 SDs, which is how outliers are defined
-    # in box-and-whisker plots.
-    if outliers_sd_threshold is not None:
-        assert type(outliers_sd_threshold) in (int, float)
-        diff_mean = results_dataframe["diff_mean"]
-        meanval, stdval = diff_mean.mean(), diff_mean.std()
-        low_cutoff = meanval - (stdval * outliers_sd_threshold)
-        hi_cutoff = meanval + (stdval * outliers_sd_threshold)
-        valid_mask = (diff_mean >= low_cutoff) & (diff_mean <= hi_cutoff)
-        results_dataframe = results_dataframe[valid_mask].copy()
-        if verbose:
-            print("{0:,} DEM cells after removing outliers.".format(len(results_dataframe)))
-
-    # if export_coastline_mask:
-    #     if ivert_job_name is not None:
-    #         ivert_exporter.upload_file_to_export_bucket(ivert_job_name, coastline_mask_filename)
-    #     files_to_export.append(coastline_mask_filename)
-    #     shared_ret_values["coastline_mask_filename"] = coastline_mask_filename
-
-    if len(results_dataframe) == 0:
-        if verbose:
-            print("No valid results in results dataframe. No outputs computed.")
-        if mark_empty_results:
-            # Just create an empty file to makre this dataset as done.
-            with open(empty_results_filename, 'w') as f:
-                f.write("No ICESat-2 data data overlapping this DEM to validate.")
-
-            if verbose:
-                print("Created", empty_results_filename, "to indicate no data was returned here.")
-
-            files_to_export.append(empty_results_filename)
-            shared_ret_values["empty_results_filename"] = empty_results_filename
-
-        return files_to_export
-
-    else:
-        # Write out the results dataframe. Method depends upon the file type. Can be .csv, .txt, .h5 (assumed default of not one of the text files.)
-        base, ext = os.path.splitext(results_dataframe_file)
-        ext = ext.lower().strip()
-
-        if ext in (".txt", ".csv"):
-            results_dataframe.to_csv(results_dataframe_file)
-        else:
-            results_dataframe.to_hdf(results_dataframe_file, key="icesat2", complib="zlib", mode='w')
-
-        if verbose:
-            print(results_dataframe_file, "written.")
-
-        files_to_export.append(results_dataframe_file)
-        shared_ret_values["results_dataframe_file"] = results_dataframe_file
-
-    if write_summary_stats:
-        write_summary_stats_file(results_dataframe,
-                                 summary_stats_filename,
-                                 verbose=verbose)
-
-        files_to_export.append(summary_stats_filename)
-        shared_ret_values["summary_stats_filename"] = summary_stats_filename
-
-    if write_result_tifs:
-        if dem_ds is None:
-            dem_ds = gdal.Open(dem_name, gdal.GA_ReadOnly)
-        generate_result_geotiff(results_dataframe,
-                                dem_ds,
-                                result_tif_filename,
-                                verbose=verbose)
-
-        files_to_export.append(result_tif_filename)
-        shared_ret_values["result_tif_filename"] = result_tif_filename
-
-    if plot_results:
-        if location_name is None:
-            location_name = os.path.split(dem_name)[1]
-
-        plot_validation_results.plot_histograms_and_line(results_dataframe,
-                                                         plot_filename,
-                                                         place_name=location_name,
-                                                         figsize=(10, 4), # (12, 4.8)
-                                                         verbose=verbose)
-
-        files_to_export.append(plot_filename)
-        shared_ret_values["plot_filename"] = plot_filename
-
-    return files_to_export
+    return _write_validation_outputs(
+        results_list, dem_ds, dem_name, results_dataframe_file, empty_results_filename,
+        summary_stats_filename, result_tif_filename, plot_filename,
+        write_summary_stats, write_result_tifs, plot_results, location_name,
+        outliers_sd_threshold, mark_empty_results, shared_ret_values, verbose, files_to_export)
 
 
 def write_summary_stats_file(results_df: pandas.DataFrame,
