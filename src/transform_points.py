@@ -1,88 +1,160 @@
-
-from cudem import srsfun, regions
+import os
+import logging
 import numpy
-import pandas
 import pyproj
+import rasterio
 import typing
 
-def transform_points(x: typing.Union[list, tuple, numpy.ndarray, pandas.Series],
-                     y: typing.Union[list, tuple, numpy.ndarray, pandas.Series],
-                     z: typing.Union[list, tuple, numpy.ndarray, pandas.Series],
-                     src_epsg: typing.Union[str, int],
-                     dst_epsg: typing.Union[str, int],
-                     src_region: typing.Union[list, tuple, numpy.ndarray, regions.Region, None] = None,
-                     ) -> tuple:
-    """Transform a set of 3D points from one coordinate reference system to another, vertically and horizontally.
+import transformez
+
+logger = logging.getLogger(__name__)
+
+_GRID_RESOLUTION = "3s"  # ~90 m — appropriate resolution for datum shift grids
+
+
+def transform_points(
+    x: typing.Union[list, tuple, numpy.ndarray],
+    y: typing.Union[list, tuple, numpy.ndarray],
+    z: typing.Union[list, tuple, numpy.ndarray],
+    src_epsg: typing.Union[str, int],
+    dst_epsg: typing.Union[str, int],
+    src_region: typing.Union[list, tuple, numpy.ndarray, None] = None,
+    cache_dir: typing.Optional[str] = None,
+) -> tuple:
+    """Transform a set of 3D points from one coordinate reference system to another.
 
     Parameters:
-        x (list, tuple, numpy.ndarray, pandas.DataFrame): The x-coordinates of the points to transform.
-        y (list, tuple, numpy.ndarray, pandas.DataFrame): The y-coordinates of the points to transform.
-        z (list, tuple, numpy.ndarray, pandas.DataFrame): The z-coordinates of the points to transform.
-        src_epsg (str or int): The source coordinate reference system, as an EPSG code (can be combined).
-            Should be a 3D reference system.
-        dst_epsg (str or int): The destination coordinate reference system, as an EPSG code (can be combined).
-            Should be a 3D reference system.
-        src_region (list, tuple, cudem.regions.Region): The source region to use for the transformation.
-            Should be in same coordinate system as src_epsg. If None, the region will be set to the bounding box extents of the points given.
+        x: X-coordinates (longitude or easting).
+        y: Y-coordinates (latitude or northing).
+        z: Z-coordinates (elevation).
+        src_epsg: Source CRS as an EPSG code (int or str) or compound string
+            (e.g. "EPSG:4326+3855" for WGS84 horizontal + EGM2008 vertical).
+        dst_epsg: Destination CRS in the same formats as src_epsg.
+        src_region: Bounding box [xmin, xmax, ymin, ymax] in the source CRS.
+            If None, derived from the extents of the input points.
+        cache_dir: Directory for caching downloaded datum grids and the
+            generated vertical shift grids. Defaults to './transformez_cache'
+            in the current working directory.
 
     Creates:
-        This function may download and create some files and sub-directories within the active working directory
-         to perform the needed set of transformations. The files will remain where they were created. The user can
-         change where that will happen by making an os.chdir() call before this function is called.
+        Shift grid .tif files may be written to cache_dir. These are reused
+        on subsequent calls covering the same datum pair and region.
 
     Raises:
-        ValueError if either the horizontal or vertical transformation cannot be made.
+        ValueError: If the vertical datum transformation cannot be built.
 
     Returns:
-        A 3-long tuple of x, y, and z points, same length as in the input points, in the dst_espg 3D reference system.
-        """
-    # First, check if the EPSG codes are the same. If so, just return the inputs.
-    # Convert the user input into pyproj projection objects
-    src_proj = pyproj.CRS.from_user_input(src_epsg)
-    dst_proj = pyproj.CRS.from_user_input(dst_epsg)
+        A 3-tuple of (x, y, z) numpy arrays in the destination CRS.
+    """
+    src_crs = pyproj.CRS.from_user_input(src_epsg)
+    dst_crs = pyproj.CRS.from_user_input(dst_epsg)
 
-    if src_proj.is_exact_same(dst_proj):
+    if src_crs.is_exact_same(dst_crs):
         return x, y, z
 
-    # By just taking the 1st 4 digits, it can handle a 6-value bbox like IVERT uses,
-    # ignoring the tmin, tmax fields at the end.
-    # If it's a tuple, create a region object from the tuple.
-    if type(src_region) in (list, tuple, numpy.ndarray):
-        region_obj = regions.Region().from_list([float(src_region[0]), float(src_region[1]),
-                                                 float(src_region[2]), float(src_region[3]),])
+    x = numpy.asarray(x, dtype=float)
+    y = numpy.asarray(y, dtype=float)
+    z = numpy.asarray(z, dtype=float)
 
-    # If no region is given (None), just get it from the extents of the points provided.
-    elif src_region is None:
-        xmin = min(x)
-        xmax = max(x)
-        ymin = min(y)
-        ymax = max(y)
-        region_obj = regions.Region().from_list([xmin, xmax, ymin, ymax])
+    src_horz, src_vert_epsg = _decompose_crs(src_crs)
+    dst_horz, dst_vert_epsg = _decompose_crs(dst_crs)
 
-    # If it was already provided as a regions.Region object, just use it.
-    elif isinstance(src_region, regions.Region):
-        region_obj = src_region
-
-    # Unhandled data type.
+    # Horizontal reprojection
+    if src_horz is not None and dst_horz is not None and not src_horz.is_exact_same(dst_horz):
+        xformer = pyproj.Transformer.from_crs(src_horz, dst_horz, always_xy=True)
+        trans_x, trans_y = xformer.transform(x, y)
     else:
-        raise TypeError(f"Unhandled type {str(type(src_region))} for 'src_region' parameter. Should be a tuple, list, or cudem.regions.Region object.")
+        trans_x, trans_y = x.copy(), y.copy()
 
-    # Create the transform object.
-    transform = srsfun.set_transform(src_srs=f"EPSG:{src_proj.to_epsg()}",
-                                     dst_srs=f"EPSG:{dst_proj.to_epsg()}",
-                                     region = region_obj)
-
-    # Transform the horizontal coordinates, if we can.
-    if transform['transformer'] is None:
-        raise ValueError("No transformation found for this dataset over the source region.")
+    # Vertical datum shift
+    if src_vert_epsg is not None and dst_vert_epsg is not None and src_vert_epsg != dst_vert_epsg:
+        trans_z = _apply_vertical_transform(
+            x, y, z,
+            src_vert_epsg=str(src_vert_epsg),
+            dst_vert_epsg=str(dst_vert_epsg),
+            src_region=src_region,
+            cache_dir=cache_dir,
+        )
     else:
-        trans_x, trans_y = transform['transformer'].transform(x, y)
+        trans_z = z.copy()
 
-    # Transform the vertical coordinates, if we can.
-    if transform['vert_transformer'] is None:
-        raise ValueError("No vertical transformation found for this dataset over the source region.")
-    else:
-        _, _, trans_z = transform['vert_transformer'].transform(x, y, z)
-
-    # Return the transformed points.
     return trans_x, trans_y, trans_z
+
+
+def _decompose_crs(
+    crs: pyproj.CRS,
+) -> typing.Tuple[typing.Optional[pyproj.CRS], typing.Optional[int]]:
+    """Return (horizontal_crs, vertical_epsg) from a possibly compound CRS."""
+    if crs.is_compound:
+        vert = next((s for s in crs.sub_crs_list if s.is_vertical), None)
+        horz = next((s for s in crs.sub_crs_list if not s.is_vertical), None)
+        return horz, (vert.to_epsg() if vert else None)
+    if crs.is_vertical:
+        return None, crs.to_epsg()
+    return crs, None
+
+
+def _apply_vertical_transform(
+    x: numpy.ndarray,
+    y: numpy.ndarray,
+    z: numpy.ndarray,
+    src_vert_epsg: str,
+    dst_vert_epsg: str,
+    src_region: typing.Union[list, tuple, numpy.ndarray, None],
+    cache_dir: typing.Optional[str],
+) -> numpy.ndarray:
+    """Compute and apply a vertical datum shift to z via a cached transformez grid."""
+    from scipy.interpolate import RegularGridInterpolator
+
+    if src_region is None:
+        region_bounds = [float(x.min()), float(x.max()), float(y.min()), float(y.max())]
+    else:
+        region_bounds = [float(src_region[0]), float(src_region[1]),
+                         float(src_region[2]), float(src_region[3])]
+
+    _cache = cache_dir or os.path.join(os.getcwd(), "transformez_cache")
+    os.makedirs(_cache, exist_ok=True)
+
+    w, e, s, n = region_bounds
+    grid_fn = os.path.join(
+        _cache,
+        f"vshift_{src_vert_epsg}_{dst_vert_epsg}_{w:.1f}_{e:.1f}_{s:.1f}_{n:.1f}.tif",
+    )
+
+    if not os.path.exists(grid_fn):
+        shift_array = transformez.generate_grid(
+            region=region_bounds,
+            increment=_GRID_RESOLUTION,
+            datum_in=src_vert_epsg,
+            datum_out=dst_vert_epsg,
+            cache_dir=_cache,
+            out_fn=grid_fn,
+            verbose=False,
+        )
+        if shift_array is None:
+            raise ValueError(
+                f"Vertical transform failed: EPSG:{src_vert_epsg} → EPSG:{dst_vert_epsg} "
+                f"over region {region_bounds}."
+            )
+
+    with rasterio.open(grid_fn) as src:
+        shift_data = src.read(1).astype(float)
+        grid_bounds = src.bounds
+        if src.nodata is not None:
+            shift_data[numpy.isclose(shift_data, src.nodata, atol=1e-4)] = numpy.nan
+
+    height, width = shift_data.shape
+    lons = numpy.linspace(grid_bounds.left, grid_bounds.right, width)
+    lats = numpy.linspace(grid_bounds.bottom, grid_bounds.top, height)
+
+    # rasterio stores rows top-to-bottom; flip to ascending-lat order for interpolator
+    interp = RegularGridInterpolator(
+        (lats, lons),
+        shift_data[::-1, :],
+        method="linear",
+        bounds_error=False,
+        fill_value=0.0,
+    )
+
+    shifts = interp(numpy.column_stack([y, x]))
+    return z + shifts

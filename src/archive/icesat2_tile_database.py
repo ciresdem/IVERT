@@ -11,7 +11,9 @@ import typing
 import icesat2_query
 import atl_granules
 
+
 class ICESat2_Tile:
+    """IS THIS CLASS EVEN NEEDED NOW?"""
 
     bbox_order = "(xmin, xmax, ymin, ymax, yyyymmdd_min, yyyymmdd_max)"
     default_format = 'feather'
@@ -19,8 +21,8 @@ class ICESat2_Tile:
     def __init__(self,
                  filename: typing.Union[str, None] = None,
                  directory: typing.Union[str, None] = None,
-                 crs: typing.Union[str, pyproj.crs.crs, None] = "EPSG:4326", # WGS84 coordinates
-                 vdatum: typing.Union[None, str, pyproj.crs.crs] = "EPSG:3855", # EGM2008 geoid vertical datum
+                 crs: typing.Union[str, pyproj.crs.crs, None] = "EPSG:4326",  # WGS84 coordinates
+                 vdatum: typing.Union[None, str, pyproj.crs.crs] = "EPSG:3855",  # EGM2008 geoid vertical datum
                  bbox: typing.Union[list[float], tuple[float], None] = None,
                  ):
         # If given a filename, list that as the filename, populate the rest from the file attributes once the file is read.
@@ -37,7 +39,8 @@ class ICESat2_Tile:
         self.bbox = bbox
 
         if (filename is None) and (bbox is None):
-            raise ValueError("Either 'filename' or 'bbox' (xmin, ymin, xmax, ymax, yyyymmdd_min, yyyymmdd_max) must be specified upon creation of ICESat2_Tile object.")
+            raise ValueError(
+                "Either 'filename' or 'bbox' (xmin, ymin, xmax, ymax, yyyymmdd_min, yyyymmdd_max) must be specified upon creation of ICESat2_Tile object.")
 
         if filename is None:
             # Create the filename from the bounding box.
@@ -53,7 +56,8 @@ class ICESat2_Tile:
         filename = os.path.normpath(os.path.expanduser(filename))
 
         if directory == "" and filename == "":
-            raise ValueError("Either filename or directory (or both) must be specified upon creation of ICESat2_Tile object.")
+            raise ValueError(
+                "Either filename or directory (or both) must be specified upon creation of ICESat2_Tile object.")
 
         # The filename might have been given with the full directory appended to it. If so, just use the filename.
         elif os.path.normpath(os.path.dirname(filename)) != os.path.normpath(directory):
@@ -83,7 +87,8 @@ class ICESat2_Tile:
     @staticmethod
     def validate_bbox(bbox) -> tuple:
         if len(bbox) != 6:
-            raise ValueError("ICESat2_Tile bbox must be specified as a 6-tuple in format (xmin, xmax, ymin, ymax, yyyymmdd_min, yyyymmdd_max)")
+            raise ValueError(
+                "ICESat2_Tile bbox must be specified as a 6-tuple in format (xmin, xmax, ymin, ymax, yyyymmdd_min, yyyymmdd_max)")
 
         try:
             xmin = float(bbox[0])
@@ -109,13 +114,15 @@ class ICESat2_Tile:
             tmin = int(bbox[4])
             assert 2018_01_01 <= tmin <= 2100_00_00
         except:
-            raise ValueError(f"Minimum time-value '{bbox[4]}' must be an eligible YYYYMMDD integer in the ICESat2 period.")
+            raise ValueError(
+                f"Minimum time-value '{bbox[4]}' must be an eligible YYYYMMDD integer in the ICESat2 period.")
 
         try:
             tmax = int(bbox[5])
             assert 2018_01_01 <= tmax <= 2100_00_00
         except:
-            raise ValueError(f"Maximum time-value '{bbox[5]}' must be an eligible YYYYMMDD integer in the ICESat2 period.")
+            raise ValueError(
+                f"Maximum time-value '{bbox[5]}' must be an eligible YYYYMMDD integer in the ICESat2 period.")
 
         if xmin >= xmax:
             raise ValueError(f"X-min {xmin} must be less than X-max {xmax}.")
@@ -162,7 +169,7 @@ class ICESat2_Tile:
 
         return fname
 
-    def read_tile(self, force_reread:bool = False, verbose:bool = True) -> typing.Union[pandas.DataFrame, None]:
+    def read_tile(self, force_reread: bool = False, verbose: bool = True) -> typing.Union[pandas.DataFrame, None]:
         """Read the file, and return the geodataframe.
         If the file doesn't yet exist, return None."""
         assert self.filepath is not None
@@ -215,8 +222,7 @@ class ICESat2_Tile:
         self.df = pandas.concat([blank_gdf, *list_of_dfs], ignore_index=True)
         self.df.attrs = blank_gdf.attrs
 
-        self.write_tile(format = format)
-
+        self.write_tile(format=format)
 
     def write_tile(self,
                    format: str = "feather",
@@ -268,19 +274,19 @@ class ICESat2_Tile:
     def create_blank_gdf(self):
         """Create a blank GDF template with zero records in it. This function defines the fields listed."""
         # Create a single line of data to fill in as the data for the GDF.
-        one_line_data = {"x": numpy.array([0.0,], dtype=float),
-                         "y": numpy.array([0.0,], dtype=float),
-                         "z": numpy.array([0.0,], dtype=float),
-                         "yyyymmdd": numpy.array([20180101,], dtype=numpy.uint32),
-                         "delta_time": numpy.array([0.0,], dtype=float),
-                         "class_code": numpy.array([0,], dtype=numpy.uint8),
-                         'beam': numpy.array([0,], dtype=numpy.uint8),
-                         'granule_id1': numpy.array([0,], dtype=numpy.uint64),
-                         'granule_id2': numpy.array([0,], dtype=numpy.uint64),
-                         "x_unc": numpy.array([0.0,], dtype=float),
-                         "y_unc": numpy.array([0.0,], dtype=float),
-                         "z_unc": numpy.array([0.0,], dtype=float),
-                         "quality_ph": numpy.array([0.0,], dtype=float),
+        one_line_data = {"x": numpy.array([0.0, ], dtype=float),
+                         "y": numpy.array([0.0, ], dtype=float),
+                         "z": numpy.array([0.0, ], dtype=float),
+                         "yyyymmdd": numpy.array([20180101, ], dtype=numpy.uint32),
+                         "delta_time": numpy.array([0.0, ], dtype=float),
+                         "class_code": numpy.array([0, ], dtype=numpy.uint8),
+                         'beam': numpy.array([0, ], dtype=numpy.uint8),
+                         'granule_id1': numpy.array([0, ], dtype=numpy.uint64),
+                         'granule_id2': numpy.array([0, ], dtype=numpy.uint64),
+                         "x_unc": numpy.array([0.0, ], dtype=float),
+                         "y_unc": numpy.array([0.0, ], dtype=float),
+                         "z_unc": numpy.array([0.0, ], dtype=float),
+                         "quality_ph": numpy.array([0.0, ], dtype=float),
                          }
 
         # Create a geodatabase from this data
@@ -309,7 +315,8 @@ class ICESat2_Tile:
         elif len(bbox) == 6:
             b_xmin, b_xmax, b_ymin, b_ymax, b_tmin, b_tmax = bbox
         else:
-            raise ValueError("Bounding box must be a 6-value tuple or list of (xmin, xmax, ymin, ymax, tmin, tmax), or a 4-tuple without the time bounds.")
+            raise ValueError(
+                "Bounding box must be a 6-value tuple or list of (xmin, xmax, ymin, ymax, tmin, tmax), or a 4-tuple without the time bounds.")
 
         if self.bbox is None or self.df is None:
             self.read_tile(verbose=verbose)
@@ -319,8 +326,8 @@ class ICESat2_Tile:
 
         # If the bounds are entirely outside the bounds of this tile's box, then just return a blank df and move along.
         if (b_xmax <= t_xmin) or (b_xmin >= t_xmax) or \
-            (b_ymax <= t_ymin) or (b_ymin >= t_ymax) or \
-            (b_tmax < t_tmin) or (b_tmin > t_tmax):
+                (b_ymax <= t_ymin) or (b_ymin >= t_ymax) or \
+                (b_tmax < t_tmin) or (b_tmin > t_tmax):
             return self.create_blank_gdf()
 
         # If the bounds entirely enclose this tile's box, then just return the entire dataframe and move on,
@@ -354,29 +361,29 @@ class ICESat2_Tile:
         # Join them all together with 'and' statements
         query_string_total = " and ".join(query_subset_strings)
         subset_mask = numexpr.evaluate(query_string_total,
-                                       local_dict = {"x": self.df["x"],
-                                                     "y": self.df["y"],
-                                                     "yyyymmdd": self.df["yyyymmdd"],
-                                                     "b_xmin": b_xmin,
-                                                     "b_xmax": b_xmax,
-                                                     "b_ymin": b_ymin,
-                                                     "b_ymax": b_ymax,
-                                                     "b_tmin": b_tmin,
-                                                     "b_tmax": b_tmax,
-                                                     }
+                                       local_dict={"x": self.df["x"],
+                                                   "y": self.df["y"],
+                                                   "yyyymmdd": self.df["yyyymmdd"],
+                                                   "b_xmin": b_xmin,
+                                                   "b_xmax": b_xmax,
+                                                   "b_ymin": b_ymin,
+                                                   "b_ymax": b_ymax,
+                                                   "b_tmin": b_tmin,
+                                                   "b_tmax": b_tmax,
+                                                   }
                                        )
 
         return self.df[subset_mask]
 
 
 if __name__ == "__main__":
-    tile = ICESat2_Tile.from_bbox(directory="~/.ivert/icesat2/photon_tiles",
-                                  crs="EPSG:4326", # WGS84
-                                  vdatum="EPSG:3855", # EGM2008
+    tile = ICESat2_Tile.from_bbox(directory="~/.ivert/icesat2/",
+                                  crs="EPSG:4326",  # WGS84
+                                  vdatum="EPSG:3855",  # EGM2008
                                   bbox=(-124, -123.75,
                                         45, 45.25,
-                                        2024_09_01, 2025_09_01)
-                                 )
+                                        2025_09_01, 2026_04_01)
+                                  )
 
     df = tile.create_blank_gdf()
     tile.df = df

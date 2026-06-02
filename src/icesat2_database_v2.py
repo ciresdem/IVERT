@@ -3,22 +3,41 @@
 import datetime
 import dateparser
 import geopandas
+import logging
 import numpy
-import numexpr
 import os
 import pandas
-import rasterio
 import shapely
 import shutil
-import subprocess
 import typing
 import xarray
 
-import icesat2_query
+import fetchez
+import fetchez.core
+import fetchez.spatial
+from fetchez.modules.earthdata import IceSat2 as _FetchezIceSat2
+import globato
+
 import utils.pickle_blosc
 import utils.configfile
 import utils.cuboid_funcs
-import coastline_mask_v2
+from icesat2_requests import ICESat2RequestsCSV
+
+logger = logging.getLogger(__name__)
+
+# ICESat-2 epoch: all delta_time values are seconds since 2018-01-01T00:00:00Z
+_ICESAT2_EPOCH = datetime.datetime(2018, 1, 1, 0, 0, 0)
+
+
+def _yyyymmdd_to_delta_time(yyyymmdd: typing.Union[int, str]) -> float:
+    """Convert a YYYYMMDD integer to ICESat-2 delta_time (seconds since 2018-01-01)."""
+    return (datetime.datetime.strptime(str(int(yyyymmdd)), "%Y%m%d") - _ICESAT2_EPOCH).total_seconds()
+
+
+def _delta_time_to_yyyymmdd(delta_time: float) -> int:
+    """Convert ICESat-2 delta_time (seconds since 2018-01-01) to a YYYYMMDD integer."""
+    return int((_ICESAT2_EPOCH + datetime.timedelta(seconds=float(delta_time))).strftime("%Y%m%d"))
+
 
 class IS2Database:
 
@@ -65,126 +84,247 @@ class IS2Database:
         geopandas.GeoDataFrame containing the photon tiles from the database.
         """
         if overwrite:
+            removed = []
             if os.path.exists(self.db_fname):
-                print("Removing old", os.path.basename(self.db_fname), end="")
+                removed.append(os.path.basename(self.db_fname))
                 os.remove(self.db_fname)
             if os.path.exists(self.db_fname_compressed):
-                print(" and", os.path.basename(self.db_fname_compressed), end="")
+                removed.append(os.path.basename(self.db_fname_compressed))
                 os.remove(self.db_fname_compressed)
-                print()
-            else:
-                print()
+            if removed:
+                logger.info("Removing old %s", " and ".join(removed))
 
         elif os.path.exists(self.db_fname):
             raise OSError("Database file already exists. Use overwrite=True to overwrite it.")
 
         if populate:
-            cdf_files = sorted([os.path.join(self.granules_dir, fn) for fn in os.listdir(self.granules_dir) if os.path.splitext(fn)[-1].lower() == ".cdf"])
-            granule_ids = [None] * len(cdf_files)
-            filenames = [None] * len(cdf_files)
-            lasers = [None] * len(cdf_files)
-            query_bboxes = [None] * len(cdf_files)
-            data_bboxes = [None] * len(cdf_files)
-            zbounds = [None] * len(cdf_files)
-            numphotons = numpy.zeros((len(cdf_files),), dtype=int)
-            numphotons_unclassified = numpy.zeros((len(cdf_files),), dtype=int)
-            numphotons_noise = numpy.zeros((len(cdf_files),), dtype=int)
-            numphotons_ground = numpy.zeros((len(cdf_files),), dtype=int)
-            numphotons_canopy = numpy.zeros((len(cdf_files),), dtype=int)
-            numphotons_canopy_top = numpy.zeros((len(cdf_files),), dtype=int)
-            numphotons_bathy_floor = numpy.zeros((len(cdf_files),), dtype=int)
-            numphotons_bathy_surface = numpy.zeros((len(cdf_files),), dtype=int)
-            numphotons_buildings = numpy.zeros((len(cdf_files),), dtype=int)
-            downloaded_on = numpy.zeros((len(cdf_files),), dtype=int)
-            geometries = [None] * len(cdf_files)
+            nc_files = sorted([os.path.join(self.granules_dir, fn) for fn in os.listdir(self.granules_dir)
+                               if os.path.splitext(fn)[-1].lower() == ".nc"])
 
-            for i, cdf in enumerate(cdf_files):
-                filenames[i] = os.path.basename(cdf)
-                xds = xarray.open_dataset(cdf)
+            records = []
+            for nc_fn in nc_files:
+                meta = self._read_nc_metadata(nc_fn)
+                if meta is not None:
+                    records.append(meta)
 
-                xarray.set_options(display_max_rows=20)
+            if records:
+                gdf = geopandas.GeoDataFrame(records, crs=self.crs, geometry="geometry")
+            else:
+                gdf = geopandas.GeoDataFrame(
+                    self._empty_db_dict(),
+                    crs=self.crs,
+                    geometry="geometry",
+                ).drop(labels=0, axis="rows")
 
-                # print(xds)
-
-                granule_ids[i] = xds.attrs["granule_id"]
-                lasers[i] = xds.attrs["laser_name"]
-                query_bboxes[i] = xds.attrs["query_bbox"]
-                data_bbox = xds.attrs["data_bbox"]
-                data_bboxes[i] = data_bbox
-                zbounds[i] = xds.attrs["zbounds"]
-                numphotons[i] = xds.attrs["numphotons"]
-                numphotons_unclassified[i] = xds.attrs["numphotons_unclassified"]
-                numphotons_noise[i] = xds.attrs["numphotons_noise"]
-                numphotons_ground[i] = xds.attrs["numphotons_ground"]
-                numphotons_canopy[i] = xds.attrs["numphotons_canopy"]
-                numphotons_canopy_top[i] = xds.attrs["numphotons_canopy_top"]
-                numphotons_bathy_floor[i] = xds.attrs["numphotons_bathy_floor"]
-                numphotons_bathy_surface[i] = xds.attrs["numphotons_bathy_surface"]
-                numphotons_buildings[i] = xds.attrs["numphotons_buildings"]
-                downloaded_on[i] = xds.attrs["downloaded_on"]
-
-                geometries[i] = shapely.box(data_bbox[0], data_bbox[2], data_bbox[1], data_bbox[3])
-
-            db_dict = {"granule_id": granule_ids,
-                       "filename": filenames,
-                       "laser_name": lasers,
-                       "query_bbox": query_bboxes,
-                       "data_bbox": data_bboxes,
-                       "zbounds": zbounds,
-                       "numphotons": numphotons,
-                       "numphotons_unclassified": numphotons_unclassified,
-                       "numphotons_noise": numphotons_noise,
-                       "numphotons_ground": numphotons_ground,
-                       "numphotons_canopy": numphotons_canopy,
-                       "numphotons_canopy_top": numphotons_canopy_top,
-                       "numphotons_bathy_floor": numphotons_bathy_floor,
-                       "numphotons_bathy_surface": numphotons_bathy_surface,
-                       "numphotons_buildings": numphotons_buildings,
-                       "downloaded_on": downloaded_on,
-                       "geometry": geometries,
-                       }
-
-            gdf = geopandas.GeoDataFrame(db_dict, crs=self.crs, geometry="geometry")
-
-        else: ## !populate, just create a blank one from scratch
-            # Create an empty database and write it here. Don't bother writing the compressed version.
-            db_dict = {"granule_id": ["foobar"],
-                       "filename": ["foobar"],
-                       "laser_name": ["gtl1"],
-                       "query_bbox": [[0.0,0.0,0.0,0.0,0,0]],
-                       "data_bbox": [[0.0,0.0,0.0,0.0,0,0]],
-                       "zbounds": [[0.0, 0.0]],
-                       "numphotons": [0],
-                       "numphotons_unclassified": [0],
-                       "numphotons_noise": [0],
-                       "numphotons_ground": [0],
-                       "numphotons_canopy": [0],
-                       "numphotons_canopy_top": [0],
-                       "numphotons_bathy_floor": [0],
-                       "numphotons_bathy_surface": [0],
-                       "numphotons_buildings": [0],
-                       "downloaded_on": [0],
-                       "geometry": shapely.box(0.0,0.0,1.0,1.0),
-                      }
-            gdf = geopandas.GeoDataFrame(db_dict, crs=self.crs, geometry="geometry").drop(labels=0, axis="rows")
+        else:
+            gdf = geopandas.GeoDataFrame(
+                self._empty_db_dict(),
+                crs=self.crs,
+                geometry="geometry",
+            ).drop(labels=0, axis="rows")
 
         gdf.to_file(self.db_fname, driver="GPKG")
         if os.path.exists(self.db_fname):
-            print("Created", os.path.basename(self.db_fname), "with", len(gdf), "records.")
+            logger.info("Created %s with %d records.", os.path.basename(self.db_fname), len(gdf))
         else:
             raise OSError("Failed to create", os.path.basename(self.db_fname))
 
         if len(gdf) > 0:
             utils.pickle_blosc.write(gdf, self.db_fname_compressed)
             if os.path.exists(self.db_fname_compressed):
-                print("Created compressed", os.path.basename(self.db_fname_compressed), "with", len(gdf), "records.")
+                logger.info("Created compressed %s with %d records.", os.path.basename(self.db_fname_compressed), len(gdf))
             else:
-                print("Failed to create compressed", os.path.basename(self.db_fname_compressed) + ".")
+                logger.warning("Failed to create compressed %s.", os.path.basename(self.db_fname_compressed))
 
         # This becomes the new database for this object.
         self.gdf = gdf
 
         return gdf
+
+    @staticmethod
+    def _empty_db_dict() -> dict:
+        """Return a single-row dict suitable for constructing a blank GeoDataFrame."""
+        return {
+            "granule_id": ["placeholder"],
+            "filename": ["placeholder"],
+            "laser_name": ["all"],
+            "query_bbox": [[0.0, 0.0, 0.0, 0.0, 0, 0]],
+            "data_bbox": [[0.0, 0.0, 0.0, 0.0, 0, 0]],
+            "zbounds": [[0.0, 0.0]],
+            "numphotons": [0],
+            "numphotons_unclassified": [0],
+            "numphotons_noise": [0],
+            "numphotons_ground": [0],
+            "numphotons_canopy": [0],
+            "numphotons_canopy_top": [0],
+            "numphotons_bathy_floor": [0],
+            "numphotons_bathy_surface": [0],
+            "numphotons_buildings": [0],
+            "downloaded_on": [0],
+            "geometry": [shapely.box(0.0, 0.0, 1.0, 1.0)],
+        }
+
+    @staticmethod
+    def _read_nc_metadata(nc_fn: str) -> typing.Union[dict, None]:
+        """Read metadata attrs from a NetCDF granule file without loading photon arrays.
+
+        This is deliberately fast: xarray reads only the file header, not the data.
+        """
+        try:
+            with xarray.open_dataset(nc_fn) as ds:
+                attrs = dict(ds.attrs)
+
+            def _bbox(raw):
+                b = list(raw)
+                return [float(b[0]), float(b[1]), float(b[2]), float(b[3]), int(b[4]), int(b[5])]
+
+            data_bbox = _bbox(attrs["data_bbox"])
+            return {
+                "granule_id":               str(attrs.get("granule_id", os.path.splitext(os.path.basename(nc_fn))[0])),
+                "filename":                 os.path.basename(nc_fn),
+                "laser_name":               str(attrs.get("laser_name", "all")),
+                "query_bbox":               _bbox(attrs.get("query_bbox", [0.0, 0.0, 0.0, 0.0, 0, 0])),
+                "data_bbox":                data_bbox,
+                "zbounds":                  [float(v) for v in attrs.get("zbounds", [float("nan"), float("nan")])],
+                "numphotons":               int(attrs.get("numphotons", 0)),
+                "numphotons_unclassified":  int(attrs.get("numphotons_unclassified", 0)),
+                "numphotons_noise":         int(attrs.get("numphotons_noise", 0)),
+                "numphotons_ground":        int(attrs.get("numphotons_ground", 0)),
+                "numphotons_canopy":        int(attrs.get("numphotons_canopy", 0)),
+                "numphotons_canopy_top":    int(attrs.get("numphotons_canopy_top", 0)),
+                "numphotons_bathy_floor":   int(attrs.get("numphotons_bathy_floor", 0)),
+                "numphotons_bathy_surface": int(attrs.get("numphotons_bathy_surface", 0)),
+                "numphotons_buildings":     int(attrs.get("numphotons_buildings", 0)),
+                "downloaded_on":            int(attrs.get("downloaded_on", 0)),
+                # shapely.box(xmin, ymin, xmax, ymax)
+                "geometry": shapely.box(data_bbox[0], data_bbox[2], data_bbox[1], data_bbox[3]),
+            }
+        except Exception as e:
+            logger.warning("Could not read metadata from %s: %s", os.path.basename(nc_fn), e)
+            return None
+
+    @staticmethod
+    def _nc_filename(h5_fn: str, query_bbox: tuple) -> str:
+        """Build a unique .nc filename by appending the query bbox to the granule base name.
+
+        Format: <granule_base>_<W|E><xmin>_<W|E><xmax>_<S|N><ymin>_<S|N><ymax>_<tmin>_<tmax>.nc
+
+        This ensures that the same granule downloaded for different query regions or time
+        spans produces distinct files rather than overwriting each other.
+        """
+        def _lon_tag(v):
+            return f"{'W' if v < 0 else 'E'}{abs(float(v)):09.5f}"
+
+        def _lat_tag(v):
+            return f"{'S' if v < 0 else 'N'}{abs(float(v)):08.5f}"
+
+        base = os.path.splitext(os.path.basename(h5_fn))[0]
+        xmin, xmax, ymin, ymax, tmin, tmax = query_bbox
+        suffix = (f"_{_lon_tag(xmin)}_{_lon_tag(xmax)}"
+                  f"_{_lat_tag(ymin)}_{_lat_tag(ymax)}"
+                  f"_{int(tmin)}_{int(tmax)}")
+        return base + suffix + ".nc"
+
+    def _process_h5_to_nc(self,
+                           h5_fn: str,
+                           nc_fn: str,
+                           query_bbox: tuple,
+                           classes_to_keep: tuple = (1, 2, 3, 7, 40, 41),
+                           overwrite: bool = False) -> typing.Union[dict, None]:
+        """Classify an ATL03 HDF5 file with globato and save the result as NetCDF.
+
+        The output .nc file contains only the photon classes in classes_to_keep, plus
+        rich metadata attributes so the database can be rebuilt from headers alone.
+
+        Returns the metadata dict, or None if no photons survived filtering.
+        """
+        if os.path.exists(nc_fn) and not overwrite:
+            return self._read_nc_metadata(nc_fn)
+
+        classes_str = "/".join([str(int(c)) for c in classes_to_keep])
+        region_str = f"{query_bbox[0]}/{query_bbox[1]}/{query_bbox[2]}/{query_bbox[3]}"
+
+        stream = globato.read(
+            h5_fn,
+            data_type="ATL03",
+            region=region_str,
+            classes=classes_str,
+            water_surface="geoid",
+            reject_failed_qa=True,
+            append_atl24=True,
+            cache_dir=self.icesat2_download_dir,
+        )
+
+        chunks = []
+        for chunk in stream:
+            chunks.append(pandas.DataFrame(chunk))
+
+        if not chunks:
+            return None
+
+        df = pandas.concat(chunks, ignore_index=True)
+        df.rename(columns={"ph_h_classed": "class_code"}, inplace=True)
+
+        # Temporal filter
+        if "delta_time" in df.columns:
+            dt_min = _yyyymmdd_to_delta_time(query_bbox[4])
+            dt_max = _yyyymmdd_to_delta_time(query_bbox[5])
+            df = df[(df["delta_time"] >= dt_min) & (df["delta_time"] < dt_max)]
+
+        if len(df) == 0:
+            return None
+
+        # Keep only the columns needed for validation; drop large/redundant ones.
+        keep_cols = ["x", "y", "z", "class_code", "bathy_confidence",
+                     "delta_time", "confidence"]
+        df = df[[c for c in keep_cols if c in df.columns]].copy()
+
+        # Compute metadata for file attributes and the database record.
+        xmin, xmax = float(df["x"].min()), float(df["x"].max())
+        ymin, ymax = float(df["y"].min()), float(df["y"].max())
+        zmin = float(df["z"].min()) if "z" in df.columns else float("nan")
+        zmax = float(df["z"].max()) if "z" in df.columns else float("nan")
+        if "delta_time" in df.columns:
+            tmin = int(_delta_time_to_yyyymmdd(float(df["delta_time"].min())))
+            tmax = int(_delta_time_to_yyyymmdd(float(df["delta_time"].max())))
+        else:
+            tmin, tmax = int(query_bbox[4]), int(query_bbox[5])
+
+        cc = df["class_code"]
+        metadata_attrs = {
+            "granule_id":               os.path.splitext(os.path.basename(nc_fn))[0],
+            "laser_name":               "all",
+            "query_bbox":               list(query_bbox),
+            "data_bbox":                [xmin, xmax, ymin, ymax, tmin, tmax],
+            "zbounds":                  [zmin, zmax],
+            "numphotons":               len(df),
+            "numphotons_unclassified":  int(numpy.count_nonzero(cc == -1)),
+            "numphotons_noise":         int(numpy.count_nonzero(cc == 0)),
+            "numphotons_ground":        int(numpy.count_nonzero(cc == 1)),
+            "numphotons_canopy":        int(numpy.count_nonzero(cc == 2)),
+            "numphotons_canopy_top":    int(numpy.count_nonzero(cc == 3)),
+            "numphotons_buildings":     int(numpy.count_nonzero(cc == 7)),
+            "numphotons_bathy_floor":   int(numpy.count_nonzero(cc == 40)),
+            "numphotons_bathy_surface": int(numpy.count_nonzero(cc == 41)),
+            "downloaded_on":            int(datetime.datetime.now().strftime("%Y%m%d")),
+        }
+
+        # Build xarray Dataset and embed metadata as global attributes.
+        xr_ds = xarray.Dataset.from_dataframe(df)
+        xr_ds.attrs = metadata_attrs
+
+        os.makedirs(os.path.dirname(nc_fn) if os.path.dirname(nc_fn) else ".", exist_ok=True)
+        xr_ds.to_netcdf(nc_fn)
+        logger.info("Saved %s (%s photons, %s ground, %s bathy).",
+                    os.path.basename(nc_fn),
+                    f"{metadata_attrs['numphotons']:,}",
+                    f"{metadata_attrs['numphotons_ground']:,}",
+                    f"{metadata_attrs['numphotons_bathy_floor']:,}")
+
+        db_record = dict(metadata_attrs)
+        db_record["filename"] = os.path.basename(nc_fn)
+        db_record["geometry"] = shapely.box(xmin, ymin, xmax, ymax)
+        return db_record
 
     def open_gdf(self,
                  read_compressed: typing.Union[str, bool] = "only_if_newer",
@@ -221,14 +361,14 @@ class IS2Database:
         if read_compressed:
             self.gdf = utils.pickle_blosc.read(self.db_fname_compressed)
             if verbose:
-                print("Loaded", os.path.basename(self.db_fname_compressed), "with", len(self.gdf), "records.")
+                logger.info("Loaded %s with %d records.", os.path.basename(self.db_fname_compressed), len(self.gdf))
         else:
             if not os.path.exists(self.db_fname):
-                raise FileNotFoundError("Database file", self.db_fname, "does not exist. Call 'create_new_database()' to create it.")
+                return None
 
             self.gdf = geopandas.read_file(self.db_fname, driver="GPKG")
             if verbose:
-                print("Loaded", os.path.basename(self.db_fname), "with", len(self.gdf), "records.")
+                logger.info("Loaded %s with %d records.", os.path.basename(self.db_fname), len(self.gdf))
 
         return self.gdf
 
@@ -265,8 +405,8 @@ class IS2Database:
         dt = dataframe["delta_time"]
 
         if len(bbox_to_exclude) == 6:
-            bbox_dt_min = icesat2_query.yyyymmdd_to_delta_time(bbox_to_exclude[4])
-            bbox_dt_max = icesat2_query.yyyymmdd_to_delta_time(bbox_to_exclude[5])
+            bbox_dt_min = _yyyymmdd_to_delta_time(bbox_to_exclude[4])
+            bbox_dt_max = _yyyymmdd_to_delta_time(bbox_to_exclude[5])
             df_sub = dataframe[(x < bbox_to_exclude[0]) |
                                (x >= bbox_to_exclude[1]) |
                                (y < bbox_to_exclude[2]) |
@@ -286,54 +426,47 @@ class IS2Database:
         return df_sub
 
     @staticmethod
-    def read_granule(granule_fn,
+    def read_granule(granule_fn: str,
                      subset_bbox: typing.Union[list, tuple, None] = None,
-                     photon_classes: typing.Union[list, tuple, None] = None)\
+                     photon_classes: typing.Union[list, tuple, None] = None) \
             -> pandas.DataFrame:
-        """Read a granule from the database.
+        """Read classified photons from a NetCDF granule file.
 
-        Filter if a bbox and/or photon classes are provided."""
-        if subset_bbox is not None:
-            assert len(subset_bbox) == 6, "subset_bbox must be a list or tuple of length 6 (xmin, ymin, xmax, ymax, tmin, tmax)."
-            subset_bbox = tuple(subset_bbox)
+        Parameters
+        ----------
+        granule_fn : str
+            Path to a processed .nc granule file in the granules directory.
+        subset_bbox : list or tuple, optional
+            6-value bounding box (xmin, xmax, ymin, ymax, tmin, tmax) where t is YYYYMMDD.
+        photon_classes : list or tuple, optional
+            Photon class codes to return. Defaults to (1, 40) (ground and bathy floor).
 
-        granule_ds = xarray.open_dataset(granule_fn)
-        # print(granule_ds)
-        # print(len(granule_ds["index"]))
-        # TODO: Do this purely in xarray, forget converting to a dataframe. But I know how to do it in a dataframe right now.
-        granule_df = granule_ds.to_dataframe()
-
-        # Subset the granule dataframe within an (xmin, xmax, ymin, ymax, tmin, tmax) bounding box.
-        # For now make base assumptions that all variables are provided (will loosen this later)
-        x = granule_df["x"]
-        y = granule_df["y"]
-        dt = granule_df["delta_time"]
-        class_code = granule_df["class_code"]
-
-        # Convert the bounding box YYYYMMDD values to delta_times.
-        bbox_dt_min = icesat2_query.yyyymmdd_to_delta_time(subset_bbox[4])
-        bbox_dt_max = icesat2_query.yyyymmdd_to_delta_time(subset_bbox[5])
-
-        # If no photon classes are specified, choose ground (1) and bathy_floor (40) photons only, by default.
+        Returns
+        -------
+        pandas.DataFrame with columns x, y, z, class_code, bathy_confidence, delta_time.
+        """
         if photon_classes is None:
-            photon_classes = (1,40)
+            photon_classes = (1, 40)
 
-        granule_df_sub = granule_df[(x >= subset_bbox[0]) &
-                                    (x < subset_bbox[1]) &
-                                    (y >= subset_bbox[2]) &
-                                    (y < subset_bbox[3]) &
-                                    (dt >= bbox_dt_min) &
-                                    (dt < bbox_dt_max) &
-                                    (class_code.isin(photon_classes))]
+        ds = xarray.open_dataset(granule_fn)
+        df = ds.to_dataframe().reset_index(drop=True)
+        ds.close()
 
-        # print(f"before ({numpy.count_nonzero(granule_df["class_code" == 1]):,} gr, "
-        #       f"{numpy.count_nonzero(granule_df["class_code" == 40]):,} ba), "
-        #       f"after ({numpy.count_nonzero(granule_df_sub["class_code" == 1]):,} gr, "
-        #       f"{numpy.count_nonzero(granule_df_sub["class_code" == 40]):,} ba)")
+        # Filter by photon class.
+        df = df[df["class_code"].isin(photon_classes)]
 
-        # print(len(granule_ds["index"]), "to", len(granule_df_sub), "photons.")
+        if subset_bbox is not None:
+            assert len(subset_bbox) == 6, "subset_bbox must have 6 values (xmin, xmax, ymin, ymax, tmin, tmax)."
+            x, y = df["x"], df["y"]
+            df = df[(x >= subset_bbox[0]) & (x < subset_bbox[1]) &
+                    (y >= subset_bbox[2]) & (y < subset_bbox[3])]
 
-        return granule_df_sub
+            if "delta_time" in df.columns:
+                dt_min = _yyyymmdd_to_delta_time(subset_bbox[4])
+                dt_max = _yyyymmdd_to_delta_time(subset_bbox[5])
+                df = df[(df["delta_time"] >= dt_min) & (df["delta_time"] < dt_max)]
+
+        return df
 
 
     @staticmethod
@@ -378,13 +511,14 @@ class IS2Database:
 
         gdf_subset = self.query_granules(bbox)
 
-        print(f"Reading {len(gdf_subset)} granules overlapping {repr(bbox)}.")
+        logger.info("Reading %d granules overlapping %r.", len(gdf_subset), bbox)
 
         # print(gdf_subset)
         fnames = gdf_subset["filename"].apply(lambda x: os.path.join(self.granules_dir, x))
-        print(numpy.count_nonzero(fnames.apply(os.path.exists)), "granules exist with",
-              f"{gdf_subset["numphotons_ground"].sum():,}", "ground photons and",
-              f"{gdf_subset["numphotons_bathy_floor"].sum():,}", "bathy_floor photons.")
+        logger.info("%d granules exist with %s ground photons and %s bathy_floor photons.",
+                    numpy.count_nonzero(fnames.apply(os.path.exists)),
+                    f"{gdf_subset['numphotons_ground'].sum():,}",
+                    f"{gdf_subset['numphotons_bathy_floor'].sum():,}")
 
 
         granule_dfs = []
@@ -412,11 +546,13 @@ class IS2Database:
                 photons_df = self.omit_photons_from_exclusion_bbox(photons_df, omit_bb)
 
         if len(photons_df) > 0:
-            print(f"Trimmed granules from {gdf_subset["numphotons"].sum():,} to {len(photons_df):,} photons "
-                  f"({numpy.count_nonzero(photons_df["class_code"] == 1):,} ground, "
-                  f"{numpy.count_nonzero(photons_df["class_code"] == 40):,} bathy).\n")
+            logger.info("Trimmed granules from %s to %s photons (%s ground, %s bathy).",
+                        f"{gdf_subset['numphotons'].sum():,}",
+                        f"{len(photons_df):,}",
+                        f"{numpy.count_nonzero(photons_df['class_code'] == 1):,}",
+                        f"{numpy.count_nonzero(photons_df['class_code'] == 40):,}")
         else:
-            print("No photons in bbox.\n")
+            logger.info("No photons in bbox.")
 
         # all of this subsetting can create a fractured dataframe that is a subset-of-subset-of... iteration.
         # If we simply copy the dataframe upon returning it will be cleaner, without pointing to larger datasets and masks.
@@ -488,98 +624,137 @@ class IS2Database:
                               max_tile_scale_factor=1.5,
                               min_bathy_confidence=0.01,
                               cache_subdir: typing.Union[str, None] = None):
-        """Download ICESat-2 granules from NASA to the granules directory, only for bboxes not already in the database,
-        and enter the new files into the database."""
-        # Filter out any areas of the given bbox that have already been filled by other queries. This returns a list of
-        # zero or more boxes.
+        """Download ICESat-2 ATL03 granules from NASA using fetchez and register them in the database.
 
-        # TODO: Un-comment this out once we've finished the CRM_vol8 code
+        Downloads raw HDF5 files into granules_dir; classification is deferred to read time via globato.
+        Only downloads granules covering bboxes not already in the database.
+        """
+        # TODO: Un-comment once filter_query_bbox is stable
         # bboxes = self.filter_query_bbox(bbox)
         bboxes = [bbox]
 
         if len(bboxes) == 0:
-            print("All required granules already exist in the database. Nothing new to download.")
+            logger.info("All required granules already exist in the database. Nothing new to download.")
             return
 
-        # If the bounding box is greater than 3 degrees on any given size, split it up.
         if split_big_bboxes:
             bboxes_split = []
             for bb in bboxes:
                 bboxes_split.extend(split_bbox_into_parts(bb,
                                                           tile_size_deg=tile_size_deg,
-                                                          max_tile_scale_factor=max_tile_scale_factor)
-                                    )
-
+                                                          max_tile_scale_factor=max_tile_scale_factor))
             bboxes = bboxes_split
 
-        print(f"Downloading granules over {bbox} in {len(bboxes)} parts.")
+        logger.info("Downloading granules over %s in %d parts.", bbox, len(bboxes))
+
+        os.makedirs(self.granules_dir, exist_ok=True)
 
         for i, sbbox in enumerate(bboxes):
-            print("=====================================================================================")
-            print(f"""Part {i+1} of {len(bboxes)}: {sbbox}""")
-            print("=====================================================================================")
+            logger.info("=" * 85)
+            logger.info("Part %d of %d: %s", i + 1, len(bboxes), sbbox)
+            logger.info("=" * 85)
 
-            # Clear out the cache with previous icesat-2 downloads. They can cause conflicts.
-            self.delete_cache(delete_cudem_cache=True,
-                              delete_already_processed_txt=False, #delete_already_processed_txt=True,
-                              delete_cmr=False,
-                              cache_subdir=cache_subdir)
+            cache_dir = (os.path.join(self.icesat2_download_dir, cache_subdir)
+                         if cache_subdir is not None else self.icesat2_download_dir)
+            os.makedirs(cache_dir, exist_ok=True)
 
-            cache_dir = os.path.join(self.icesat2_download_dir, cache_subdir) if cache_subdir is not None else self.icesat2_download_dir
-            if not os.path.exists(cache_dir):
-                print("Creating cache directory", cache_dir)
-                os.makedirs(cache_dir)
+            # fetchez region is "xmin/xmax/ymin/ymax"
+            region_str = f"{sbbox[0]}/{sbbox[1]}/{sbbox[2]}/{sbbox[3]}"
+            time_start = datetime.datetime.strptime(str(int(sbbox[4])), "%Y%m%d").strftime("%Y-%m-%dT00:00:00")
+            time_end = datetime.datetime.strptime(str(int(sbbox[5])), "%Y%m%d").strftime("%Y-%m-%dT00:00:00")
 
-            new_granule_meta_df = \
-                icesat2_query.download_granules(sbbox,
-                                                self.granules_dir,
-                                                cache_dir,
-                                                classifications_to_keep = classes_to_keep,
-                                                other_columns = {}, # {"/gtx/heights/delta_time": "delta_time"},
-                                                classify_water=True,
-                                                classify_buildings=True,
-                                                min_bathy_confidence=min_bathy_confidence, # Keep all the bathy_floor data with any confidence at all, we'll screen it out later.
-                                                trim_to_bbox=True,
-                                                overwrite=False)
+            logger.info("Fetching ATL03 granules: region=%s  %s -> %s", region_str, time_start, time_end)
+            src_region = fetchez.spatial.parse_region(region_str)[0]
+            mod = _FetchezIceSat2(src_region=src_region,
+                                  outdir=cache_dir,
+                                  subset=True,
+                                  time_start=time_start,
+                                  time_end=time_end)
 
-            # From the dataframe returned, convert the data_bbox into a 2D geometry bounding-box polygon.
-            def _get_poly_from_bbox(bb):
-                return shapely.box(float(bb[0]), float(bb[1]), float(bb[2]), float(bb[3]))
+            # Check for a cached Harmony job for this bbox before submitting.
+            requests_csv = ICESat2RequestsCSV()
+            cached = requests_csv.find_matching_request("ATL03", sbbox, only_unexpired=True)
+            if cached:
+                mod.subset_job_id = cached["jobID"]
+                n_granules = cached.get("numInputGranules", "?")
+                logger.info("Re-using cached Harmony job (%s ATL03 granules): "
+                            "https://harmony.earthdata.nasa.gov/jobs/%s", n_granules, mod.subset_job_id)
+            else:
+                harmony_status = mod.harmony_make_request()
+                if harmony_status and "jobID" in harmony_status:
+                    mod.subset_job_id = harmony_status["jobID"]
+                    n_granules = harmony_status.get("numInputGranules", "?")
+                    logger.info("Harmony job submitted (%s ATL03 granules): "
+                                "https://harmony.earthdata.nasa.gov/jobs/%s", n_granules, mod.subset_job_id)
+                    requests_csv.add_record("ATL03", sbbox, harmony_status)
 
-            if new_granule_meta_df is None or len(new_granule_meta_df) == 0:
-                # TODO: Place an "EMPTY" marker in the database with the correct query_bbox
-                #  (and data_bbox outside any reasonable search area) to keep IVERT from ever trying to rebuild that
-                #  section of database.
+            mod.run()
+
+            # Update the CSV with the final status (links, progress=100, etc.)
+            if mod.subset_job_id:
+                final_status = mod.harmony_ping_for_status(mod.subset_job_id)
+                if final_status:
+                    requests_csv.update_record("ATL03", sbbox, final_status,
+                                               fail_quietly=True)
+
+            results = fetchez.core.run_fetchez([mod])
+            h5_files = [os.path.abspath(entry["dst_fn"])
+                        for _, entry in results
+                        if entry.get("status") == 0
+                        and entry.get("dst_fn")
+                        and os.path.exists(entry["dst_fn"])]
+
+            if not h5_files:
+                logger.info("No granules downloaded for this bbox.")
                 continue
 
-            new_granule_meta_df["geometry"] = new_granule_meta_df["data_bbox"].apply(_get_poly_from_bbox)
+            logger.info("Downloaded %d ATL03 granule(s). Classifying and saving as NetCDF...", len(h5_files))
 
-            # Convert it into a geodataframe.
-            new_granule_gdf = geopandas.GeoDataFrame(new_granule_meta_df, crs=self.crs, geometry="geometry")
+            existing_gdf = self.open_gdf(read_compressed=False, verbose=False)
+            existing_filenames = set(existing_gdf["filename"].values) if existing_gdf is not None else set()
 
-            # Read whatever the existing dataframe is.
-            existing_gdf = self.open_gdf(read_compressed=True)
+            new_records = []
+            for h5_src in h5_files:
+                nc_basename = self._nc_filename(h5_src, sbbox)
+                nc_dest = os.path.join(self.granules_dir, nc_basename)
 
-            # Combine the new entries with the existing dataframe.
-            self.gdf = geopandas.GeoDataFrame(pandas.concat([existing_gdf, new_granule_gdf], ignore_index=True), crs=self.crs, geometry="geometry")
+                if nc_basename in existing_filenames:
+                    logger.info("Skipping %s (already in database).", nc_basename)
+                    continue
+
+                meta = self._process_h5_to_nc(h5_src, nc_dest,
+                                              query_bbox=sbbox,
+                                              classes_to_keep=classes_to_keep)
+                if meta is not None:
+                    new_records.append(meta)
+
+            if not new_records:
+                continue
+
+            new_gdf = geopandas.GeoDataFrame(new_records, crs=self.crs, geometry="geometry")
+            if existing_gdf is None or len(existing_gdf) == 0:
+                self.gdf = new_gdf
+            else:
+                self.gdf = geopandas.GeoDataFrame(
+                    pandas.concat([existing_gdf, new_gdf], ignore_index=True),
+                    crs=self.crs, geometry="geometry",
+                )
 
             self.gdf.to_file(self.db_fname, driver="GPKG")
             if os.path.exists(self.db_fname):
-                print("Updated", os.path.basename(self.db_fname), "with", len(self.gdf), "records.")
+                logger.info("Updated %s with %d records.", os.path.basename(self.db_fname), len(self.gdf))
             else:
                 if os.path.exists(self.db_fname_compressed):
                     os.remove(self.db_fname_compressed)
-
-                raise OSError("Failed to create", os.path.basename(self.db_fname))
+                raise OSError(f"Failed to write {os.path.basename(self.db_fname)}")
 
             if os.path.exists(self.db_fname_compressed):
                 os.remove(self.db_fname_compressed)
             if len(self.gdf) > 0:
                 utils.pickle_blosc.write(self.gdf, self.db_fname_compressed)
                 if os.path.exists(self.db_fname_compressed):
-                    print("Updated compressed", os.path.basename(self.db_fname_compressed), "with", len(self.gdf), "records.")
-
-        self.delete_cache()
+                    logger.info("Updated compressed %s with %d records.",
+                                os.path.basename(self.db_fname_compressed), len(self.gdf))
 
 
     def bounds(self,
@@ -856,7 +1031,7 @@ if __name__ == "__main__":
 
     # print(ivert_db.bounds("t"))
     gdf = ivert_db.create_new_database(populate=True, overwrite=True)
-    # print(gdf)
+    print(gdf)
 
     # Create a new database and populate it over the CRM vol8 extent.
     # ivert_db.create_new_database(populate=True, overwrite=True)
@@ -900,13 +1075,13 @@ if __name__ == "__main__":
     # ivert_db.download_new_granules(bbox=(-124.15, -123.85, 45.0, 45.25, 2024_07_20, 2024_08_10)) # Smaller test area
     # CRM, volume 8 data (all)
 
-    import sys
-    do_i = int(sys.argv[1])
+    # import sys
+    # do_i = int(sys.argv[1])
 
     # CRM Vol8 total area, split into 9 parts.
-    bbox = (-127.01, -121.74, 43.99, 49.01, 2024_03_01, 2025_03_01)
-    # bbox = (-127.01, -121.74, 43.99, 49.01, 2024_03_15, 2024_03_26) # Smaller date window for testing.
-    bboxes = split_bbox_into_parts(bbox, tile_size_deg=2.0, max_tile_scale_factor=1.5)
+    # bbox = (-127.01, -121.74, 43.99, 49.01, 2024_03_01, 2025_03_01)
+    bbox = (-127.0, -126.75, 44.0, 44.25, 2025_03_15, 2026_03_26) # Smaller date window for testing.
+    # bboxes = split_bbox_into_parts(bbox, tile_size_deg=2.0, max_tile_scale_factor=1.5)
     # Order bboxes to go from right to left (descending longitude), to process land first.
     bboxes = sorted(bboxes, key=lambda x: x[0], reverse=True)
 
@@ -921,9 +1096,9 @@ if __name__ == "__main__":
     # bboxes = [bbox]
     # do_i = 1
 
-    for i, smaller_bbox in enumerate(bboxes):
-        if do_i > 0 and i != (do_i - 1):
-            continue
+    # for i, smaller_bbox in enumerate(bboxes):
+    #     if do_i > 0 and i != (do_i - 1):
+    #         continue
 
         # if do_i in []: # (2,3,5,6,9):
         #     # For some stupid fucking reason, subset #6 isn't working, just hangs on processing coastline.
@@ -946,17 +1121,17 @@ if __name__ == "__main__":
         #
         # else:
 
-        print()
-        print(f"=================== {i+1} of {len(bboxes)} ===================")
+        # print()
+        # print(f"=================== {i+1} of {len(bboxes)} ===================")
         # clear_cache_cmd = ["rm", "-rf", os.path.expanduser("~/.ivert/cache/*")]
         # print(" ".join(clear_cache_cmd))
         # subprocess.run(clear_cache_cmd)
         # ivert_db.download_new_granules(bbox=(-127.0, -121.75, 43.9, 49.1, 20240301, 20250301),
-        ivert_db.download_new_granules(bbox=smaller_bbox,
-                                       split_big_bboxes=False,
-                                       classes_to_keep=(1, 40),
-                                       tile_size_deg=2.0,
-                                       cache_subdir=str(do_i),
-                                       min_bathy_confidence=0.9,
-                                       max_tile_scale_factor=1.5,
-                                       )
+    ivert_db.download_new_granules(bbox=bbox,
+                                   split_big_bboxes=False,
+                                   classes_to_keep=(1, 2, 3, 40),
+                                   tile_size_deg=2.0,
+                                   cache_subdir=str(do_i),
+                                   min_bathy_confidence=0.9,
+                                   max_tile_scale_factor=1.5,
+                                   )

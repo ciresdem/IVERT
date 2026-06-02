@@ -1201,7 +1201,7 @@ def validate_dem_parallel(dem_name: str,
                                               src_epsg="EPSG:4326+3855",
                                               dst_epsg=dem_epsg_str)
 
-    except ZeroDivisionError:
+    except (ValueError, RuntimeError):
         print("Warning: Unable to perform transformation. Using original points.")
         # TODO: Try to convert just horizontally (even if we can't do it vertically).
         photon_df["dem_x"] = photon_df['x']

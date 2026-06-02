@@ -159,9 +159,11 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
 data/*
-!data/icesat2/
 !data/empty_tile.tif
 scratch_data/*
 src/tests/
 src/tests_old/
+
+# Any project-specific Claude Code helper files.
 CLAUDE.md
+.claude/
