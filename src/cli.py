@@ -7,6 +7,9 @@ ivert.cli
 Command-line interface for the ICESat-2 Validation of Elevations Reporting Tool (IVERT).
 """
 
+import glob
+import os
+
 import click
 
 try:
@@ -117,6 +120,58 @@ def download(bbox_or_files, date_start, date_end, projection, wsen, replace, cla
 # validate
 ###############################################################
 
+def _run_validate(files_or_directory, vdatum, region_name, include_photons,
+                  measure_coverage, band_num, outlier_sd_threshold, buildings):
+    """Branch to validate_dem or validate_list_of_dems based on the number of input files."""
+    try:
+        from ivert import validate_dem as vd_module
+        from ivert import validate_dem_collection as vdc_module
+    except ImportError:
+        import validate_dem as vd_module
+        import validate_dem_collection as vdc_module
+
+    # Expand any glob patterns the shell left unexpanded (e.g., quoted patterns).
+    expanded = []
+    for f in files_or_directory:
+        matches = glob.glob(f)
+        expanded.extend(matches if matches else [f])
+
+    if not expanded:
+        raise click.ClickException("No input files or directory found.")
+
+    classes = [1, 6, 40]
+    if buildings:
+        classes = sorted(classes + [7])
+
+    if len(expanded) == 1 and os.path.isfile(expanded[0]):
+        kwargs = dict(
+            dem_name=expanded[0],
+            classes=classes,
+            band_num=band_num,
+            outliers_sd_threshold=outlier_sd_threshold,
+            include_photon_level_validation=include_photons,
+            location_name=region_name,
+            measure_coverage=measure_coverage,
+        )
+        if vdatum != "NONE_PROVIDED":
+            kwargs["dem_vertical_datum"] = vdatum
+        vd_module.validate_dem(**kwargs)
+    else:
+        dem_input = expanded[0] if len(expanded) == 1 else expanded
+        kwargs = dict(
+            dem_list_or_dir=dem_input,
+            classes=classes,
+            band_num=band_num,
+            place_name=region_name,
+            include_photon_validation=include_photons,
+            measure_coverage=measure_coverage,
+            outliers_sd_threshold=outlier_sd_threshold,
+        )
+        if vdatum != "NONE_PROVIDED":
+            kwargs["input_vdatum"] = vdatum
+        vdc_module.validate_list_of_dems(**kwargs)
+
+
 @ivert_cli.command("validate")
 @click.argument("files_or_directory", nargs=-1, required=True)
 @click.option(
@@ -190,7 +245,8 @@ def validate(files_or_directory, vdatum, region_name, include_photons,
 
     Example: ivert validate mydem.tif -V EPSG:5703 -n "Oregon Coast"
     """
-    raise click.ClickException("'ivert validate' is not yet implemented.")
+    _run_validate(files_or_directory, vdatum, region_name, include_photons,
+                  measure_coverage, band_num, outlier_sd_threshold, buildings)
 
 
 ###############################################################
