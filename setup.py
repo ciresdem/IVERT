@@ -66,6 +66,7 @@ setuptools.setup(
         'h5py',
         'boto3', # for amazon
         'pandas', # for reading the IVERT database tables.
+        'click',
         'dateparser',
         'tabulate',
         'psutil',
@@ -74,7 +75,7 @@ setuptools.setup(
     ],
     entry_points = {
         'console_scripts': [
-            'ivert = ivert.client:ivert_client_cli'
+            'ivert = ivert.cli:ivert_cli'
         ]
     },
     py_modules = [
