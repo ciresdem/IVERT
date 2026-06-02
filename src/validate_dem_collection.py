@@ -18,17 +18,10 @@ import typing
 # # Include the base /src/ directory of thie project, to add all the other modules.
 # import import_parent_dir; import_parent_dir.import_src_dir_via_pythonpath()
 ####################################
-import clean_ivert_files as clean_ivert_files
 import icesat2_database_v2
-# import icesat2_photon_database_OLD as icesat2_photon_database
-# import ivert_jobs
-import jobs_database
-import server_file_export
 import plot_validation_results as plot_validation_results
 import validate_dem as validate_dem
 import utils.query_yes_no as yes_no
-import utils.is_aws as is_aws
-import utils.configfile as configfile
 
 
 def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFrame, str],
@@ -98,26 +91,19 @@ def write_summary_csv_file(total_results_df_or_file: typing.Union[pandas.DataFra
     return output_df
 
 
-def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
+def validate_list_of_dems(dem_list_or_dir: str | list[str],
+                          classes: list[int] | tuple[int] = [1, 6, 40],
                           output_dir: typing.Union[str, None] = None,
                           fname_filter: typing.Union[str, None] = r"\.tif\Z",
                           fname_omit: typing.Union[str, None] = None,
-                          ivert_job_name: typing.Union[str, None] = None,
-                          # band_num: int = 1,
+                          band_num: int = 1,
                           input_vdatum: str = "egm2008",
-                          output_vdatum: str = "egm2008",
                           overwrite: bool = False,
                           place_name: typing.Union[str, None] = None,
-                          # mask_osm_buildings: bool = True,
-                          # mask_bing_buildings: bool = True,
-                          # mask_wsf_urban: bool = False,
-                          # mask_out_lakes: bool = True,
                           create_individual_results: bool = True,
-                          # export_coastline_masks: bool = True,
                           delete_datafiles: bool = False,
                           include_photon_validation: bool = True,
                           write_result_tifs: bool = False,
-                          # omit_bad_granules: bool = True,
                           write_summary_csv: bool = True,
                           measure_coverage: bool = False,
                           outliers_sd_threshold: float = 2.5,
@@ -192,16 +178,6 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
                                 .replace("/", "_")
                                 .replace("__", "_") + "_results").replace("__", "_")
 
-    if ivert_job_name is None:
-        ivert_jobs_db = None
-        ivert_exporter = None
-        ivert_username = None
-        ivert_job_id = None
-    else:
-        ivert_jobs_db = jobs_database.JobsDatabaseServer()
-        ivert_exporter = server_file_export.IvertExporter(s3_manager=None, jobs_db=ivert_jobs_db)
-        ivert_username = server_file_export.get_username(ivert_job_name)
-        ivert_job_id = server_file_export.get_job_id(ivert_job_name)
 
     statsfile_name = os.path.join(stats_and_plots_dir, stats_and_plots_base.replace("_results",
                                                                                     "_summary_stats") + ".txt")
@@ -223,20 +199,16 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
             validate_dem.write_summary_stats_file(results_df,
                                                   statsfile_name,
                                                   verbose=verbose)
-            if ivert_job_name is not None:
-                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, statsfile_name)
 
         if not os.path.exists(plot_file_name):
             if results_df is None:
                 results_df = pandas.read_hdf(results_h5)
                 if verbose:
                     print(results_df, "read.")
-            plot_validation_results.plot_histogram_and_error_stats_4_panels(results_df,
-                                                                            plot_file_name,
-                                                                            place_name=place_name,
-                                                                            verbose=verbose)
-            if ivert_job_name is not None:
-                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, plot_file_name)
+            plot_validation_results.plot_histograms_and_line(results_df,
+                                                             plot_file_name,
+                                                             place_name=place_name,
+                                                             verbose=verbose)
 
         if (results_df is None) and verbose:
             print("Files '" + results_h5 + "',",
@@ -298,10 +270,6 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
         results_h5_file = os.path.join(this_output_dir, os.path.splitext(os.path.split(dem_path)[1])[0] + "_results.h5")
         empty_fname = results_h5_file.replace("_results.h5", "_results_EMPTY.txt")
 
-        if ivert_job_name:
-            ivert_jobs_db.update_file_status(ivert_username, ivert_job_id, os.path.basename(dem_path),
-                                             "processing", upload_to_s3=True)
-
         try:
             shared_ret_values = {}
             # Do the validation.
@@ -309,87 +277,41 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
             # whole directory.
             validate_dem.validate_dem(dem_path,
                                       output_dir,
-                                      # band_num=band_num,
+                                      classes=classes,
                                       shared_ret_values=shared_ret_values,
                                       icesat2_photon_database_obj=photon_db_obj,
-                                      ivert_job_name=ivert_job_name,
                                       dem_vertical_datum=input_vdatum,
-                                      output_vertical_datum=output_vdatum,
                                       interim_data_dir=this_output_dir,
                                       overwrite=overwrite,
                                       delete_datafiles=delete_datafiles,
                                       write_result_tifs=write_result_tifs,
-                                      # mask_osm_buildings=mask_osm_buildings,
-                                      # mask_bing_buildings=mask_bing_buildings,
-                                      # mask_wsf_urban=mask_wsf_urban,
-                                      # mask_out_lakes=mask_out_lakes,
                                       write_summary_stats=create_individual_results,
-                                      # export_coastline_mask=export_coastline_masks,
                                       include_photon_level_validation=include_photon_validation,
                                       plot_results=create_individual_results,
                                       outliers_sd_threshold=outliers_sd_threshold,
                                       mark_empty_results=True,
-                                      # omit_bad_granules=omit_bad_granules,
                                       measure_coverage=measure_coverage,
                                       verbose=verbose)
         except MemoryError:
-            if ivert_job_name:
-                ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
-                                                 os.path.basename(dem_path), "error", upload_to_s3=True)
-                if verbose:
-                    print(f"Skipping {os.path.basename(dem_path)} due to memory error.")
+            if verbose:
+                print(f"Skipping {os.path.basename(dem_path)} due to memory error.")
             continue
 
         except KeyboardInterrupt as e:
-            if ivert_job_name:
-                ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
-                                                 os.path.basename(dem_path), "killed", upload_to_s3=True)
-
             raise e
 
         except Exception:
-            if ivert_job_name:
-                ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
-                                                 os.path.basename(dem_path), "error", upload_to_s3=True)
-                if verbose:
-                    print(f"Skipping {os.path.basename(dem_path)}: {traceback.format_exc()}")
-
+            if verbose:
+                print(f"Skipping {os.path.basename(dem_path)}: {traceback.format_exc()}")
             continue
 
         files_to_export.extend(list(shared_ret_values.values()))
 
         if os.path.exists(results_h5_file):
-            # Append the filename as a column
             list_of_results_dfs.append(results_h5_file)
-            if ivert_job_name:
-                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, results_h5_file)
-                # Update the DEM file status
-                ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
-                                                 os.path.basename(dem_path), "processed", upload_to_s3=True)
 
         elif os.path.exists(empty_fname):
-            if ivert_job_name:
-                ivert_exporter.upload_file_to_export_bucket(ivert_job_name, empty_fname)
-                ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
-                                                 os.path.basename(dem_path), "processed", upload_to_s3=True)
-                list_of_empty_files.append(empty_fname)
-
-        elif ivert_job_name:
-            ivert_jobs_db.update_file_status(ivert_username, ivert_job_id,
-                                             os.path.basename(dem_path), "error", upload_to_s3=True)
-
-        # On the IVERT server, the local EC2 instance has limited disk space. If it's more than the maximnum disk usage
-        # threshold outlined in ivert_config, clean it up. BUT ONLY IF IT'S AN AWS INSTANCE AND
-        # NO OTHER JOBS BESIDES THIS ONE ARE RUNNING.
-        ivert_config = configfile.Config()
-        if is_aws.is_aws() and \
-                clean_ivert_files.disk_usage_pct() >= ivert_config.ivert_disk_usage_max_percent and \
-                len(ivert_jobs.list_running_ivert_jobs()) <= 1:
-
-            if verbose:
-                print(f"Disk usage is over {ivert_config.ivert_disk_usage_max_percent:0.1f}%. Cleaning up...")
-            clean_ivert_files.delete_local_photon_tiles(ivert_config, verbose=verbose)
-            clean_ivert_files.clean_cudem_cache(ivert_config, False, verbose=verbose)
+            list_of_empty_files.append(empty_fname)
 
 
     # An extra newline is appreciated here just for readability's sake.
@@ -409,41 +331,24 @@ def validate_list_of_dems(dem_list_or_dir: typing.Union[str, typing.List[str]],
 
     if write_summary_csv:
         write_summary_csv_file(total_results_df, list_of_empty_files, csv_name, verbose=verbose)
-
         files_to_export.append(csv_name)
-        if ivert_job_name is not None:
-            ivert_exporter.upload_file_to_export_bucket(ivert_job_name, csv_name)
 
     # Output the statistics summary file.
     validate_dem.write_summary_stats_file(total_results_df, statsfile_name, verbose=verbose)
-
-    if ivert_job_name is not None:
-        ivert_exporter.upload_file_to_export_bucket(ivert_job_name, statsfile_name)
     files_to_export.append(statsfile_name)
 
     # Output the validation results plot.
-    # plot_validation_results.plot_histogram_and_error_stats_4_panels(total_results_df,
-    #                                                                 plot_file_name,
-    #                                                                 place_name=place_name,
-    #                                                                 verbose=verbose)
     plot_validation_results.plot_histograms_and_line(total_results_df,
                                                      plot_file_name,
                                                      place_name=place_name,
                                                      verbose=verbose)
-
     files_to_export.append(plot_file_name)
-
-    if ivert_job_name is not None:
-        ivert_exporter.upload_file_to_export_bucket(ivert_job_name, plot_file_name)
 
     if results_h5 is not None:
         total_results_df.to_hdf(results_h5, key="results", complib="zlib", complevel=3)
         if verbose:
             print(results_h5, "written.")
-
-    if ivert_job_name is not None and results_h5 is not None:
         files_to_export.append(results_h5)
-        ivert_exporter.upload_file_to_export_bucket(ivert_job_name, results_h5)
 
     return files_to_export
 
@@ -472,9 +377,6 @@ def define_and_parse_args():
     parser.add_argument("--input_vdatum", "-ivd", default="egm2008",
                         help="The vertical datum of the input DEMs. "
                              "Default: 'egm2008'")
-
-    parser.add_argument("--output_vdatum", "-ovd", default="egm2008",
-                        help="The vertical datume of the output analysis. Default: If the DEM has a vertical datum assigned in its metadata, use that. If not, assume 'egm2008' and process using that.")
 
     parser.add_argument("--place_name", "-name", type=str, default=None,
                         help="Readable name of the location being validated. Will be used in output summary plots and "
@@ -591,7 +493,6 @@ def main():
                           fname_omit=args.fname_omit,
                           output_dir=args.output_dir,
                           input_vdatum=args.input_vdatum,
-                          output_vdatum=args.output_vdatum,
                           overwrite=args.overwrite,
                           place_name=args.place_name,
                           create_individual_results=args.individual_results,

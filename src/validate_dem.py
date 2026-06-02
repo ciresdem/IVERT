@@ -28,7 +28,7 @@ import utils.pickle_blosc
 import utils.split_dem
 import plot_validation_results
 import icesat2_database_v2
-import icesat2_query
+import utils.dem_geom as dem_geom
 import transform_points
 import utils.loggerproc
 
@@ -877,13 +877,13 @@ def validate_dem_parallel(dem_name: str,
     dem_array = dem_ds.GetRasterBand(band_num).ReadAsArray()
 
     # Get the dem's horizontal and vertical reference frame.
-    dem_horz_ref_frame, dem_vert_ref_frame = icesat2_query.get_dem_reference_frame_from_file(dem_name)
+    dem_horz_ref_frame, dem_vert_ref_frame = dem_geom.get_dem_reference_frame_from_file(dem_name)
     # If the calling function specified the vertical reference datum, use it (override what's in the file)
     if dem_vertical_datum is not None:
         dem_vert_ref_frame = dem_vertical_datum
 
-    dem_epsg_str = icesat2_query.get_dem_srs_string(dem_horz_ref_frame, dem_vert_ref_frame)
-    dem_wgs84_bbox = icesat2_query.get_wgs84_bounding_box(dem_name)
+    dem_epsg_str = dem_geom.get_dem_srs_string(dem_horz_ref_frame, dem_vert_ref_frame)
+    dem_wgs84_bbox = dem_geom.get_wgs84_bounding_box(dem_name)
 
     # elif use_icesat2_photon_database:
     if icesat2_photon_database_obj is None:
