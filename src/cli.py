@@ -516,14 +516,19 @@ def database_download(bbox_or_files, date_start, date_end, projection, wsen, rep
     if tmax > atl24_cutoff:
         c = str(atl24_cutoff)
         cutoff_str = f"{c[:4]}-{c[4:6]}-{c[6:]}"
+        t = str(tmax)
+        tmax_str = f"{t[:4]}-{t[4:6]}-{t[6:]}"
         click.echo(
             f"WARNING: As of this version of IVERT, ATL24 bathymetry data is not available "
             f"after {cutoff_str}. Data downloaded after that date will lack bathymetry "
-            f"classifications (photon classes 40/41). You may update this cutoff date via "
-            f"'ivert setup atl24_date_cutoff=YYYYMMDD' if a newer ATL24 version has been released.",
+            f"classifications (photon classes 40/41).\n"
+            f"Your current request ends at {tmax_str}.\n"
+            f"You may update this cutoff date via "
+            f"'ivert setup atl24_date_cutoff=YYYYMMDD' to suppress these warnings if a newer ATL24 "
+            f"version has been released.",
             err=True,
         )
-        if not force and not click.confirm("Continue with the download anyway?", default=False):
+        if not force and not click.confirm("\nContinue with the download anyway?", default=False):
             raise click.Abort()
 
     class_list = tuple(int(c) for c in classes.split("/"))
