@@ -763,9 +763,11 @@ class IS2Database:
                     crs=self.crs, geometry="geometry",
                 )
 
+            logger.info("Created %d new record(s).", len(new_records))
+
             self.gdf.to_file(self.db_fname, driver="GPKG")
             if os.path.exists(self.db_fname):
-                logger.info("Updated %s with %d records.", os.path.basename(self.db_fname), len(self.gdf))
+                logger.info("Updated %s with %d total records.", os.path.basename(self.db_fname), len(self.gdf))
             else:
                 if os.path.exists(self.db_fname_compressed):
                     os.remove(self.db_fname_compressed)
@@ -776,7 +778,7 @@ class IS2Database:
             if len(self.gdf) > 0:
                 utils.pickle_blosc.write(self.gdf, self.db_fname_compressed)
                 if os.path.exists(self.db_fname_compressed):
-                    logger.info("Updated compressed %s with %d records.",
+                    logger.info("Updated compressed %s with %d total records.",
                                 os.path.basename(self.db_fname_compressed), len(self.gdf))
 
 
