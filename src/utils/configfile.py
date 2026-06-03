@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import ast
 import configparser
+import importlib.resources
 import os
 import re
 import sys
@@ -19,14 +20,9 @@ else:
         import utils.is_aws as is_aws
         import utils.version as version
 
-ivert_default_configfile = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                                                        "..", "..", "config", "ivert_defaults.ini"))
-
-# When we build the ivert package, this is the location of the ivert_data directory. Look for it there.
-if not os.path.exists(ivert_default_configfile):
-    ivert_default_configfile = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                                                            "..", "..", "..", "..",
-                                                            "ivert_data", "config", "ivert_defaults.ini"))
+ivert_default_configfile = str(
+    importlib.resources.files("ivert").joinpath("config", "ivert_defaults.ini")
+)
 
 
 class Config:
