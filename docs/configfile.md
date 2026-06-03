@@ -102,3 +102,15 @@ When IVERT starts, the user config path is resolved in this order:
 1. `--config PATH` CLI flag
 2. `IVERT_USER_CONFIG` environment variable
 3. `user_configfile` setting in `ivert_defaults.ini` (default: `~/.ivert/user_config.ini`)
+
+---
+
+## Reverting to default settings
+
+To restore all settings to their defaults, delete your user config file:
+
+```bash
+rm ~/.ivert/user_config.ini
+```
+
+IVERT will fall back entirely to `ivert_defaults.ini` on the next run.
