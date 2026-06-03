@@ -44,34 +44,39 @@ setuptools.setup(
     package_dir = {'ivert': 'src',
                    'ivert_utils': 'src/utils'},
     data_files = [('ivert_data/data/', ["data/empty_tile.tif"]),
-                  ('ivert_data/config', ["config/email_templates.ini",
-                                         "config/ivert_config.ini",
-                                         "config/ivert_job_config_TEMPLATE.ini",
-                                         "config/ivert_user_config_TEMPLATE.ini",
-                                         "config/ivert_jobs_schema.sql"]),
+                  ('ivert_data/config', ["config/ivert_config.ini"]),
                   ("ivert_data/", ["VERSION", "LICENSE", "README.md"]),
                   ],
-    # package_data = {'ivert': ['data/icesat2/ATL03_EMPTY_TILE.h5',
-    #                           'data/empty_tile.tif',
-    #                           'Config/*.ini',
-    #                           'Config/*.sql']},
     classifiers = [
         'Programming Language :: Python :: 3',
         'License :: OSI APPROVED :: MIT License',
         'Operating System :: OS Independent',
     ],
     install_requires = [
-        'numpy', # all
-        'scipy',
-        'h5py',
-        'boto3', # for amazon
-        'pandas', # for reading the IVERT database tables.
+        'blosc2',
+        'boto3',
         'click',
         'dateparser',
-        'tabulate',
-        'psutil',
+        'gdal',
+        'geopandas',
+        'h5py',
+        'matplotlib',
+        'netCDF4',
+        'numexpr',
+        'numpy',
         'packaging',
-        'gdal'
+        'pandas',
+        'psutil',
+        'pyproj',
+        'rasterio',
+        'scipy',
+        'shapely',
+        'six',
+        'tabulate',
+        'xarray',
+        'fetchez @ git+https://github.com/continuous-dems/fetchez.git',
+        'globato @ git+https://github.com/continuous-dems/globato.git',
+        'transformez @ git+https://github.com/continuous-dems/transformez.git',
     ],
     entry_points = {
         'console_scripts': [
@@ -80,10 +85,7 @@ setuptools.setup(
     },
     py_modules = [
     ],
-    scripts = [
-        'src/s3.py',
-        'src/jobs_database.py'
-    ],
+    scripts = [],
     python_requires = '>=3.9',
     project_urls = {
         'Source': 'https://github.com/ciresdem/IVERT',
