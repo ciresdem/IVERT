@@ -85,7 +85,7 @@ class _SetupGroup(click.Group):
 def setup(ctx):
     """Configure IVERT settings and local data directories.
 
-    Typically run once before using IVERT on a new machine, or when
+    Typically, run once before using IVERT on a new machine, or when
     changing data directory paths or credentials.
     """
     if ctx.args:
@@ -212,9 +212,14 @@ def database_list(show_all, boxes):
         return
 
     if boxes:
+        def _fmt_date(d):
+            s = str(int(d))
+            return f"{s[:4]}.{s[4:6]}.{s[6:]}"
+
         unique_boxes = sorted(set(tuple(b) for b in gdf["query_bbox"]))
+        rows = [b[:4] + (_fmt_date(b[4]), _fmt_date(b[5])) for b in unique_boxes]
         headers = ["Xmin", "Xmax", "Ymin", "Ymax", "Date Start", "Date End"]
-        click.echo(tabulate_mod.tabulate(unique_boxes, headers=headers, tablefmt="simple"))
+        click.echo(tabulate_mod.tabulate(rows, headers=headers, tablefmt="simple"))
         click.echo(f"\n{len(unique_boxes)} unique query box(es)  —  db: {db.db_fname}")
     elif show_all:
         cols = [c for c in gdf.columns if c != "geometry"]
@@ -291,6 +296,51 @@ def database_delete(delete_all):
             click.echo(f"Deleted {len(nc_files)} .nc granule file(s) from {db.granules_dir}")
         else:
             click.echo(f"No .nc files found in {db.granules_dir}")
+
+
+@database.command("size")
+def database_size():
+    """Report the number of files and disk size for each part of the database."""
+    try:
+        from ivert import icesat2_database_v2 as is2db_mod
+    except ImportError:
+        import icesat2_database_v2 as is2db_mod
+
+    def _fmt_bytes(n):
+        for unit in ("B", "KB", "MB", "GB", "TB"):
+            if n < 1024 or unit == "TB":
+                return f"{n:.1f} {unit}"
+            n /= 1024
+
+    db = is2db_mod.IS2Database()
+
+    rows = []
+
+    # .gpkg index
+    if os.path.exists(db.db_fname):
+        rows.append(("gpkg index", 1, _fmt_bytes(os.path.getsize(db.db_fname)), db.db_fname))
+    else:
+        rows.append(("gpkg index", 0, "—", db.db_fname))
+
+    # .blosc index
+    if os.path.exists(db.db_fname_compressed):
+        rows.append(("blosc index", 1, _fmt_bytes(os.path.getsize(db.db_fname_compressed)), db.db_fname_compressed))
+    else:
+        rows.append(("blosc index", 0, "—", db.db_fname_compressed))
+
+    # .nc granule files
+    nc_files = (
+        [os.path.join(db.granules_dir, fn)
+         for fn in os.listdir(db.granules_dir)
+         if os.path.splitext(fn)[-1].lower() == ".nc"]
+        if os.path.isdir(db.granules_dir) else []
+    )
+    nc_count = len(nc_files)
+    nc_bytes = sum(os.path.getsize(f) for f in nc_files) if nc_files else 0
+    rows.append((".nc granules", nc_count, _fmt_bytes(nc_bytes) if nc_files else "—", db.granules_dir))
+
+    import tabulate as tabulate_mod
+    click.echo(tabulate_mod.tabulate(rows, headers=["Type", "Files", "Size", "Path"], tablefmt="simple"))
 
 
 @database.command("download")
@@ -379,7 +429,12 @@ def database_download(bbox_or_files, date_start, date_end, projection, wsen, rep
     e.g., -74.0/-73.0/40.5/41.0), or one or more DEM files whose combined
     extent defines the download region. Use --wsen to switch to W/S/E/N order.
 
-    Example: ivert database download -- -74.0/-73.0/40.5/41.0
+    Examples:
+        ivert database download -- -74.0/-73.0/40.5/41.0
+        ivert database download -ds 2023.01.01 -de 2024.01.01 ../dems/oregon_coast_v1.tif
+        ivert databasee download -ds "two years ago" -de "one year ago" ../dems/*.tif
+
+    (Note: Use the '--' delimiter to explicitly end your command-line options if coordinates begin with a negative '-')
     """
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 

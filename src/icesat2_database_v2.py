@@ -674,7 +674,12 @@ class IS2Database:
                                                           max_tile_scale_factor=max_tile_scale_factor))
             bboxes = bboxes_split
 
-        logger.info("Downloading granules over %s in %d parts.", bbox, len(bboxes))
+        actual_bbox = (
+            min(bb[0] for bb in bboxes), max(bb[1] for bb in bboxes),
+            min(bb[2] for bb in bboxes), max(bb[3] for bb in bboxes),
+            int(min(bb[4] for bb in bboxes)), int(max(bb[5] for bb in bboxes)),
+        )
+        logger.info("Downloading granules over %s in %d parts.", actual_bbox, len(bboxes))
 
         os.makedirs(self.granules_dir, exist_ok=True)
 
@@ -727,6 +732,11 @@ class IS2Database:
                                                fail_quietly=True)
 
             results = fetchez.core.run_fetchez([mod])
+            if not results:
+                logger.warning("Harmony request returned no results for bbox %s. Skipping for now. "
+                               "This may be because zero files were returned or Harmony is temporarily down. "
+                               "You may re-run the command later if you feel this was in error.", sbbox)
+                continue
             h5_files = [os.path.abspath(entry["dst_fn"])
                         for _, entry in results
                         if entry.get("status") == 0
@@ -1051,7 +1061,7 @@ def split_bbox_into_parts(bbox: list | tuple,
     bin_ymaxs = binys[1:, 1:].flatten()
 
     if tmin is not None and tmax is not None:
-        bboxes = [(float(xbmin), float(xbmax), float(ybmin), float(ybmax), tmin, tmax) for (xbmin, xbmax, ybmin, ybmax) in zip(bin_xmins, bin_xmaxs, bin_ymins, bin_ymaxs)]
+        bboxes = [(float(xbmin), float(xbmax), float(ybmin), float(ybmax), int(tmin), int(tmax)) for (xbmin, xbmax, ybmin, ybmax) in zip(bin_xmins, bin_xmaxs, bin_ymins, bin_ymaxs)]
     else:
         bboxes = [(float(xbmin), float(xbmax), float(ybmin), float(ybmax)) for (xbmin, xbmax, ybmin, ybmax) in zip(bin_xmins, bin_xmaxs, bin_ymins, bin_ymaxs)]
 
