@@ -1018,5 +1018,43 @@ def split_bbox_into_parts(bbox: list | tuple,
 
     return bboxes
 
+def _cmd_list(args):
+    """Implementation of the 'list' subcommand."""
+    import tabulate as tabulate_mod
+
+    db = IS2Database()
+    gdf = db.open_gdf(verbose=False)
+
+    if gdf is None or len(gdf) == 0:
+        print("No granules in database.")
+        return
+
+    rows = []
+    for _, row in gdf.iterrows():
+        rows.append([
+            row["filename"],
+            row["numphotons"],
+            row["numphotons_ground"],
+            row["numphotons_bathy_floor"],
+            row["numphotons_bathy_surface"],
+        ])
+
+    headers = ["File", "Total", "Ground", "BathyFloor", "BathySurf"]
+    print(tabulate_mod.tabulate(rows, headers=headers, tablefmt="simple", intfmt=","))
+    print(f"\n{len(gdf)} granule(s)  —  db: {db.db_fname}")
+
+
 if __name__ == "__main__":
-    pass
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="icesat2_database_v2",
+        description="Manage the local ICESat-2 photon granule database.")
+    sub = parser.add_subparsers(dest="command", metavar="COMMAND")
+    sub.required = True
+
+    list_p = sub.add_parser("list", help="List granules currently in the database.")
+    list_p.set_defaults(func=_cmd_list)
+
+    parsed = parser.parse_args()
+    parsed.func(parsed)
