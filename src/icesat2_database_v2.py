@@ -325,6 +325,15 @@ class IS2Database:
         db_record["geometry"] = shapely.box(xmin, ymin, xmax, ymax)
         return db_record
 
+    @staticmethod
+    def _normalize_bbox_columns(gdf: geopandas.GeoDataFrame) -> geopandas.GeoDataFrame:
+        """Parse bbox columns that GPKG round-trips as JSON strings back into lists of numbers."""
+        import json
+        for col in ("query_bbox", "data_bbox", "zbounds"):
+            if col in gdf.columns and len(gdf) > 0 and isinstance(gdf[col].iloc[0], str):
+                gdf[col] = gdf[col].apply(json.loads)
+        return gdf
+
     def open_gdf(self,
                  read_compressed: str | bool = "only_if_newer",
                  force_reread: bool = False,
@@ -365,7 +374,7 @@ class IS2Database:
             if not os.path.exists(self.db_fname):
                 return None
 
-            self.gdf = geopandas.read_file(self.db_fname)
+            self.gdf = self._normalize_bbox_columns(geopandas.read_file(self.db_fname))
             if verbose:
                 logger.info("Loaded %s with %d records.", os.path.basename(self.db_fname), len(self.gdf))
 
@@ -380,7 +389,7 @@ class IS2Database:
 
         Return the subset of the database read off of disk."""
         if os.path.exists(self.db_fname):
-            gdf_subset = geopandas.read_file(self.db_fname, bbox=bbox)
+            gdf_subset = self._normalize_bbox_columns(geopandas.read_file(self.db_fname, bbox=bbox))
 
             if date_range is not None:
                 date_range = self.convert_date_range(date_range)
@@ -631,9 +640,7 @@ class IS2Database:
         Downloads raw HDF5 files into granules_dir; classification is deferred to read time via globato.
         Only downloads granules covering bboxes not already in the database.
         """
-        # TODO: Un-comment once filter_query_bbox is stable
-        # bboxes = self.filter_query_bbox(bbox)
-        bboxes = [bbox]
+        bboxes = self.filter_query_bbox(bbox)
 
         if len(bboxes) == 0:
             logger.info("All required granules already exist in the database. Nothing new to download.")
@@ -1044,6 +1051,37 @@ def _cmd_list(args):
     print(f"\n{len(gdf)} granule(s)  —  db: {db.db_fname}")
 
 
+def _cmd_delete(args):
+    """Implementation of the 'delete' subcommand."""
+    db = IS2Database()
+
+    for fpath in (db.db_fname, db.db_fname_compressed):
+        if os.path.exists(fpath):
+            os.remove(fpath)
+            print(f"Deleted {fpath}")
+        else:
+            print(f"Not found (skipping): {fpath}")
+
+    if args.all:
+        nc_files = [os.path.join(db.granules_dir, fn)
+                    for fn in os.listdir(db.granules_dir)
+                    if os.path.splitext(fn)[-1].lower() == ".nc"] \
+                    if os.path.isdir(db.granules_dir) else []
+        if nc_files:
+            for fpath in sorted(nc_files):
+                os.remove(fpath)
+            print(f"Deleted {len(nc_files)} .nc granule file(s) from {db.granules_dir}")
+        else:
+            print(f"No .nc files found in {db.granules_dir}")
+
+
+def _cmd_rebuild(args):
+    """Implementation of the 'rebuild' subcommand."""
+    db = IS2Database()
+    gdf = db.create_new_database(populate=True, overwrite=True)
+    print(f"Rebuilt database with {len(gdf)} granule(s).")
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -1055,6 +1093,14 @@ if __name__ == "__main__":
 
     list_p = sub.add_parser("list", help="List granules currently in the database.")
     list_p.set_defaults(func=_cmd_list)
+
+    delete_p = sub.add_parser("delete", help="Delete the .gpkg and .blosc database files.")
+    delete_p.add_argument("--all", action="store_true",
+                          help="Also delete all .nc granule data files.")
+    delete_p.set_defaults(func=_cmd_delete)
+
+    rebuild_p = sub.add_parser("rebuild", help="Rebuild the database from existing .nc granule files.")
+    rebuild_p.set_defaults(func=_cmd_rebuild)
 
     parsed = parser.parse_args()
     parsed.func(parsed)

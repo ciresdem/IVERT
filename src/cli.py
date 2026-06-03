@@ -11,6 +11,15 @@ import glob
 import logging
 import os
 
+# Set NUMEXPR_MAX_THREADS before any import loads NumExpr, to suppress the
+# "safe limit" warning on machines with many cores.
+if "NUMEXPR_MAX_THREADS" not in os.environ:
+    try:
+        from utils.parallel_funcs import physical_cpu_count as _physical_cpu_count
+    except ImportError:
+        from ivert_utils.parallel_funcs import physical_cpu_count as _physical_cpu_count
+    os.environ["NUMEXPR_MAX_THREADS"] = str(_physical_cpu_count())
+
 import click
 
 try:
@@ -261,11 +270,13 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
 )
 @click.option(
     "-n", "--name", "--region-name", "region_name",
-    default="DEMs",
-    show_default=True,
+    default=None,
+    show_default=False,
     help=(
-        "Name of the region being validated. Appears in the validation summary "
-        "plot when validating more than one file."
+        "Name of the region being validated. For a single DEM, appears on its "
+        "plot (defaults to the DEM filename). For a collection, appears only on "
+        "the collection-level summary plot; individual DEM plots always use "
+        "their filenames."
     ),
 )
 @click.option(
@@ -274,7 +285,7 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
     default=False,
     help=(
         "Return a point database of individual ICESat-2 photons used to validate "
-        "each DEM, in addition to the normal .h5 and .tif outputs."
+        "each DEM, in addition to the normal .h5 and .tif results outputs."
     ),
 )
 @click.option(

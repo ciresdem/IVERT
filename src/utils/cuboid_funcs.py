@@ -188,7 +188,6 @@ def subtract_cuboids(a, b, tol=1e-10, bbox_order="point"):
 
     # If no overlap, return A itself
     if ix1 >= (ix2 + tol) or iy1 >= (iy2 + tol) or iz1 >= (iz2 + tol):
-        print("exiting here")
         return [a]
 
     result = []
