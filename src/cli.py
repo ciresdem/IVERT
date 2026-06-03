@@ -8,6 +8,7 @@ Command-line interface for the ICESat-2 Validation of Elevations Reporting Tool 
 """
 
 import glob
+import logging
 import os
 
 import click
@@ -113,6 +114,8 @@ def download(bbox_or_files, date_start, date_end, projection, wsen, replace, cla
 
     Example: ivert download -- -74.0/-73.0/40.5/41.0
     """
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
     try:
         from ivert import icesat2_database_v2 as is2db_mod
         from ivert.utils import dem_geom

@@ -365,7 +365,7 @@ class IS2Database:
             if not os.path.exists(self.db_fname):
                 return None
 
-            self.gdf = geopandas.read_file(self.db_fname, driver="GPKG")
+            self.gdf = geopandas.read_file(self.db_fname)
             if verbose:
                 logger.info("Loaded %s with %d records.", os.path.basename(self.db_fname), len(self.gdf))
 
