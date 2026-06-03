@@ -456,6 +456,8 @@ def validate_dem(dem_name: str,
                  max_subdivides: int = 4,
                  subdivision_number: int = 0,
                  orig_dem_name: str | None = None,
+                 min_confidence_level: int = 1,
+                 min_bathy_confidence: float = 0.75,
                  verbose: bool = True):
     """Validate a DEM and produce output results.
 
@@ -523,6 +525,8 @@ def validate_dem(dem_name: str,
               'measure_coverage': measure_coverage,
               'max_photons_per_cell': max_photons_per_cell,
               'numprocs': numprocs,
+              'min_confidence_level': min_confidence_level,
+              'min_bathy_confidence': min_bathy_confidence,
               'verbose': verbose
               }
 
@@ -596,6 +600,8 @@ def validate_dem(dem_name: str,
                          measure_coverage=measure_coverage,
                          max_photons_per_cell=max_photons_per_cell,
                          numprocs=numprocs,
+                         min_confidence_level=min_confidence_level,
+                         min_bathy_confidence=min_bathy_confidence,
                          verbose=verbose,
                          max_subdivides=max_subdivides,
                          orig_dem_name=orig_dem_name,
@@ -850,7 +856,8 @@ def _check_existing_outputs(dem_name, results_dataframe_file, empty_results_file
 
 
 def _fetch_photons(dem_name, band_num, dem_vertical_datum, icesat2_photon_database_obj,
-                    dates, classes, omit_bboxes, verbose):
+                    dates, classes, omit_bboxes, verbose,
+                    min_confidence_level: int = 1, min_bathy_confidence: float = 0.75):
     """Open the DEM and query overlapping ICESat-2 photons.
 
     Returns (dem_ds, dem_array, photon_df, dem_epsg_str) or None if no photons found.
@@ -877,7 +884,9 @@ def _fetch_photons(dem_name, band_num, dem_vertical_datum, icesat2_photon_databa
     photon_df = icesat2_photon_database_obj.query_photons(
         dem_3d_bbox,
         photon_classes=classes,
-        omit_bboxes=omit_bboxes if omit_bboxes is not None else [])
+        omit_bboxes=omit_bboxes if omit_bboxes is not None else [],
+        min_confidence_level=min_confidence_level,
+        min_bathy_confidence=min_bathy_confidence)
 
     if photon_df is None or len(photon_df) == 0:
         return None
@@ -1309,6 +1318,8 @@ def validate_dem_parallel(dem_name: str,
                           measure_coverage: bool = False,
                           max_photons_per_cell: int | None = None,
                           numprocs: int = parallel_funcs.physical_cpu_count(),
+                          min_confidence_level: int = 1,
+                          min_bathy_confidence: float = 0.75,
                           verbose: bool = True):
     """Validate a single DEM.
 
@@ -1335,7 +1346,9 @@ def validate_dem_parallel(dem_name: str,
     files_to_export = []
 
     fetch_result = _fetch_photons(dem_name, band_num, dem_vertical_datum,
-                                   icesat2_photon_database_obj, dates, classes, omit_bboxes, verbose)
+                                   icesat2_photon_database_obj, dates, classes, omit_bboxes, verbose,
+                                   min_confidence_level=min_confidence_level,
+                                   min_bathy_confidence=min_bathy_confidence)
     if fetch_result is None:
         if mark_empty_results:
             with open(empty_results_filename, 'w') as f:

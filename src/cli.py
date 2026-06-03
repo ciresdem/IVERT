@@ -62,7 +62,7 @@ def setup():
 @ivert_cli.command("download")
 @click.argument("bbox_or_files", nargs=-1, required=True)
 @click.option(
-    "-DS", "--date-start", "date_start",
+    "-ds", "--date-start", "date_start",
     default="one year and one week ago",
     show_default=True,
     help=(
@@ -71,7 +71,7 @@ def setup():
     ),
 )
 @click.option(
-    "-DE", "--date-end", "date_end",
+    "-de", "--date-end", "date_end",
     default="one week ago",
     show_default=True,
     help=(
@@ -81,7 +81,7 @@ def setup():
     ),
 )
 @click.option(
-    "-P", "--projection",
+    "-p", "--projection",
     default="EPSG:4326",
     show_default=True,
     help="Horizontal projection (EPSG code) that the bounding box coordinates are in.",
@@ -96,7 +96,7 @@ def setup():
     ),
 )
 @click.option(
-    "-R", "--replace",
+    "-r", "--replace",
     is_flag=True,
     default=False,
     help=(
@@ -105,7 +105,7 @@ def setup():
     ),
 )
 @click.option(
-    "-C", "--classes",
+    "-c", "--classes",
     default="1/6/7/9/40/41/42",
     show_default=True,
     help=(
@@ -114,7 +114,30 @@ def setup():
         "9=inland-water, 40=bathy-floor, 41=bathy-surface, 42=lake-surface."
     ),
 )
-def download(bbox_or_files, date_start, date_end, projection, wsen, replace, classes):
+@click.option(
+    "-cl", "--confidence-level", "confidence_level",
+    type=click.IntRange(1, 4),
+    default=1,
+    show_default=True,
+    help=(
+        "Minimum ATL03 signal confidence level to save (1–4). Photons below this "
+        "level are discarded before writing to the database. "
+        "1=low (keep all), 2=medium, 3=high, 4=very-high."
+    ),
+)
+@click.option(
+    "-bc", "--bathy-confidence", "bathy_confidence",
+    type=click.FloatRange(0.0, 1.0),
+    default=0.01,
+    show_default=True,
+    help=(
+        "Minimum ATL24 bathymetry confidence to save (0.0–1.0). "
+        "Bathy-floor photons (class 40) below this confidence are discarded "
+        "before writing to the database."
+    ),
+)
+def download(bbox_or_files, date_start, date_end, projection, wsen, replace, classes,
+             confidence_level, bathy_confidence):
     """Download ICESat-2 photon data for a region of interest.
 
     BBOX_OR_FILES: A 4-value bounding box in W/E/S/N order (slash-separated,
@@ -197,7 +220,9 @@ def download(bbox_or_files, date_start, date_end, projection, wsen, replace, cla
         raise click.ClickException(
             f"Invalid bounding box: xmin < xmax, ymin < ymax required. Got {full_bbox[:4]}.")
 
-    db.download_new_granules(full_bbox, classes_to_keep=class_list)
+    db.download_new_granules(full_bbox, classes_to_keep=class_list,
+                             min_confidence_level=confidence_level,
+                             min_bathy_confidence=bathy_confidence)
 
 
 ###############################################################
@@ -205,7 +230,8 @@ def download(bbox_or_files, date_start, date_end, projection, wsen, replace, cla
 ###############################################################
 
 def _run_validate(files_or_directory, vdatum, region_name, include_photons,
-                  measure_coverage, band_num, outlier_sd_threshold, buildings):
+                  measure_coverage, band_num, outlier_sd_threshold, buildings,
+                  confidence_level, bathy_confidence, verbose=True):
     """Branch to validate_dem or validate_list_of_dems based on the number of input files."""
     try:
         from ivert import validate_dem as vd_module
@@ -236,6 +262,9 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
             include_photon_level_validation=include_photons,
             location_name=region_name,
             measure_coverage=measure_coverage,
+            min_confidence_level=confidence_level,
+            min_bathy_confidence=bathy_confidence,
+            verbose=verbose,
         )
         if vdatum != "NONE_PROVIDED":
             kwargs["dem_vertical_datum"] = vdatum
@@ -250,6 +279,9 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
             include_photon_validation=include_photons,
             measure_coverage=measure_coverage,
             outliers_sd_threshold=outlier_sd_threshold,
+            min_confidence_level=confidence_level,
+            min_bathy_confidence=bathy_confidence,
+            verbose=verbose,
         )
         if vdatum != "NONE_PROVIDED":
             kwargs["input_vdatum"] = vdatum
@@ -317,13 +349,42 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
     ),
 )
 @click.option(
-    "-B", "--buildings",
+    "-b", "--buildings",
     is_flag=True,
     default=False,
     help="Include building-class photons in validation.",
 )
+@click.option(
+    "-cl", "--confidence-level", "confidence_level",
+    type=click.IntRange(1, 4),
+    default=1,
+    show_default=True,
+    help=(
+        "Minimum ATL03 signal confidence level to use (1–4). Photons below this "
+        "level are excluded from validation. "
+        "1=low (keep all), 2=medium, 3=high, 4=very-high."
+    ),
+)
+@click.option(
+    "-bc", "--bathy-confidence", "bathy_confidence",
+    type=click.FloatRange(0.0, 1.0),
+    default=0.75,
+    show_default=True,
+    help=(
+        "Minimum ATL24 bathymetry confidence to use (0.0–1.0). "
+        "Bathy-floor photons (class 40) below this confidence are excluded "
+        "from validation."
+    ),
+)
+@click.option(
+    "-v", "--verbose",
+    is_flag=True,
+    default=False,
+    help="Print progress messages during validation.",
+)
 def validate(files_or_directory, vdatum, region_name, include_photons,
-             measure_coverage, band_num, outlier_sd_threshold, buildings):
+             measure_coverage, band_num, outlier_sd_threshold, buildings,
+             confidence_level, bathy_confidence, verbose):
     """Validate one or more DEMs against ICESat-2 photon data.
 
     FILES_OR_DIRECTORY can be one or more GeoTIFF paths, a directory
@@ -332,7 +393,8 @@ def validate(files_or_directory, vdatum, region_name, include_photons,
     Example: ivert validate mydem.tif -V EPSG:5703 -n "Oregon Coast"
     """
     _run_validate(files_or_directory, vdatum, region_name, include_photons,
-                  measure_coverage, band_num, outlier_sd_threshold, buildings)
+                  measure_coverage, band_num, outlier_sd_threshold, buildings,
+                  confidence_level, bathy_confidence, verbose)
 
 
 ###############################################################

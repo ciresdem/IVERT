@@ -229,7 +229,8 @@ class IS2Database:
                            nc_fn: str,
                            query_bbox: tuple,
                            classes_to_keep: tuple = (1, 2, 3, 7, 40, 41),
-                           overwrite: bool = False) -> dict | None:
+                           overwrite: bool = False,
+                           min_confidence_level: int = 1) -> dict | None:
         """Classify an ATL03 HDF5 file with globato and save the result as NetCDF.
 
         The output .nc file contains only the photon classes in classes_to_keep, plus
@@ -272,6 +273,11 @@ class IS2Database:
 
         if len(df) == 0:
             return None
+
+        if min_confidence_level > 1 and "confidence" in df.columns:
+            df = df[df["confidence"] >= min_confidence_level]
+            if len(df) == 0:
+                return None
 
         # Keep only the columns needed for validation; drop large/redundant ones.
         keep_cols = ["x", "y", "z", "class_code", "bathy_confidence",
@@ -490,6 +496,7 @@ class IS2Database:
                       bbox: list | tuple | None = None,
                       photon_classes: list | tuple | None = (1, 6, 40),
                       min_bathy_confidence = 0.75,
+                      min_confidence_level: int = 1,
                       omit_bboxes = [],
                       # download_new_data: bool = False,
                       ) \
@@ -505,7 +512,9 @@ class IS2Database:
                 Photon classes to include in the query. See globato/streams/readers/icesat2.py for the full list.
                 Defaults to (1, 6, 40) (ground, land_ice, and bathy_floor photons).
             min_bathy_confidence : float
-                The minimum confidence for bathymetric points to use.
+                The minimum ATL24 confidence for bathymetric (class 40) photons to include (0.0–1.0).
+            min_confidence_level : int
+                The minimum ATL03 signal confidence level to include (1–4). 1 keeps all photons.
             # download_new_data : bool
             #     Whether to download new ICESat-2 data from NASA if the current database doesn't contain the entire bounding box.
 
@@ -544,6 +553,9 @@ class IS2Database:
         if min_bathy_confidence > 0.0:
             photons_df = photons_df[(photons_df['class_code'] != 40) |
                                     ((photons_df['class_code'] == 40) & (photons_df['bathy_confidence'] >= min_bathy_confidence))]
+
+        if min_confidence_level > 1 and "confidence" in photons_df.columns:
+            photons_df = photons_df[photons_df["confidence"] >= min_confidence_level]
 
         if omit_bboxes is None:
             omit_bboxes = []
@@ -634,6 +646,7 @@ class IS2Database:
                               tile_size_deg=2.0,
                               max_tile_scale_factor=1.5,
                               min_bathy_confidence=0.01,
+                              min_confidence_level: int = 1,
                               cache_subdir: str | None = None):
         """Download ICESat-2 ATL03 granules from NASA using fetchez and register them in the database.
 
@@ -733,7 +746,8 @@ class IS2Database:
 
                 meta = self._process_h5_to_nc(h5_src, nc_dest,
                                               query_bbox=sbbox,
-                                              classes_to_keep=classes_to_keep)
+                                              classes_to_keep=classes_to_keep,
+                                              min_confidence_level=min_confidence_level)
                 if meta is not None:
                     new_records.append(meta)
 
