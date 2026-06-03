@@ -421,8 +421,17 @@ def database_size():
         "before writing to the database."
     ),
 )
+@click.option(
+    "-f", "--force",
+    is_flag=True,
+    default=False,
+    help=(
+        "Skip the interactive prompt when the requested date range extends beyond "
+        "the ATL24 data cutoff date. A warning is still printed."
+    ),
+)
 def database_download(bbox_or_files, date_start, date_end, projection, wsen, replace,
-                      classes, confidence_level, bathy_confidence):
+                      classes, confidence_level, bathy_confidence, force):
     """Download ICESat-2 photon data for a region of interest.
 
     BBOX_OR_FILES: A 4-value bounding box in W/E/S/N order (slash-separated,
@@ -501,6 +510,21 @@ def database_download(bbox_or_files, date_start, date_end, projection, wsen, rep
     if tmin >= tmax:
         raise click.ClickException(
             f"--date-start ({tmin}) must be before --date-end ({tmax}).")
+
+    # Check ATL24 date cutoff.
+    atl24_cutoff = int(db.config.ATL24_date_cutoff)
+    if tmax > atl24_cutoff:
+        c = str(atl24_cutoff)
+        cutoff_str = f"{c[:4]}-{c[4:6]}-{c[6:]}"
+        click.echo(
+            f"WARNING: As of this version of IVERT, ATL24 bathymetry data is not available "
+            f"after {cutoff_str}. Data downloaded after that date will lack bathymetry "
+            f"classifications (photon classes 40/41). You may update this cutoff date via "
+            f"'ivert setup ATL24_date_cutoff=YYYYMMDD' if a newer ATL24 version has been released.",
+            err=True,
+        )
+        if not force and not click.confirm("Continue with the download anyway?", default=False):
+            raise click.Abort()
 
     class_list = tuple(int(c) for c in classes.split("/"))
 
