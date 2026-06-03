@@ -165,10 +165,135 @@ def setup_list():
 
 
 ###############################################################
-# download
+# database
 ###############################################################
 
-@ivert_cli.command("download")
+@ivert_cli.group("database", invoke_without_command=True)
+@click.pass_context
+def database(ctx):
+    """Manage the local IVERT ICESat-2 photon database.
+
+    Subcommands handle downloading new data, updating existing records,
+    and editing or inspecting the database.
+
+    Run 'ivert database <subcommand> --help' for details.
+    """
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+
+@database.command("list")
+@click.option(
+    "-a", "--all", "show_all",
+    is_flag=True,
+    default=False,
+    help="Show all fields for each granule instead of the default summary columns.",
+)
+@click.option(
+    "-bo", "--boxes",
+    is_flag=True,
+    default=False,
+    help="Print the unique query bounding boxes used to build the database. Overrides --all.",
+)
+def database_list(show_all, boxes):
+    """List granules currently in the IVERT ICESat-2 database."""
+    import tabulate as tabulate_mod
+
+    try:
+        from ivert import icesat2_database_v2 as is2db_mod
+    except ImportError:
+        import icesat2_database_v2 as is2db_mod
+
+    db = is2db_mod.IS2Database()
+    gdf = db.open_gdf(verbose=False)
+
+    if gdf is None or len(gdf) == 0:
+        click.echo("No granules in database.")
+        return
+
+    if boxes:
+        unique_boxes = sorted(set(tuple(b) for b in gdf["query_bbox"]))
+        headers = ["Xmin", "Xmax", "Ymin", "Ymax", "Date Start", "Date End"]
+        click.echo(tabulate_mod.tabulate(unique_boxes, headers=headers, tablefmt="simple"))
+        click.echo(f"\n{len(unique_boxes)} unique query box(es)  —  db: {db.db_fname}")
+    elif show_all:
+        cols = [c for c in gdf.columns if c != "geometry"]
+        rows = []
+        for _, row in gdf.iterrows():
+            rows.append([str(row[c]) if isinstance(row[c], (list, tuple)) else row[c]
+                         for c in cols])
+        click.echo(tabulate_mod.tabulate(rows, headers=cols, tablefmt="simple"))
+        click.echo(f"\n{len(gdf)} granule(s)  —  db: {db.db_fname}")
+    else:
+        rows = []
+        for _, row in gdf.iterrows():
+            rows.append([
+                row["filename"],
+                row["numphotons"],
+                row["numphotons_ground"],
+                row["numphotons_bathy_floor"],
+                row["numphotons_bathy_surface"],
+            ])
+        headers = ["File", "Total", "Ground", "BathyFloor", "BathySurf"]
+        click.echo(tabulate_mod.tabulate(rows, headers=headers, tablefmt="simple", intfmt=","))
+        click.echo(f"\n{len(gdf)} granule(s)  —  db: {db.db_fname}")
+
+
+@database.command("rebuild")
+def database_rebuild():
+    """Rebuild the database index from existing .nc granule files on disk."""
+    try:
+        from ivert import icesat2_database_v2 as is2db_mod
+    except ImportError:
+        import icesat2_database_v2 as is2db_mod
+
+    db = is2db_mod.IS2Database()
+    gdf = db.create_new_database(populate=True, overwrite=True)
+    click.echo(f"Rebuilt database with {len(gdf)} granule(s).")
+
+
+@database.command("delete")
+@click.option(
+    "-a", "--all", "delete_all",
+    is_flag=True,
+    default=False,
+    help="Also delete all .nc granule data files from the granules directory.",
+)
+def database_delete(delete_all):
+    """Delete the .gpkg and .blosc database index files.
+
+    The downloaded .nc granule files are kept unless --all is specified.
+    """
+    try:
+        from ivert import icesat2_database_v2 as is2db_mod
+    except ImportError:
+        import icesat2_database_v2 as is2db_mod
+
+    db = is2db_mod.IS2Database()
+
+    for fpath in (db.db_fname, db.db_fname_compressed):
+        if os.path.exists(fpath):
+            os.remove(fpath)
+            click.echo(f"Deleted {fpath}")
+        else:
+            click.echo(f"Not found (skipping): {fpath}")
+
+    if delete_all:
+        nc_files = (
+            [os.path.join(db.granules_dir, fn)
+             for fn in os.listdir(db.granules_dir)
+             if os.path.splitext(fn)[-1].lower() == ".nc"]
+            if os.path.isdir(db.granules_dir) else []
+        )
+        if nc_files:
+            for fpath in sorted(nc_files):
+                os.remove(fpath)
+            click.echo(f"Deleted {len(nc_files)} .nc granule file(s) from {db.granules_dir}")
+        else:
+            click.echo(f"No .nc files found in {db.granules_dir}")
+
+
+@database.command("download")
 @click.argument("bbox_or_files", nargs=-1, required=True)
 @click.option(
     "-ds", "--date-start", "date_start",
@@ -219,8 +344,9 @@ def setup_list():
     show_default=True,
     help=(
         "ICESat-2 photon classes to download, slash-separated. "
-        "1=ground, 2=canopy, 3=canopy-top, 6=land-ice, 7=buildings, "
-        "9=inland-water, 40=bathy-floor, 41=bathy-surface, 42=lake-surface."
+        "-1=unclassified, 0=noise, 1=ground, 2=canopy, 3=canopy-top, "
+        "6=land-ice, 7=buildings, 9=inland-water, 40=bathy-floor, "
+        "41=bathy-surface, 42=lake-surface."
     ),
 )
 @click.option(
@@ -245,15 +371,15 @@ def setup_list():
         "before writing to the database."
     ),
 )
-def download(bbox_or_files, date_start, date_end, projection, wsen, replace, classes,
-             confidence_level, bathy_confidence):
+def database_download(bbox_or_files, date_start, date_end, projection, wsen, replace,
+                      classes, confidence_level, bathy_confidence):
     """Download ICESat-2 photon data for a region of interest.
 
     BBOX_OR_FILES: A 4-value bounding box in W/E/S/N order (slash-separated,
     e.g., -74.0/-73.0/40.5/41.0), or one or more DEM files whose combined
     extent defines the download region. Use --wsen to switch to W/S/E/N order.
 
-    Example: ivert download -- -74.0/-73.0/40.5/41.0
+    Example: ivert database download -- -74.0/-73.0/40.5/41.0
     """
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 

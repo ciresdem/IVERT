@@ -1113,7 +1113,9 @@ if __name__ == "__main__":
                           help="Also delete all .nc granule data files.")
     delete_p.set_defaults(func=_cmd_delete)
 
-    rebuild_p = sub.add_parser("rebuild", help="Rebuild the database from existing .nc granule files.")
+    rebuild_p = sub.add_parser("rebuild", help="Rebuild the database from existing .nc granule files."
+                                               "Useful if the .nc files have been modified at all, and/or if you suspect"
+                                               " the overview information has become inaccurate.")
     rebuild_p.set_defaults(func=_cmd_rebuild)
 
     parsed = parser.parse_args()
