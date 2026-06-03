@@ -53,7 +53,6 @@ setuptools.setup(
         'Operating System :: OS Independent',
     ],
     install_requires = [
-        'blosc2',
         'boto3',
         'click',
         'dateparser',
