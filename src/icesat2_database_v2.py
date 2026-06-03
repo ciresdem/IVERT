@@ -659,6 +659,13 @@ class IS2Database:
             logger.info("All required granules already exist in the database. Nothing new to download.")
             return
 
+        if not (len(bboxes) == 1 and tuple(bboxes[0]) == tuple(bbox)):
+            logger.info(
+                "Existing database coverage partially overlaps the requested region. "
+                "Downloading only the missing sub-region(s) (%d area(s) to fill).",
+                len(bboxes),
+            )
+
         if split_big_bboxes:
             bboxes_split = []
             for bb in bboxes:
@@ -765,7 +772,16 @@ class IS2Database:
 
             logger.info("Created %d new record(s).", len(new_records))
 
-            self.gdf.to_file(self.db_fname, driver="GPKG")
+            # If we have logging set to "info", the geopandas "to_file()" call will print an annoying info message.
+            # Temporarily set logging to "WARNING" to suppress that, then set it back to its previous value afterward.
+            root_logger = logging.getLogger()
+            _prev_level = root_logger.level
+            root_logger.setLevel(logging.WARNING)
+            try:
+                self.gdf.to_file(self.db_fname, driver="GPKG")
+            finally:
+                root_logger.setLevel(_prev_level)
+
             if os.path.exists(self.db_fname):
                 logger.info("Updated %s with %d total records.", os.path.basename(self.db_fname), len(self.gdf))
             else:
