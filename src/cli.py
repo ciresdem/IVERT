@@ -461,6 +461,111 @@ def database_download(bbox_or_files, date_start, date_end, projection, wsen, rep
 
 
 ###############################################################
+# cache
+###############################################################
+
+def _cache_dir():
+    """Return the configured cache directory path."""
+    try:
+        from utils.configfile import Config
+    except ImportError:
+        from ivert_utils.configfile import Config
+    return Config().cache_directory
+
+
+def _fmt_size(nbytes):
+    """Format a byte count as a human-readable string."""
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if nbytes < 1024 or unit == "TB":
+            return f"{nbytes:.1f} {unit}"
+        nbytes /= 1024
+
+
+@ivert_cli.group("cache", invoke_without_command=True)
+@click.pass_context
+def cache(ctx):
+    """Manage the IVERT local file cache.
+
+    Run 'ivert cache <subcommand> --help' for details.
+    """
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+
+@cache.command("status")
+def cache_status():
+    """Show the number of files and total size of the cache."""
+    import tabulate as tabulate_mod
+
+    cache_dir = _cache_dir()
+    if not os.path.isdir(cache_dir):
+        click.echo(f"Cache directory does not exist: {cache_dir}")
+        return
+
+    # Collect per-top-level-subdir stats, plus a bucket for loose root files.
+    subdir_stats = {}   # name -> [file_count, total_bytes]
+    for entry in sorted(os.scandir(cache_dir), key=lambda e: e.name):
+        if entry.is_dir(follow_symlinks=False):
+            count, size = 0, 0
+            for dirpath, _, filenames in os.walk(entry.path):
+                for fn in filenames:
+                    count += 1
+                    size += os.path.getsize(os.path.join(dirpath, fn))
+            subdir_stats[entry.name] = [count, size]
+        elif entry.is_file(follow_symlinks=False):
+            subdir_stats.setdefault("(root)", [0, 0])
+            subdir_stats["(root)"][0] += 1
+            subdir_stats["(root)"][1] += entry.stat().st_size
+
+    if not subdir_stats:
+        click.echo(f"Cache is empty: {cache_dir}")
+        return
+
+    total_files = sum(v[0] for v in subdir_stats.values())
+    total_bytes = sum(v[1] for v in subdir_stats.values())
+
+    rows = [[name, f"{stats[0]:,}", _fmt_size(stats[1])]
+            for name, stats in subdir_stats.items()]
+    rows.append(["TOTAL", f"{total_files:,}", _fmt_size(total_bytes)])
+    click.echo(tabulate_mod.tabulate(rows, headers=["Subdirectory", "Files", "Size"],
+                                     tablefmt="simple"))
+    click.echo(f"\nCache directory: {cache_dir}")
+
+
+@cache.command("delete")
+@click.option(
+    "-f", "--force",
+    is_flag=True,
+    default=False,
+    help="Skip the confirmation prompt.",
+)
+def cache_delete(force):
+    """Delete all files in the IVERT cache directory."""
+    import shutil
+
+    cache_dir = _cache_dir()
+    if not os.path.isdir(cache_dir):
+        click.echo(f"Cache directory does not exist: {cache_dir}")
+        return
+
+    if not force:
+        click.confirm(f"Delete all contents of {cache_dir}?", abort=True)
+
+    deleted_files, deleted_dirs = 0, 0
+    for entry in os.scandir(cache_dir):
+        if entry.is_dir(follow_symlinks=False):
+            deleted_files += sum(len(files) for _, _, files in os.walk(entry.path))
+            shutil.rmtree(entry.path)
+            deleted_dirs += 1
+        else:
+            os.remove(entry.path)
+            deleted_files += 1
+
+    click.echo(f"Deleted {deleted_dirs} subdirectorie(s) and {deleted_files} root file(s) "
+               f"from {cache_dir}")
+
+
+###############################################################
 # validate
 ###############################################################
 
