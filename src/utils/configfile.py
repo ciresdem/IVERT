@@ -61,6 +61,7 @@ class Config:
         self._configfile = os.path.abspath(os.path.realpath(configfile))
         self._config = configparser.ConfigParser()
         self.is_aws = is_aws.is_aws()
+        self._user_set_keys = set()
 
         if not os.path.exists(configfile):
             raise FileNotFoundError(f"Configfile {configfile} not found.")
@@ -99,11 +100,19 @@ class Config:
         return os.path.abspath(os.path.join(os.path.dirname(self._configfile), path))
 
     def _apply_user_config(self):
-        """If the user config file exists, overlay its values on top of the defaults."""
-        if not hasattr(self, "user_configfile") or not self.user_configfile:
-            return
+        """If the user config file exists, overlay its values on top of the defaults.
 
-        user_path = os.path.abspath(os.path.expanduser(str(self.user_configfile)))
+        Resolution order for the user config path:
+          1. IVERT_USER_CONFIG environment variable (set directly or via --config CLI flag)
+          2. user_configfile value from ivert_defaults.ini
+        """
+        env_override = os.environ.get("IVERT_USER_CONFIG", "").strip()
+        if env_override:
+            user_path = os.path.abspath(os.path.expanduser(env_override))
+        elif hasattr(self, "user_configfile") and self.user_configfile:
+            user_path = os.path.abspath(os.path.expanduser(str(self.user_configfile)))
+        else:
+            return
         if not os.path.exists(user_path):
             return
 
@@ -115,9 +124,11 @@ class Config:
         try:
             for k, v in user_config["DEFAULT"].items():
                 self._read_option(k, v)
+                self._user_set_keys.add(k)
             if self.is_aws and "AWS" in user_config:
                 for k, v in user_config["AWS"].items():
                     self._read_option(k, v)
+                    self._user_set_keys.add(k)
         finally:
             self._configfile = saved_configfile
 
@@ -166,6 +177,10 @@ class Config:
         try:
             if key[:3].lower() == "s3_":
                 # This is an S3 key-path. Do not convert it to an absolute path.
+                pass
+
+            elif re.match(r'[a-zA-Z][a-zA-Z0-9+\-.]*://', value.strip()):
+                # This is a URL (http://, https://, ftp://, s3://, etc.). Leave it as-is.
                 pass
 
             elif sys.platform in ('linux', 'cygwin', 'darwin') and value.find("/") > -1:

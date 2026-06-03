@@ -33,26 +33,135 @@ except ImportError:
 
 @click.group()
 @click.version_option(version=ivert_version, prog_name="ivert")
-def ivert_cli():
+@click.option(
+    "--config", "user_config",
+    default=None,
+    metavar="PATH",
+    help=(
+        "Path to a user config file, overriding the default "
+        "(~/.ivert/user_config.ini) and the IVERT_USER_CONFIG "
+        "environment variable."
+    ),
+)
+@click.pass_context
+def ivert_cli(ctx, user_config):
     """IVERT: ICESat-2 Validation of Elevations Reporting Tool.
 
     Run 'ivert <command> --help' for detailed help on any command.
     """
-    pass
+    if user_config:
+        os.environ["IVERT_USER_CONFIG"] = os.path.abspath(os.path.expanduser(user_config))
 
 
 ###############################################################
 # setup
 ###############################################################
 
-@ivert_cli.command("setup")
-def setup():
+_SETUP_EXCLUDED_KEYS = {"ivert_version", "atlas_sdp_epoch", "project_base_directory"}
+
+
+class _SetupGroup(click.Group):
+    """Click Group that also accepts 'key=value' arguments as config assignments.
+
+    key=value args are captured in parse_args before Click's subcommand routing
+    so that Click never attempts to resolve them as subcommand names.
+    """
+
+    def parse_args(self, ctx, args):
+        if args and not args[0].startswith("-") and "=" in args[0]:
+            ctx.args = list(args)
+            return []
+        return super().parse_args(ctx, args)
+
+    def invoke(self, ctx):
+        if ctx.args:
+            click.Command.invoke(self, ctx)
+            return
+        super().invoke(ctx)
+
+
+@ivert_cli.group("setup", cls=_SetupGroup, invoke_without_command=True)
+@click.pass_context
+def setup(ctx):
     """Configure IVERT settings and local data directories.
 
     Typically run once before using IVERT on a new machine, or when
     changing data directory paths or credentials.
     """
-    raise click.ClickException("'ivert setup' is not yet implemented.")
+    if ctx.args:
+        _setup_set_values(ctx.args)
+    elif ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+
+def _setup_set_values(assignments):
+    """Write one or more key=value pairs to the user config file."""
+    import configparser as _cp
+    try:
+        from utils.configfile import Config
+    except ImportError:
+        from ivert_utils.configfile import Config
+
+    config = Config()
+
+    parsed = []
+    for assignment in assignments:
+        if "=" not in assignment:
+            raise click.UsageError(f"Invalid format '{assignment}'. Use option_name=value.")
+        key, _, value = assignment.partition("=")
+        key = key.strip().lower()
+        if key in _SETUP_EXCLUDED_KEYS:
+            raise click.UsageError(f"'{key}' is a read-only setting and cannot be changed.")
+        if key not in config._config["DEFAULT"]:
+            raise click.UsageError(
+                f"Unknown setting '{key}'. Run 'ivert setup list' to see valid settings.")
+        parsed.append((key, value))
+
+    user_path = os.path.abspath(os.path.expanduser(str(config.user_configfile)))
+    user_config = _cp.ConfigParser()
+    if os.path.exists(user_path):
+        user_config.read(user_path)
+
+    for key, value in parsed:
+        user_config["DEFAULT"][key] = value
+        click.echo(f"  {key} = {value}")
+
+    os.makedirs(os.path.dirname(user_path), exist_ok=True)
+    with open(user_path, "w") as f:
+        user_config.write(f)
+
+    click.echo(f"\nSaved to {user_path}")
+
+
+@setup.command("list")
+def setup_list():
+    """List all configurable settings and their current values."""
+    try:
+        from utils.configfile import Config
+    except ImportError:
+        from ivert_utils.configfile import Config
+
+    config = Config()
+    keys = [k for k in config._config["DEFAULT"].keys()
+            if k not in _SETUP_EXCLUDED_KEYS]
+
+    if not keys:
+        click.echo("No configurable settings found.")
+        return
+
+    col_w = max(len(k) for k in keys)
+    click.echo(f"\n  {'Setting':<{col_w}}  Value")
+    click.echo("  " + "-" * (col_w + 2 + 56))
+
+    for key in keys:
+        value = str(getattr(config, key, ""))
+        source = "[user]" if key in config._user_set_keys else "[default]"
+        click.echo(f"  {key:<{col_w}}  {value:<52}  {source}")
+
+    click.echo(
+        f"\n  To change a setting:  ivert setup option_name=new_value"
+        f"\n  Add quotes around values containing spaces or special characters."
+    )
 
 
 ###############################################################
