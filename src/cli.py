@@ -113,7 +113,79 @@ def download(bbox_or_files, date_start, date_end, projection, wsen, replace, cla
 
     Example: ivert download -- -74.0/-73.0/40.5/41.0
     """
-    raise click.ClickException("'ivert download' is not yet implemented.")
+    try:
+        from ivert import icesat2_database_v2 as is2db_mod
+        from ivert.utils import dem_geom
+    except ImportError:
+        import icesat2_database_v2 as is2db_mod
+        from utils import dem_geom
+
+    # --- Parse bbox or files ---
+    # Flatten slash-separated tokens into a flat list.
+    values = []
+    for token in bbox_or_files:
+        values.extend(token.split("/"))
+
+    wgs84_bbox = None  # (xmin, xmax, ymin, ymax)
+
+    if len(values) == 4:
+        try:
+            nums = [float(v) for v in values]
+            if wsen:
+                # W/S/E/N → reorder to xmin, xmax, ymin, ymax
+                xmin, ymin, xmax, ymax = nums
+            else:
+                xmin, xmax, ymin, ymax = nums
+            if projection.upper() in ("EPSG:4326", "4326"):
+                wgs84_bbox = (xmin, xmax, ymin, ymax)
+            else:
+                wgs84_bbox = dem_geom.get_wgs84_bounding_box(
+                    (xmin, xmax, ymin, ymax), dem_horz_reference_frame=projection)
+        except ValueError:
+            pass  # not numeric — fall through to file path handling
+
+    if wgs84_bbox is None:
+        # Treat tokens as file paths (glob-expand them).
+        expanded = []
+        for token in bbox_or_files:
+            matches = glob.glob(token)
+            expanded.extend(matches if matches else [token])
+
+        missing = [f for f in expanded if not os.path.exists(f)]
+        if missing:
+            raise click.ClickException(
+                "Files not found (and input is not a valid 4-value bbox): "
+                + ", ".join(missing))
+
+        xmins, xmaxs, ymins, ymaxs = [], [], [], []
+        for fn in expanded:
+            bb = dem_geom.get_wgs84_bounding_box(fn)
+            xmins.append(bb[0]); xmaxs.append(bb[1])
+            ymins.append(bb[2]); ymaxs.append(bb[3])
+        wgs84_bbox = (min(xmins), max(xmaxs), min(ymins), max(ymaxs))
+
+    # --- Parse dates and classes ---
+    db = is2db_mod.IS2Database()
+
+    try:
+        tmin = db.convert_date_to_yyyymmdd(date_start)
+        tmax = db.convert_date_to_yyyymmdd(date_end)
+    except Exception as exc:
+        raise click.ClickException(f"Could not parse date: {exc}") from exc
+
+    if tmin >= tmax:
+        raise click.ClickException(
+            f"--date-start ({tmin}) must be before --date-end ({tmax}).")
+
+    class_list = tuple(int(c) for c in classes.split("/"))
+
+    full_bbox = (wgs84_bbox[0], wgs84_bbox[1], wgs84_bbox[2], wgs84_bbox[3], tmin, tmax)
+
+    if not is2db_mod.IS2Database.bbox_valid(full_bbox):
+        raise click.ClickException(
+            f"Invalid bounding box: xmin < xmax, ymin < ymax required. Got {full_bbox[:4]}.")
+
+    db.download_new_granules(full_bbox, classes_to_keep=class_list)
 
 
 ###############################################################
