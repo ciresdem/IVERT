@@ -44,7 +44,7 @@ setuptools.setup(
     package_dir = {'ivert': 'src',
                    'ivert_utils': 'src/utils'},
     data_files = [('ivert_data/data/', ["data/empty_tile.tif"]),
-                  ('ivert_data/config', ["config/ivert_config.ini"]),
+                  ('ivert_data/config', ["config/ivert_defaults.ini"]),
                   ("ivert_data/", ["VERSION", "LICENSE", "README.md"]),
                   ],
     classifiers = [

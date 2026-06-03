@@ -20,13 +20,13 @@ else:
         import utils.version as version
 
 ivert_default_configfile = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                                                        "..", "..", "config", "ivert_config.ini"))
+                                                        "..", "..", "config", "ivert_defaults.ini"))
 
 # When we build the ivert package, this is the location of the ivert_data directory. Look for it there.
 if not os.path.exists(ivert_default_configfile):
     ivert_default_configfile = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                                             "..", "..", "..", "..",
-                                                            "ivert_data", "config", "ivert_config.ini"))
+                                                            "ivert_data", "config", "ivert_defaults.ini"))
 
 
 class Config:
@@ -76,6 +76,10 @@ class Config:
         # if os.path.basename(self._configfile) == os.path.basename(ivert_default_configfile):
         #     self._add_user_variables_and_s3_creds_to_config_obj(ignore_errors=ignore_errors)
 
+        # If loading the defaults config, overlay any user-local overrides on top.
+        if os.path.basename(self._configfile) == os.path.basename(ivert_default_configfile):
+            self._apply_user_config()
+
         # If 'ivert_version' is present and not already set, set it.
         if hasattr(self, "ivert_version") and self.ivert_version is None:
             self.ivert_version = version.__version__
@@ -93,6 +97,29 @@ class Config:
             return path
 
         return os.path.abspath(os.path.join(os.path.dirname(self._configfile), path))
+
+    def _apply_user_config(self):
+        """If the user config file exists, overlay its values on top of the defaults."""
+        if not hasattr(self, "user_configfile") or not self.user_configfile:
+            return
+
+        user_path = os.path.abspath(os.path.expanduser(str(self.user_configfile)))
+        if not os.path.exists(user_path):
+            return
+
+        user_config = configparser.ConfigParser()
+        user_config.read(user_path)
+
+        saved_configfile = self._configfile
+        self._configfile = user_path
+        try:
+            for k, v in user_config["DEFAULT"].items():
+                self._read_option(k, v)
+            if self.is_aws and "AWS" in user_config:
+                for k, v in user_config["AWS"].items():
+                    self._read_option(k, v)
+        finally:
+            self._configfile = saved_configfile
 
     def _parse_config_into_attrs(self):
         """Read all the Config lines, put into object attributes. If we're running in an AWS instance, also read the
