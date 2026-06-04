@@ -230,7 +230,9 @@ class IS2Database:
                            query_bbox: tuple,
                            classes_to_keep: tuple = (1, 2, 3, 7, 40, 41),
                            overwrite: bool = False,
-                           min_confidence_level: int = 1) -> dict | None:
+                           min_confidence_level: int = 1,
+                           granule_num: int | None = None,
+                           total_granules: int | None = None) -> dict | None:
         """Classify an ATL03 HDF5 file with globato and save the result as NetCDF.
 
         The output .nc file contains only the photon classes in classes_to_keep, plus
@@ -253,6 +255,7 @@ class IS2Database:
             reject_failed_qa=True,
             append_atl24=True,
             cache_dir=self.icesat2_download_dir,
+            use_external_masks=True,
         )
 
         chunks = []
@@ -320,7 +323,9 @@ class IS2Database:
 
         os.makedirs(os.path.dirname(nc_fn) if os.path.dirname(nc_fn) else ".", exist_ok=True)
         xr_ds.to_netcdf(nc_fn)
-        logger.info("Saved %s (%s photons, %s ground, %s bathy).",
+        progress = f"{granule_num}/{total_granules} " if granule_num is not None and total_granules is not None else ""
+        logger.info("%sSaved %s (%s photons, %s ground, %s bathy).",
+                    progress,
                     os.path.basename(nc_fn),
                     f"{metadata_attrs['numphotons']:,}",
                     f"{metadata_attrs['numphotons_ground']:,}",
@@ -366,9 +371,11 @@ class IS2Database:
             return self.gdf
 
         if read_compressed == "only_if_newer":
-            if os.path.exists(self.db_fname_compressed) and os.path.exists(self.db_fname):
-                if os.path.getmtime(self.db_fname_compressed) > os.path.getmtime(self.db_fname):
-                    read_compressed = True
+            read_compressed = (
+                os.path.exists(self.db_fname_compressed)
+                and os.path.exists(self.db_fname)
+                and os.path.getmtime(self.db_fname_compressed) > os.path.getmtime(self.db_fname)
+            )
         elif read_compressed:
             read_compressed = os.path.exists(self.db_fname_compressed)
 
@@ -737,11 +744,11 @@ class IS2Database:
                                "This may be because zero files were returned or Harmony is temporarily down. "
                                "You may re-run the command later if you feel this was in error.", sbbox)
                 continue
-            h5_files = [os.path.abspath(entry["dst_fn"])
-                        for _, entry in results
-                        if entry.get("status") == 0
-                        and entry.get("dst_fn")
-                        and os.path.exists(entry["dst_fn"])]
+            h5_files = sorted(os.path.abspath(entry["dst_fn"])
+                              for _, entry in results
+                              if entry.get("status") == 0
+                              and entry.get("dst_fn")
+                              and os.path.exists(entry["dst_fn"]))
 
             if not h5_files:
                 logger.info("No granules downloaded for this bbox.")
@@ -753,20 +760,27 @@ class IS2Database:
             existing_filenames = set(existing_gdf["filename"].values) if existing_gdf is not None else set()
 
             new_records = []
+            files_to_process = []
             for h5_src in h5_files:
                 nc_basename = self._nc_filename(h5_src, sbbox)
                 nc_dest = os.path.join(self.granules_dir, nc_basename)
-
                 if nc_basename in existing_filenames:
                     logger.info("Skipping %s (already in database).", nc_basename)
-                    continue
+                else:
+                    files_to_process.append((h5_src, nc_dest))
 
+            for granule_num, (h5_src, nc_dest) in enumerate(files_to_process, start=1):
                 meta = self._process_h5_to_nc(h5_src, nc_dest,
                                               query_bbox=sbbox,
                                               classes_to_keep=classes_to_keep,
-                                              min_confidence_level=min_confidence_level)
+                                              min_confidence_level=min_confidence_level,
+                                              granule_num=granule_num,
+                                              total_granules=len(files_to_process))
                 if meta is not None:
                     new_records.append(meta)
+                else:
+                    logger.info("%d/%d No valid classified photons retrieved from %s.",
+                                granule_num, len(files_to_process), os.path.basename(nc_dest))
 
             if not new_records:
                 continue

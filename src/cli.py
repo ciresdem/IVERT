@@ -43,14 +43,23 @@ except ImportError:
         "environment variable."
     ),
 )
+@click.option(
+    "--debug",
+    is_flag=True,
+    default=False,
+    help="Enable debug-level logging output.",
+)
 @click.pass_context
-def ivert_cli(ctx, user_config):
+def ivert_cli(ctx, user_config, debug):
     """IVERT: ICESat-2 Validation of Elevations Reporting Tool.
 
     Run 'ivert <command> --help' for detailed help on any command.
     """
     if user_config:
         os.environ["IVERT_USER_CONFIG"] = os.path.abspath(os.path.expanduser(user_config))
+    if debug:
+        logging.basicConfig(level=logging.DEBUG, format="%(levelname)s: %(message)s")
+        logging.getLogger().setLevel(logging.DEBUG)
 
 
 ###############################################################
@@ -207,8 +216,13 @@ def database_list(show_all, boxes):
     db = is2db_mod.IS2Database()
     gdf = db.open_gdf(verbose=False)
 
-    if gdf is None or len(gdf) == 0:
-        click.echo("No granules in database.")
+    if gdf is None:
+        click.echo(f"No IVERT database found at: {db.db_fname}")
+        click.echo("Run 'ivert database download <bbox>' to create one.")
+        return
+
+    if len(gdf) == 0:
+        click.echo("Database exists but contains no granules.")
         return
 
     if boxes:
@@ -439,8 +453,11 @@ def database_download(bbox_or_files, date_start, date_end, projection, wsen, rep
     extent defines the download region. Use --wsen to switch to W/S/E/N order.
 
     Examples:
+
         ivert database download -- -74.0/-73.0/40.5/41.0
+
         ivert database download -ds 2023.01.01 -de 2024.01.01 ../dems/oregon_coast_v1.tif
+
         ivert databasee download -ds "two years ago" -de "one year ago" ../dems/*.tif
 
     (Note: Use the '--' delimiter to explicitly end your command-line options if coordinates begin with a negative '-')
@@ -781,23 +798,23 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
 @click.option(
     "-cl", "--confidence-level", "confidence_level",
     type=click.IntRange(1, 4),
-    default=1,
+    default=4,
     show_default=True,
     help=(
         "Minimum ATL03 signal confidence level to use (1–4). Photons below this "
         "level are excluded from validation. "
-        "1=low (keep all), 2=medium, 3=high, 4=very-high."
+        "1=low (keep all), 2=medium, 3=high, 4=very-high. Default: 4"
     ),
 )
 @click.option(
     "-bc", "--bathy-confidence", "bathy_confidence",
     type=click.FloatRange(0.0, 1.0),
-    default=0.75,
+    default=0.90,
     show_default=True,
     help=(
         "Minimum ATL24 bathymetry confidence to use (0.0–1.0). "
         "Bathy-floor photons (class 40) below this confidence are excluded "
-        "from validation."
+        "from validation. Default: 0.9"
     ),
 )
 @click.option(
