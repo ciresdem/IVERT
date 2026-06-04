@@ -456,8 +456,8 @@ def validate_dem(dem_name: str,
                  max_subdivides: int = 4,
                  subdivision_number: int = 0,
                  orig_dem_name: str | None = None,
-                 min_confidence_level: int = 1,
-                 min_bathy_confidence: float = 0.75,
+                 min_confidence_level: int = 4,
+                 min_bathy_confidence: float = 0.90,
                  verbose: bool = True):
     """Validate a DEM and produce output results.
 
@@ -869,7 +869,7 @@ def _fetch_photons(dem_name, band_num, dem_vertical_datum, icesat2_photon_databa
 
     dem_horz_ref_frame, dem_vert_ref_frame = dem_geom.get_dem_reference_frame_from_file(dem_name)
     if dem_vertical_datum is not None:
-        dem_vert_ref_frame = dem_vertical_datum
+        dem_vert_ref_frame = dem_geom.get_dem_reference_frame_from_user_input(dem_vertical_datum, "vert")
     dem_epsg_str = dem_geom.get_dem_srs_string(dem_horz_ref_frame, dem_vert_ref_frame)
     dem_wgs84_bbox = dem_geom.get_wgs84_bounding_box(dem_name)
 
@@ -1318,8 +1318,8 @@ def validate_dem_parallel(dem_name: str,
                           measure_coverage: bool = False,
                           max_photons_per_cell: int | None = None,
                           numprocs: int = parallel_funcs.physical_cpu_count(),
-                          min_confidence_level: int = 1,
-                          min_bathy_confidence: float = 0.75,
+                          min_confidence_level: int = 4,
+                          min_bathy_confidence: float = 0.90,
                           verbose: bool = True):
     """Validate a single DEM.
 

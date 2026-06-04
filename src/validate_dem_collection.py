@@ -114,7 +114,7 @@ def validate_list_of_dems(dem_list_or_dir: str | list[str],
     DEMs should encompass a contiguous area so as to use the same set of ICESat-2 granules for
     validation."""
     if output_dir is None:
-        if os.path.isdir(dem_list_or_dir):
+        if isinstance(dem_list_or_dir, str) and os.path.isdir(dem_list_or_dir):
             stats_and_plots_dir = dem_list_or_dir
         elif type(dem_list_or_dir) == str:
             stats_and_plots_dir = os.path.dirname(dem_list_or_dir)

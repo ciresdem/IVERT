@@ -672,14 +672,37 @@ def cache_delete(force):
 
 def _run_validate(files_or_directory, vdatum, region_name, include_photons,
                   measure_coverage, band_num, outlier_sd_threshold, buildings,
-                  confidence_level, bathy_confidence, verbose=True):
+                  confidence_level, bathy_confidence, outdir=None, verbose=True):
     """Branch to validate_dem or validate_list_of_dems based on the number of input files."""
     try:
         from ivert import validate_dem as vd_module
         from ivert import validate_dem_collection as vdc_module
+        from ivert import vdatum_lookup
     except ImportError:
         import validate_dem as vd_module
         import validate_dem_collection as vdc_module
+        import vdatum_lookup
+
+    # Resolve common datum names (e.g. 'navd88') to 'EPSG:NNNN' strings.
+    if vdatum != "NONE_PROVIDED":
+        resolved = vdatum_lookup.resolve_vdatum(vdatum)
+        if resolved is None:
+            raise click.ClickException(
+                f"Unrecognised vertical datum '{vdatum}'. "
+                "Provide an EPSG code (e.g. 'EPSG:5703', '5703') or a known short name "
+                "(e.g. 'navd88', 'egm2008', 'mllw'). "
+                "Run 'ivert validate --list-vdatums' to see all recognised names."
+            )
+        vdatum = resolved
+
+    if outdir is None:
+        try:
+            from utils.configfile import Config
+        except ImportError:
+            from ivert_utils.configfile import Config
+        # Read the raw (unresolved) string so it stays relative to the DEM directory,
+        # not the config file's directory.
+        outdir = Config()._config["DEFAULT"]["ivert_results_subdir"]
 
     # Expand any glob patterns the shell left unexpanded (e.g., quoted patterns).
     expanded = []
@@ -695,8 +718,15 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
         classes = sorted(classes + [7])
 
     if len(expanded) == 1 and os.path.isfile(expanded[0]):
+        # validate_dem uses output_dir as-is, so resolve any relative path against
+        # the DEM's own directory rather than the current working directory.
+        if not os.path.isabs(outdir):
+            single_outdir = os.path.join(os.path.dirname(os.path.abspath(expanded[0])), outdir)
+        else:
+            single_outdir = outdir
         kwargs = dict(
             dem_name=expanded[0],
+            output_dir=single_outdir,
             classes=classes,
             band_num=band_num,
             outliers_sd_threshold=outlier_sd_threshold,
@@ -712,8 +742,19 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
         vd_module.validate_dem(**kwargs)
     else:
         dem_input = expanded[0] if len(expanded) == 1 else expanded
+        if not os.path.isabs(outdir):
+            if isinstance(dem_input, list):
+                dem_dir = os.path.dirname(os.path.abspath(dem_input[0]))
+            elif os.path.isdir(dem_input):
+                dem_dir = os.path.abspath(dem_input)
+            else:
+                dem_dir = os.path.dirname(os.path.abspath(dem_input))
+            multi_outdir = os.path.join(dem_dir, outdir)
+        else:
+            multi_outdir = outdir
         kwargs = dict(
             dem_list_or_dir=dem_input,
+            output_dir=multi_outdir,
             classes=classes,
             band_num=band_num,
             place_name=region_name,
@@ -730,16 +771,24 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
 
 
 @ivert_cli.command("validate")
-@click.argument("files_or_directory", nargs=-1, required=True)
+@click.argument("files_or_directory", nargs=-1, required=False)
 @click.option(
     "-V", "--vdatum",
     default="NONE_PROVIDED",
-    show_default=True,
+    show_default=False,
     help=(
-        "Vertical datum of the input DEM(s), as an EPSG number or short name "
-        "(e.g., 'EPSG:5703', 'navd88'). If omitted, IVERT reads it from the DEM "
-        "metadata header. Run 'vdatums --list-epsg' for available options."
+        "Vertical datum of the input DEM(s). Accepts an EPSG code "
+        "('EPSG:5703', '5703'), a bare integer, or a common short name "
+        "('navd88', 'egm2008', 'mllw', …). If omitted, IVERT reads the datum "
+        "from the DEM metadata header. Use --list-vdatums to see all "
+        "recognised names."
     ),
+)
+@click.option(
+    "--list-vdatums",
+    is_flag=True,
+    default=False,
+    help="Print all recognised vertical datum names and their EPSG codes, then exit.",
 )
 @click.option(
     "-n", "--name", "--region-name", "region_name",
@@ -803,7 +852,7 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
     help=(
         "Minimum ATL03 signal confidence level to use (1–4). Photons below this "
         "level are excluded from validation. "
-        "1=low (keep all), 2=medium, 3=high, 4=very-high. Default: 4"
+        "1=low (keep all), 2=medium, 3=high, 4=very-high."
     ),
 )
 @click.option(
@@ -814,7 +863,17 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
     help=(
         "Minimum ATL24 bathymetry confidence to use (0.0–1.0). "
         "Bathy-floor photons (class 40) below this confidence are excluded "
-        "from validation. Default: 0.9"
+        "from validation."
+    ),
+)
+@click.option(
+    "-o", "--outdir",
+    default=None,
+    metavar="DIR",
+    help=(
+        "Output directory for validation results. Relative paths are resolved "
+        "relative to the input DEM's directory. Defaults to the "
+        "'ivert_results_subdir' setting (run 'ivert setup list' to view)."
     ),
 )
 @click.option(
@@ -823,19 +882,40 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
     default=False,
     help="Print progress messages during validation.",
 )
-def validate(files_or_directory, vdatum, region_name, include_photons,
+def validate(files_or_directory, vdatum, list_vdatums, region_name, include_photons,
              measure_coverage, band_num, outlier_sd_threshold, buildings,
-             confidence_level, bathy_confidence, verbose):
+             confidence_level, bathy_confidence, outdir, verbose):
     """Validate one or more DEMs against ICESat-2 photon data.
 
     FILES_OR_DIRECTORY can be one or more GeoTIFF paths, a directory
     (all *.tif files are used), or a glob pattern (e.g., 'data/ncei*.tif').
 
-    Example: ivert validate mydem.tif -V EPSG:5703 -n "Oregon Coast"
+    Example: ivert validate mydem.tif -V navd88 -n "Oregon Coast"
     """
+    if list_vdatums:
+        try:
+            from ivert import vdatum_lookup
+        except ImportError:
+            import vdatum_lookup
+        name_table, desc_table = vdatum_lookup._get_tables()
+        by_epsg: dict = {}
+        for name, epsg in name_table.items():
+            by_epsg.setdefault(epsg, []).append(name)
+        click.echo("Recognised vertical datum names (EPSG code → common names, description):\n")
+        for epsg in sorted(by_epsg):
+            aliases = sorted(by_epsg[epsg], key=len)
+            description = desc_table.get(epsg, "")
+            alias_str = ", ".join(f"'{a}'" for a in aliases)
+            desc_str = f"  — {description}" if description else ""
+            click.echo(f"  EPSG:{epsg:<6d}  {alias_str}{desc_str}")
+        return
+
+    if not files_or_directory:
+        raise click.UsageError("Missing argument 'FILES_OR_DIRECTORY'.")
+
     _run_validate(files_or_directory, vdatum, region_name, include_photons,
                   measure_coverage, band_num, outlier_sd_threshold, buildings,
-                  confidence_level, bathy_confidence, verbose)
+                  confidence_level, bathy_confidence, outdir, verbose)
 
 
 ###############################################################
