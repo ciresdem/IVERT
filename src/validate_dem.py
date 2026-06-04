@@ -907,17 +907,19 @@ def _compute_photon_overlap(dem_ds, dem_array, photon_df, classes, dem_epsg_str,
     coverage_coords is (xmin_arr, xmax_arr, ymin_arr, ymax_arr) when measure_coverage=True, else None.
     """
     try:
+        print("dem_epsg_str", dem_epsg_str)
         photon_df["dem_x"], photon_df["dem_y"], photon_df["dem_z"] = \
             transform_points.transform_points(photon_df['x'], photon_df['y'], photon_df['z'],
                                               src_epsg="EPSG:4326+3855",
                                               dst_epsg=dem_epsg_str,
                                               cache_dir=cache_dir)
-    except (ValueError, RuntimeError):
+    except (ValueError, RuntimeError) as e:
         print("Warning: Unable to perform transformation. Using original points.")
-        # TODO: Try to convert just horizontally (even if we can't do it vertically).
-        photon_df["dem_x"] = photon_df['x']
-        photon_df["dem_y"] = photon_df['y']
-        photon_df["dem_z"] = photon_df['z']
+        raise e
+        # # TODO: Try to convert just horizontally (even if we can't do it vertically).
+        # photon_df["dem_x"] = photon_df['x']
+        # photon_df["dem_y"] = photon_df['y']
+        # photon_df["dem_z"] = photon_df['z']
 
     xstart, xstep, _, ystart, _, ystep = dem_ds.GetGeoTransform()
     photon_df["i"] = numpy.floor((photon_df["dem_y"] - ystart) / ystep).astype(int)
@@ -1424,9 +1426,9 @@ def write_summary_stats_file(results_df: pandas.DataFrame,
 
     mean_diff = results_df["diff_mean"]
 
-    lines.append("Mean bias error (ICESat-2 - DEM) (m): {0}".format(mean_diff.mean()))
+    lines.append("Mean bias error (DEM - ICESat-2) (m): {0}".format(mean_diff.mean()))
     lines.append("RMSE (m): {0}".format(numpy.sqrt(numpy.mean(numpy.power(mean_diff, 2)))))
-    lines.append("== Decile ranges of errors (ICESat-2 - DEM) (m) (Look for long-tails, indicating possible artifacts.) ===")
+    lines.append("== Decile ranges of errors (DEM - ICESat-2) (m) (Look for long-tails, indicating possible artifacts.) ===")
 
     percentile_levels = [0, 1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 99, 100]
     percentile_values = numpy.percentile(mean_diff, percentile_levels)
@@ -1541,9 +1543,8 @@ if __name__ == "__main__":
     if not args.datadir:
         args.datadir = args.output_dir
 
-    classes_list = args.classes.split("/")
     try:
-        [int(c) for c in classes_list]
+        classes_list = [int(c) for c in args.classes.split("/")]
     except ValueError:
         print("ERROR: 'classes' must be a list of integer values separated by forward-slashes (/)")
         sys.exit(1)
