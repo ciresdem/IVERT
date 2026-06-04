@@ -39,6 +39,7 @@ osr.UseExceptions()
 
 ivert_config = utils.configfile.Config()
 EMPTY_VAL = ivert_config.dem_default_ndv
+TRANSFORMEZ_CACHE_DIR = ivert_config.cache_directory
 
 
 def read_dataframe_file(df_filename: str) -> pandas.DataFrame:
@@ -898,7 +899,7 @@ def _fetch_photons(dem_name, band_num, dem_vertical_datum, icesat2_photon_databa
 
 
 def _compute_photon_overlap(dem_ds, dem_array, photon_df, classes, dem_epsg_str,
-                              measure_coverage, verbose):
+                              measure_coverage, verbose, cache_dir=None):
     """Transform photon coordinates into DEM space and compute cell-level overlap.
 
     Returns (photon_df, height_field, ph_mask_ground_only, dem_overlap_i, dem_overlap_j,
@@ -909,7 +910,8 @@ def _compute_photon_overlap(dem_ds, dem_array, photon_df, classes, dem_epsg_str,
         photon_df["dem_x"], photon_df["dem_y"], photon_df["dem_z"] = \
             transform_points.transform_points(photon_df['x'], photon_df['y'], photon_df['z'],
                                               src_epsg="EPSG:4326+3855",
-                                              dst_epsg=dem_epsg_str)
+                                              dst_epsg=dem_epsg_str,
+                                              cache_dir=cache_dir)
     except (ValueError, RuntimeError):
         print("Warning: Unable to perform transformation. Using original points.")
         # TODO: Try to convert just horizontally (even if we can't do it vertically).
@@ -1361,7 +1363,8 @@ def validate_dem_parallel(dem_name: str,
     dem_ds, dem_array, photon_df, dem_epsg_str = fetch_result
 
     overlap_result = _compute_photon_overlap(dem_ds, dem_array, photon_df, classes,
-                                              dem_epsg_str, measure_coverage, verbose)
+                                              dem_epsg_str, measure_coverage, verbose,
+                                              cache_dir=TRANSFORMEZ_CACHE_DIR)
     if overlap_result is None:
         if mark_empty_results:
             with open(empty_results_filename, 'w') as f:
