@@ -148,7 +148,7 @@ def plot_histograms_and_line(results_h5_or_list_or_df,
     ax1.set_title("DEM " + u"\u2212" + " ICESat-2 elevation: land")
     ax1.set_ylabel("% of data cells")
     ax1.set_xlabel("Elevation difference (m)")
-    ax1.yaxis.set_major_formatter(ticker.PercentFormatter(len(meandiff_land), decimals=0))
+    ax1.yaxis.set_major_formatter(ticker.PercentFormatter(max(len(meandiff_land), 1), decimals=0))
 
     # Add the lines for mean +- std
     center = numpy.mean(meandiff_land)
@@ -242,7 +242,7 @@ def plot_histograms_and_line(results_h5_or_list_or_df,
     ax2.set_title("DEM " + u"\u2212" + " ICESat-2 elevation: bathy")
     ax2.set_ylabel("% of data cells")
     ax2.set_xlabel("Elevation difference (m)")
-    ax2.yaxis.set_major_formatter(ticker.PercentFormatter(len(meandiff_bathy), decimals=0))
+    ax2.yaxis.set_major_formatter(ticker.PercentFormatter(max(len(meandiff_bathy), 1), decimals=0))
 
     # Add the lines for mean +- std
     center = numpy.mean(meandiff_bathy)
@@ -470,7 +470,7 @@ def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
     ax1.set_title("DEM " + u"\u2212" + " ICESat-2 elevation")
     ax1.set_ylabel("% of data cells")
     ax1.set_xlabel("Elevation difference (m)")
-    ax1.yaxis.set_major_formatter(ticker.PercentFormatter(len(meandiff), decimals=0))
+    ax1.yaxis.set_major_formatter(ticker.PercentFormatter(max(len(meandiff), 1), decimals=0))
 
     # Add the lines for mean +- std
     center = numpy.mean(meandiff)
@@ -571,7 +571,7 @@ def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
     ax3.set_title("Number of photons")
     ax3.set_xlabel("Photon count per DEM cell")
     ax3.set_ylabel("% of data cells")
-    ax3.yaxis.set_major_formatter(ticker.PercentFormatter(len(numphotons_intd), decimals=1))
+    ax3.yaxis.set_major_formatter(ticker.PercentFormatter(max(len(numphotons_intd), 1), decimals=1))
 
     # Crop the left & right, right at 98 percentile.
     cutoff = numpy.percentile(numphotons_intd, 99)
@@ -603,7 +603,7 @@ def plot_histogram_and_error_stats_4_panels(results_h5_or_list_or_df,
     ax4.hist(canopy_fraction, bins=50,color="darkgreen")
     ax4.set_title("Canopy Cover (%)")
     ax4.set_xlabel("% Canopy Cover")
-    ax4.yaxis.set_major_formatter(ticker.PercentFormatter(len(canopy_fraction), decimals=0))
+    ax4.yaxis.set_major_formatter(ticker.PercentFormatter(max(len(canopy_fraction), 1), decimals=0))
 
     # Crop the right edge at the 99th percentile
     cutoff = numpy.percentile(canopy_fraction, 99)
