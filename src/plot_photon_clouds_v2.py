@@ -76,20 +76,6 @@ def _find_h5(nc_path):
     return None
 
 
-def _utm_along_track_km(lons, lats):
-    """Return cumulative along-track distance (km) for ordered lon/lat arrays.
-
-    Reprojects to the auto-detected UTM zone so distances are computed in metres
-    using true Cartesian geometry, then converts to km.
-    """
-    import geopandas as gpd
-    gdf = gpd.GeoDataFrame(geometry=gpd.points_from_xy(lons, lats), crs="EPSG:4326")
-    gdf_utm = gdf.to_crs(gdf.estimate_utm_crs())
-    x = gdf_utm.geometry.x.values
-    y = gdf_utm.geometry.y.values
-    step_m = np.sqrt(np.diff(x) ** 2 + np.diff(y) ** 2)
-    return np.concatenate([[0.0], np.cumsum(step_m)]) / 1000.0
-
 
 def _beam_delta_times(h5_path):
     """Return {beam_name: delta_time_array} for all beams present in the .h5."""
@@ -109,50 +95,64 @@ def _load_h5_beam_photons(h5_path, beam):
     """Load all photons for one beam from ATL03 .h5, returning a DataFrame with class_code=0.
 
     Heights are converted from ellipsoidal to EGM2008 geoid by subtracting the
-    geoid undulation interpolated from geophys_corr/geoid.  Photons are sorted by
-    delta_time and a cumulative along_track_km column is computed via UTM projection.
+    geoid undulation interpolated from geophys_corr/geoid.  Cumulative along-track
+    distance (along_track_m) is computed from geolocation/segment_length and
+    heights/dist_ph_along, matching the convention used in the .nc files.
     """
     import h5py
     with h5py.File(h5_path, "r") as f:
         try:
-            delta_time = f[f"{beam}/heights/delta_time"][...]
-            lon = f[f"{beam}/heights/lon_ph"][...]
-            lat = f[f"{beam}/heights/lat_ph"][...]
-            h_ph = f[f"{beam}/heights/h_ph"][...]
-            geoid_dt = f[f"{beam}/geophys_corr/delta_time"][...]
-            geoid = f[f"{beam}/geophys_corr/geoid"][...]
+            delta_time    = f[f"{beam}/heights/delta_time"][...]
+            lon           = f[f"{beam}/heights/lon_ph"][...]
+            lat           = f[f"{beam}/heights/lat_ph"][...]
+            h_ph          = f[f"{beam}/heights/h_ph"][...]
+            dist_ph_along = f[f"{beam}/heights/dist_ph_along"][...]
+            geoid_dt      = f[f"{beam}/geophys_corr/delta_time"][...]
+            geoid         = f[f"{beam}/geophys_corr/geoid"][...]
+            ph_index_beg  = f[f"{beam}/geolocation/ph_index_beg"][...]
+            seg_length    = f[f"{beam}/geolocation/segment_length"][...]
         except KeyError:
-            return pd.DataFrame(columns=["x", "y", "z", "delta_time", "class_code", "along_track_km"])
+            return pd.DataFrame(columns=["x", "y", "z", "delta_time", "class_code", "along_track_m"])
 
-    # Interpolate geoid undulation (segment rate) to per-photon rate, then subtract
     geoid_ph = np.interp(delta_time, geoid_dt, geoid)
     z = h_ph - geoid_ph
 
-    # Sort by delta_time so along-track distance is computed in acquisition order
-    order = np.argsort(delta_time)
-    delta_time, lon, lat, z = delta_time[order], lon[order], lat[order], z[order]
+    n = len(delta_time)
+    seg_cumul_start = np.concatenate([[0.0], np.cumsum(seg_length[:-1])])
+    seg_of_ph = np.clip(
+        np.searchsorted(ph_index_beg, np.arange(n), side="right") - 1,
+        0, len(ph_index_beg) - 1,
+    )
+    along_track_m = seg_cumul_start[seg_of_ph] + dist_ph_along
 
-    along_track_km = _utm_along_track_km(lon, lat)
+    order = np.argsort(delta_time)
+    delta_time    = delta_time[order]
+    lon           = lon[order]
+    lat           = lat[order]
+    z             = z[order]
+    along_track_m = along_track_m[order]
 
     return pd.DataFrame({
-        "x": lon,
-        "y": lat,
-        "z": z,
-        "delta_time": delta_time,
-        "class_code": np.zeros(len(delta_time), dtype=np.int8),
-        "along_track_km": along_track_km,
+        "x":             lon,
+        "y":             lat,
+        "z":             z,
+        "delta_time":    delta_time,
+        "class_code":    np.zeros(n, dtype=np.int8),
+        "along_track_m": along_track_m,
     })
 
 
 def load_nc(nc_path):
     """Load the .nc granule into a DataFrame."""
+    data = {}
     with netCDF4.Dataset(nc_path) as ds:
-        df = pd.DataFrame({
-            v: ds.variables[v][:].data if hasattr(ds.variables[v][:], "data")
-               else np.array(ds.variables[v][:])
-            for v in ds.variables
-        })
-    return df
+        for v in ds.variables:
+            raw = ds.variables[v][:]
+            arr = raw.data if hasattr(raw, "data") else np.array(raw)
+            if np.asarray(arr).dtype.kind == "O":
+                arr = np.asarray(arr).astype(str)
+            data[v] = arr
+    return pd.DataFrame(data)
 
 
 def plot_beam(df_beam, beam_name, outpath, zlim=None, dlim=None, classes=None, title_extra=""):
@@ -173,7 +173,7 @@ def plot_beam(df_beam, beam_name, outpath, zlim=None, dlim=None, classes=None, t
         unselected = (df_beam["class_code"] != 0) & ~df_beam["class_code"].isin(classes)
         df_beam.loc[unselected, "class_code"] = 0
 
-    along_track = df_beam["along_track_km"].values
+    along_track = df_beam["along_track_m"].values / 1000.0
     z = df_beam["z"].values
     cc = df_beam["class_code"].values
 
@@ -317,7 +317,7 @@ def main():
         if not os.path.exists(h5_path):
             sys.exit(f".h5 file not found: {h5_path}")
     else:
-        h5_path = _find_h5(nc_path)
+        h5_path = None
 
     if h5_path:
         print(f"Found .h5: {os.path.basename(h5_path)}", flush=True)
@@ -329,34 +329,54 @@ def main():
                 print(f"  Beam {beam} not in .h5, skipping.")
                 continue
 
-            # Load h5 beam first — its exact (delta_time, x, y) triplet is the only
-            # reliable way to identify which nc photons belong to this beam, because
-            # all six beams share the same delta_time values (simultaneous firing).
             df_bg = _load_h5_beam_photons(h5_path, beam)
             if df_bg.empty:
                 print(f"  Beam {beam}: no h5 photons, skipping.")
                 continue
 
-            df_beam = df.merge(
-                df_bg[["delta_time", "x", "y", "along_track_km"]],
-                on=["delta_time", "x", "y"], how="inner"
-            )
+            # Filter nc photons to this beam using the laser column when present;
+            # fall back to exact (delta_time, x, y) matching for old nc files.
+            if "laser" in df.columns:
+                df_beam = df[df["laser"] == beam].copy()
+            else:
+                df_beam = df.merge(
+                    df_bg[["delta_time", "x", "y"]],
+                    on=["delta_time", "x", "y"], how="inner"
+                )
+
             if df_beam.empty:
                 print(f"  Beam {beam}: no photons in .nc, skipping.")
                 continue
+
+            # Ensure along_track_m exists on the nc photons; get it from the h5
+            # position match if the nc file predates the field being added.
+            if "along_track_m" not in df_beam.columns:
+                df_beam = df_beam.merge(
+                    df_bg[["delta_time", "x", "y", "along_track_m"]],
+                    on=["delta_time", "x", "y"], how="left"
+                ).dropna(subset=["along_track_m"])
 
             print(f"  Beam {beam}: {len(df_beam):,} classified + {len(df_bg):,} background photons", flush=True)
             df_plot = pd.concat([df_bg, df_beam], ignore_index=True)
             outpath = os.path.join(outdir, f"{nc_stem}_{beam}.png")
             plot_beam(df_plot, beam, outpath, zlim=zlim, dlim=dlim, classes=classes)
     else:
-        print("No .h5 found — plotting all photons together.", flush=True)
-        beam = args.beam or "all_beams"
-        sort_col = "delta_time" if "delta_time" in df.columns else "y"
-        df = df.sort_values(sort_col).reset_index(drop=True)
-        df["along_track_km"] = _utm_along_track_km(df["x"].values, df["y"].values)
-        outpath = os.path.join(outdir, f"{nc_stem}_{beam}.png")
-        plot_beam(df, beam, outpath, zlim=zlim, dlim=dlim, classes=classes)
+        # No .h5 — use laser/along_track_m from the nc file directly if present.
+        if "laser" in df.columns:
+            beams_in_nc = sorted(df["laser"].unique())
+            beams_to_plot_noh5 = [args.beam] if args.beam else beams_in_nc
+            for beam in beams_to_plot_noh5:
+                df_beam = df[df["laser"] == beam].copy()
+                if df_beam.empty:
+                    continue
+                if "along_track_m" not in df_beam.columns:
+                    print(f"  Beam {beam}: nc has no along_track_m, skipping.", flush=True)
+                    continue
+                print(f"  Beam {beam}: {len(df_beam):,} photons (nc only)", flush=True)
+                outpath = os.path.join(outdir, f"{nc_stem}_{beam}.png")
+                plot_beam(df_beam, beam, outpath, zlim=zlim, dlim=dlim, classes=classes)
+        else:
+            print("No .h5 found and nc has no beam/distance info — cannot plot.", flush=True)
 
 
 if __name__ == "__main__":
