@@ -159,8 +159,8 @@ def plot_beam(df_beam, beam_name, outpath, zlim=None, dlim=None, classes=None, t
     """Plot one beam's photon curtain (along-track km vs elevation).
 
     classes: None  → plot all class codes present
-             set() → plot no classified photons (noise background only)
-             {1, 40, …} → plot only those class codes (plus class-0 noise)
+             set() → reclassify all classified photons as noise (class 0)
+             {1, 40, …} → plot those class codes; all others reclassified as noise
     """
     sort_col = "delta_time" if "delta_time" in df_beam.columns else "y"
     df_beam = df_beam.sort_values(sort_col).reset_index(drop=True)
@@ -168,9 +168,10 @@ def plot_beam(df_beam, beam_name, outpath, zlim=None, dlim=None, classes=None, t
     # Drop photons with non-physical elevations
     df_beam = df_beam[(df_beam["z"] >= -1e5) & (df_beam["z"] <= 1e5)].reset_index(drop=True)
 
-    # Filter to requested classes; class_code == 0 (noise background) is always kept
+    # Reclassify photons not in the requested set to noise (class 0) so they still appear
     if classes is not None:
-        df_beam = df_beam[(df_beam["class_code"] == 0) | df_beam["class_code"].isin(classes)].reset_index(drop=True)
+        unselected = (df_beam["class_code"] != 0) & ~df_beam["class_code"].isin(classes)
+        df_beam.loc[unselected, "class_code"] = 0
 
     along_track = df_beam["along_track_km"].values
     z = df_beam["z"].values
@@ -221,9 +222,10 @@ def main():
     parser.add_argument("--dmax", type=float, default=None,
                         help="Maximum along-track distance to display (km).")
     parser.add_argument("--classes", default=None,
-                        help="Slash-separated class codes to plot from the .nc file "
-                             "(e.g. '1/40/41'). Default: plot all classes. "
-                             "Pass '' to plot no classified photons (noise background only).")
+                        help="Slash-separated class codes to highlight (e.g. '1/40/41'). "
+                             "Photons not in the list are reclassified as noise and shown "
+                             "in grey. Default: show all classes. Pass '' to show all "
+                             "photons as noise.")
     parser.add_argument("--h5", nargs="?", const=True, default=None,
                         help="ATL03 .h5 file to use as noise background. Supply a path, or "
                              "omit the path to search the IVERT cache for a file whose name "
