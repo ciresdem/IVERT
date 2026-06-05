@@ -207,11 +207,13 @@ def plot_beam(df_beam, beam_name, outpath, zlim=None, dlim=None, classes=None, t
 
 def main():
     parser = argparse.ArgumentParser(description="Plot classified ICESat-2 photon curtains.")
-    parser.add_argument("nc_file", help="Path to the .nc granule file")
+    parser.add_argument("input_file",
+                        help="Path to the .nc granule file, or an ATL03 .h5 file "
+                             "(automatically enables --h5-only).")
     parser.add_argument("--beam", "-b", default=None,
                         help="Beam to plot (e.g. gt2l). Default: plot all beams.")
     parser.add_argument("--outdir", "-o", default=None,
-                        help="Output directory for images (default: same as nc_file).")
+                        help="Output directory for images (default: same dir as input file).")
     parser.add_argument("--zmin", type=float, default=None,
                         help="Minimum elevation to display (m). Data outside [-1e5, 1e5] is "
                              "always filtered regardless.")
@@ -230,14 +232,15 @@ def main():
                         help="ATL03 .h5 file to use as noise background. Supply a path, or "
                              "omit the path to search the IVERT cache for a file whose name "
                              "starts with the same granule ID as the .nc file.")
+    parser.add_argument("--h5-only", action="store_true", default=False,
+                        help="Plot only the ATL03 .h5 photons (all as noise); ignore the "
+                             ".nc classifications entirely. Automatically enabled when the "
+                             "input file is an .h5.")
     args = parser.parse_args()
 
-    nc_path = os.path.abspath(args.nc_file)
-    if not os.path.exists(nc_path):
-        sys.exit(f"File not found: {nc_path}")
-
-    outdir = args.outdir or os.path.dirname(nc_path)
-    os.makedirs(outdir, exist_ok=True)
+    input_path = os.path.abspath(args.input_file)
+    if not os.path.exists(input_path):
+        sys.exit(f"File not found: {input_path}")
 
     zlim = None
     if args.zmin is not None or args.zmax is not None:
@@ -254,23 +257,66 @@ def main():
     else:
         classes = {int(c) for c in args.classes.split("/")}
 
+    # ------------------------------------------------------------------ h5-only
+    h5_only = args.h5_only or input_path.lower().endswith(".h5")
+
+    if h5_only:
+        # Resolve the h5 file to use
+        if input_path.lower().endswith(".h5"):
+            h5_path = input_path
+        elif args.h5 is True:
+            h5_path = _find_h5(input_path)
+            if h5_path is None:
+                sys.exit("--h5-only: no matching .h5 found in cache.")
+        elif args.h5:
+            h5_path = os.path.abspath(args.h5)
+            if not os.path.exists(h5_path):
+                sys.exit(f".h5 file not found: {h5_path}")
+        else:
+            h5_path = _find_h5(input_path)
+            if h5_path is None:
+                sys.exit("--h5-only: no matching .h5 found in cache.")
+
+        outdir = args.outdir or os.path.dirname(h5_path)
+        os.makedirs(outdir, exist_ok=True)
+        h5_stem = os.path.splitext(os.path.basename(h5_path))[0]
+
+        print(f"H5-only: {os.path.basename(h5_path)}", flush=True)
+        beam_dts = _beam_delta_times(h5_path)
+        beams_to_plot = [args.beam] if args.beam else list(beam_dts.keys())
+
+        for beam in beams_to_plot:
+            if beam not in beam_dts:
+                print(f"  Beam {beam} not in .h5, skipping.")
+                continue
+            df_plot = _load_h5_beam_photons(h5_path, beam)
+            if df_plot.empty:
+                print(f"  Beam {beam}: no photons, skipping.")
+                continue
+            print(f"  Beam {beam}: {len(df_plot):,} photons", flush=True)
+            outpath = os.path.join(outdir, f"{h5_stem}_{beam}.png")
+            plot_beam(df_plot, beam, outpath, zlim=zlim, dlim=dlim, classes=classes)
+        return
+
+    # ------------------------------------------------------------------ nc + optional h5
+    nc_path = input_path
+    outdir = args.outdir or os.path.dirname(nc_path)
+    os.makedirs(outdir, exist_ok=True)
+
     print(f"Loading {os.path.basename(nc_path)} ...", flush=True)
     df = load_nc(nc_path)
     nc_stem = os.path.splitext(os.path.basename(nc_path))[0]
 
     # Resolve .h5 path for beam splitting and noise background
     if args.h5 is True:
-        # --h5 given without a path: search the IVERT cache by granule ID
         h5_path = _find_h5(nc_path)
         if h5_path is None:
             print("Warning: --h5 given but no matching .h5 found in cache.", flush=True)
     elif args.h5:
-        # --h5 given with an explicit path
         h5_path = os.path.abspath(args.h5)
         if not os.path.exists(h5_path):
             sys.exit(f".h5 file not found: {h5_path}")
     else:
-        # --h5 not given: still try auto-find for beam splitting
         h5_path = _find_h5(nc_path)
 
     if h5_path:
