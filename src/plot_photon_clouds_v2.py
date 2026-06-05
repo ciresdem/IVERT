@@ -38,14 +38,16 @@ import netCDF4
 CLASS_STYLE = {
      0: dict(color="grey",    label="Noise",          zorder=0.5, alpha=0.5, s=1),
      1: dict(color="saddlebrown",  label="Ground",         zorder=2, alpha=1.0, s=3),
-     2: dict(color="mediumseagreen", label="Canopy",       zorder=1, alpha=0.5, s=1),
-     3: dict(color="darkgreen",    label="Canopy Top",     zorder=1, alpha=0.5, s=1),
+     2: dict(color="limegreen",    label="Canopy",         zorder=1, alpha=0.8, s=2),
+     3: dict(color="forestgreen",  label="Canopy Top",     zorder=2, alpha=0.9, s=2),
      7: dict(color="red",          label="Built Structure", zorder=2, alpha=0.8, s=2),
     40: dict(color="darkorange",   label="Bathy Floor",    zorder=3, alpha=1.0, s=3),
     41: dict(color="dodgerblue",   label="Water Surface",  zorder=1, alpha=0.6, s=1),
     42: dict(color="dodgerblue",   label="Inland Water",   zorder=1, alpha=0.6, s=1),
 }
 DEFAULT_STYLE = dict(color="lightgrey", label="Other", zorder=0, alpha=0.3, s=1)
+
+DEM_COLORS = ["dimgrey", "purple", "darkcyan", "darkmagenta", "darkgoldenrod"]
 
 
 
@@ -155,7 +157,170 @@ def load_nc(nc_path):
     return pd.DataFrame(data)
 
 
-def plot_beam(df_beam, beam_name, outpath, zlim=None, dlim=None, classes=None, title_extra=""):
+def _get_vdatum_label(epsg_int):
+    """Return a short human-readable label for a vertical datum EPSG code."""
+    _KNOWN = {3855: "EGM2008", 5703: "NAVD88", 5714: "MSL", 5773: "EGM96",
+              6360: "NAVD88", 5701: "ODN"}
+    try:
+        import vdatum_lookup
+        desc = vdatum_lookup.get_epsg_description(epsg_int)
+        if desc:
+            return desc.replace(" height", "").replace(" Height", "")
+    except Exception:
+        pass
+    return _KNOWN.get(epsg_int, f"EPSG:{epsg_int}")
+
+
+def _apply_vdatum_to_df(df, target_vert_epsg_int, cache_dir=None):
+    """Return a copy of df with z transformed from EGM2008 to target vertical datum."""
+    import transform_points as tp
+    src = "EPSG:4326+3855"
+    dst = f"EPSG:4326+{target_vert_epsg_int}"
+    try:
+        _, _, z_new = tp.transform_points(
+            df["x"].values, df["y"].values, df["z"].values,
+            src_epsg=src, dst_epsg=dst, cache_dir=cache_dir)
+        df = df.copy()
+        df["z"] = z_new
+    except Exception as e:
+        print(f"  Warning: vdatum transform failed ({e}). Plotting in EGM2008.", flush=True)
+    return df
+
+
+def _sample_dem_along_track(dem_path, lons, lats, along_track_m,
+                             target_vert_epsg_int=None, cache_dir=None):
+    """Sample a DEM raster along a laser track at the DEM's native pixel resolution.
+
+    Rather than sampling only at photon locations (which leaves flat gaps between
+    clusters), this interpolates the track to an evenly-spaced grid at approximately
+    the DEM's pixel size, producing a continuous profile.  Individual DEM grid cells
+    may be sampled more than once where the track runs at a shallow angle.
+
+    Returns (along_track_km, z_dem, label) or None if the DEM has no overlap.
+    When target_vert_epsg_int is given and differs from the DEM's native vertical datum,
+    the sampled elevations are transformed to that datum.
+    """
+    import rasterio
+    import pyproj
+
+    lons = np.asarray(lons, dtype=float)
+    lats = np.asarray(lats, dtype=float)
+    along_track_m = np.asarray(along_track_m, dtype=float)
+
+    # Sort by along-track distance so np.interp works correctly.
+    order = np.argsort(along_track_m)
+    lons, lats, along_track_m = lons[order], lats[order], along_track_m[order]
+
+    try:
+        with rasterio.open(dem_path) as src:
+            dem_nodata = src.nodata
+            dem_rc_crs = src.crs
+
+            # Estimate the DEM pixel size in metres along-track.
+            res_crs_x, res_crs_y = src.res  # native CRS units
+            if dem_rc_crs is not None:
+                dem_py_crs = pyproj.CRS.from_user_input(dem_rc_crs.to_wkt())
+                if dem_py_crs.is_geographic:
+                    clat = float(np.mean(lats))
+                    res_m = min(res_crs_x * 111320.0 * np.cos(np.radians(clat)),
+                                res_crs_y * 111320.0)
+                else:
+                    res_m = min(res_crs_x, res_crs_y)
+            else:
+                res_m = min(res_crs_x, res_crs_y)
+            res_m = max(res_m, 1.0)  # guard against zero or sub-metre values
+
+            # Build a dense along-track grid at DEM resolution spacing.
+            atm_min, atm_max = along_track_m[0], along_track_m[-1]
+            n_pts = max(2, int(np.ceil((atm_max - atm_min) / res_m)) + 1)
+            dense_atm = np.linspace(atm_min, atm_max, n_pts)
+
+            # Interpolate lon/lat onto the dense grid.
+            dense_lons = np.interp(dense_atm, along_track_m, lons)
+            dense_lats = np.interp(dense_atm, along_track_m, lats)
+
+            # Reproject to DEM CRS and sample.
+            if dem_rc_crs is not None:
+                xformer = pyproj.Transformer.from_crs(
+                    pyproj.CRS.from_epsg(4326), dem_py_crs, always_xy=True)
+                px, py = xformer.transform(dense_lons, dense_lats)
+            else:
+                px, py = dense_lons.copy(), dense_lats.copy()
+
+            samples = list(src.sample(zip(px.tolist(), py.tolist())))
+    except Exception as e:
+        print(f"  Warning: could not sample DEM {os.path.basename(dem_path)}: {e}", flush=True)
+        return None
+
+    z_dem = np.array([s[0] if len(s) else np.nan for s in samples], dtype=float)
+
+    if dem_nodata is not None:
+        z_dem[np.isclose(z_dem, dem_nodata, rtol=0, atol=1e-3)] = np.nan
+    valid = np.isfinite(z_dem)
+    if not np.any(valid):
+        print(f"  DEM {os.path.basename(dem_path)}: no overlap with laser track.", flush=True)
+        return None
+
+    if target_vert_epsg_int is not None:
+        try:
+            import utils.dem_geom as dem_geom
+            import transform_points as tp
+            _, dem_vert = dem_geom.get_dem_reference_frame_from_file(dem_path)
+        except Exception:
+            dem_vert = None
+
+        if dem_vert is not None:
+            dem_vert_epsg = dem_vert.to_epsg()
+            if dem_vert_epsg is not None and dem_vert_epsg != target_vert_epsg_int:
+                try:
+                    _, _, z_tx = tp.transform_points(
+                        dense_lons[valid], dense_lats[valid], z_dem[valid],
+                        src_epsg=f"EPSG:4326+{dem_vert_epsg}",
+                        dst_epsg=f"EPSG:4326+{target_vert_epsg_int}",
+                        cache_dir=cache_dir,
+                    )
+                    z_out = np.full(len(z_dem), np.nan)
+                    z_out[valid] = z_tx
+                    z_dem = z_out
+                    valid = np.isfinite(z_dem)
+                except Exception as e:
+                    print(f"  Warning: DEM vertical transform failed: {e}", flush=True)
+
+    sort_idx = np.argsort(dense_atm[valid])
+    valid_idx = np.where(valid)[0][sort_idx]
+    label = os.path.splitext(os.path.basename(dem_path))[0]
+    return dense_atm[valid_idx] / 1000.0, z_dem[valid_idx], label
+
+
+def _collect_dem_profiles(dem_paths, lons, lats, along_track_m,
+                           target_vert_epsg_int, cache_dir):
+    """Sample each DEM and return a list of (along_km, z, label) profiles."""
+    profiles = []
+    for p in (dem_paths or []):
+        result = _sample_dem_along_track(p, lons, lats, along_track_m,
+                                         target_vert_epsg_int, cache_dir)
+        if result is not None:
+            print(f"  DEM {os.path.basename(p)}: {len(result[0]):,} sampled points", flush=True)
+            profiles.append(result)
+    return profiles
+
+
+def _positions_for_dem_sampling(df, dlim):
+    """Return (lons, lats, along_m) restricted to the dlim window (km).
+
+    When dlim is None or both bounds are None, the full arrays are returned.
+    This ensures DEM sampling only covers the segment that will actually be plotted,
+    so DEMs outside the window are skipped and don't appear in the legend.
+    """
+    atk_km = df["along_track_m"].values / 1000.0
+    lo = dlim[0] if (dlim is not None and dlim[0] is not None) else -np.inf
+    hi = dlim[1] if (dlim is not None and dlim[1] is not None) else np.inf
+    mask = (atk_km >= lo) & (atk_km <= hi)
+    return df["x"].values[mask], df["y"].values[mask], df["along_track_m"].values[mask]
+
+
+def plot_beam(df_beam, beam_name, outpath, zlim=None, dlim=None, classes=None, title_extra="",
+              dem_profiles=None, ylabel=None):
     """Plot one beam's photon curtain (along-track km vs elevation).
 
     classes: None  → plot all class codes present
@@ -187,8 +352,14 @@ def plot_beam(df_beam, beam_name, outpath, zlim=None, dlim=None, classes=None, t
                    zorder=style["zorder"], alpha=style["alpha"], s=style["s"],
                    linewidths=0)
 
+    if dem_profiles:
+        for i, (dem_atk, dem_z, dem_lbl) in enumerate(dem_profiles):
+            color = DEM_COLORS[i % len(DEM_COLORS)]
+            ax.plot(dem_atk, dem_z, color=color, linewidth=0.8, label=dem_lbl,
+                    zorder=0.75, alpha=0.75)
+
     ax.set_xlabel("Along-track distance (km)")
-    ax.set_ylabel("Elevation / depth (m, geoid)")
+    ax.set_ylabel(ylabel or "Elevation / depth (m, EGM2008 geoid)")
     title = f"{os.path.basename(outpath).replace('.png', '')}  —  {beam_name}"
     if title_extra:
         title += f"  {title_extra}"
@@ -210,8 +381,8 @@ def main():
     parser.add_argument("input_file",
                         help="Path to the .nc granule file, or an ATL03 .h5 file "
                              "(automatically enables --h5-only).")
-    parser.add_argument("--beam", "-b", default=None,
-                        help="Beam to plot (e.g. gt2l). Default: plot all beams.")
+    parser.add_argument("--laser", "-b", default=None,
+                        help="Laser/beam to plot (e.g. gt2l). Default: plot all beams.")
     parser.add_argument("--outdir", "-o", default=None,
                         help="Output directory for images (default: same dir as input file).")
     parser.add_argument("--zmin", type=float, default=None,
@@ -219,9 +390,9 @@ def main():
                              "always filtered regardless.")
     parser.add_argument("--zmax", type=float, default=None,
                         help="Maximum elevation to display (m).")
-    parser.add_argument("--dmin", type=float, default=None,
+    parser.add_argument("--xmin", type=float, default=None,
                         help="Minimum along-track distance to display (km).")
-    parser.add_argument("--dmax", type=float, default=None,
+    parser.add_argument("--xmax", type=float, default=None,
                         help="Maximum along-track distance to display (km).")
     parser.add_argument("--classes", default=None,
                         help="Slash-separated class codes to highlight (e.g. '1/40/41'). "
@@ -236,7 +407,40 @@ def main():
                         help="Plot only the ATL03 .h5 photons (all as noise); ignore the "
                              ".nc classifications entirely. Automatically enabled when the "
                              "input file is an .h5.")
+    parser.add_argument("--dem", nargs="+", default=None, metavar="DEM",
+                        help="One or more DEM raster files to profile along the laser track. "
+                             "Each overlapping DEM is plotted as a line at its sampled elevations.")
+    parser.add_argument("--vdatum", "-V", default=None,
+                        help="Target vertical datum for photons and DEMs (e.g. 'navd88', "
+                             "'egm2008', 'EPSG:5703'). Transforms ICESat-2 photons from "
+                             "EGM2008 and DEM elevations to the given datum so both are "
+                             "on the same vertical reference. Default: EGM2008 (no transform).")
     args = parser.parse_args()
+
+    # Resolve vertical datum --------------------------------------------------
+    target_vert_epsg_int = None
+    ylabel = "Elevation / depth (m, EGM2008 geoid)"
+    if args.vdatum:
+        try:
+            import vdatum_lookup
+            vdatum_str = vdatum_lookup.resolve_vdatum(args.vdatum)
+        except ImportError:
+            vdatum_str = args.vdatum if ":" in args.vdatum else f"EPSG:{args.vdatum}"
+        if vdatum_str is None:
+            sys.exit(f"Unknown vertical datum: {args.vdatum!r}. "
+                     "Use an EPSG code or common name (e.g. 'navd88', 'egm2008').")
+        try:
+            target_vert_epsg_int = int(str(vdatum_str).split(":")[-1])
+        except ValueError:
+            sys.exit(f"Could not parse vertical EPSG from {vdatum_str!r}.")
+        ylabel = f"Elevation / depth (m, {_get_vdatum_label(target_vert_epsg_int)})"
+
+    # Datum-shift grid cache (use ivert cache if available, else cwd)
+    try:
+        import utils.configfile
+        cache_dir = utils.configfile.Config().cache_directory
+    except Exception:
+        cache_dir = None
 
     input_path = os.path.abspath(args.input_file)
     if not os.path.exists(input_path):
@@ -247,8 +451,8 @@ def main():
         zlim = (args.zmin, args.zmax)
 
     dlim = None
-    if args.dmin is not None or args.dmax is not None:
-        dlim = (args.dmin, args.dmax)
+    if args.xmin is not None or args.xmax is not None:
+        dlim = (args.xmin, args.xmax)
 
     if args.classes is None:
         classes = None
@@ -283,7 +487,7 @@ def main():
 
         print(f"H5-only: {os.path.basename(h5_path)}", flush=True)
         beam_dts = _beam_delta_times(h5_path)
-        beams_to_plot = [args.beam] if args.beam else list(beam_dts.keys())
+        beams_to_plot = [args.laser] if args.laser else list(beam_dts.keys())
 
         for beam in beams_to_plot:
             if beam not in beam_dts:
@@ -294,8 +498,14 @@ def main():
                 print(f"  Beam {beam}: no photons, skipping.")
                 continue
             print(f"  Beam {beam}: {len(df_plot):,} photons", flush=True)
+            if target_vert_epsg_int:
+                df_plot = _apply_vdatum_to_df(df_plot, target_vert_epsg_int, cache_dir)
+            _dlons, _dlats, _datm = _positions_for_dem_sampling(df_plot, dlim)
+            dem_profiles = _collect_dem_profiles(
+                args.dem, _dlons, _dlats, _datm, target_vert_epsg_int, cache_dir)
             outpath = os.path.join(outdir, f"{h5_stem}_{beam}.png")
-            plot_beam(df_plot, beam, outpath, zlim=zlim, dlim=dlim, classes=classes)
+            plot_beam(df_plot, beam, outpath, zlim=zlim, dlim=dlim, classes=classes,
+                      dem_profiles=dem_profiles or None, ylabel=ylabel)
         return
 
     # ------------------------------------------------------------------ nc + optional h5
@@ -322,7 +532,7 @@ def main():
     if h5_path:
         print(f"Found .h5: {os.path.basename(h5_path)}", flush=True)
         beam_dts = _beam_delta_times(h5_path)
-        beams_to_plot = [args.beam] if args.beam else list(beam_dts.keys())
+        beams_to_plot = [args.laser] if args.laser else list(beam_dts.keys())
 
         for beam in beams_to_plot:
             if beam not in beam_dts:
@@ -358,13 +568,19 @@ def main():
 
             print(f"  Beam {beam}: {len(df_beam):,} classified + {len(df_bg):,} background photons", flush=True)
             df_plot = pd.concat([df_bg, df_beam], ignore_index=True)
+            if target_vert_epsg_int:
+                df_plot = _apply_vdatum_to_df(df_plot, target_vert_epsg_int, cache_dir)
+            _dlons, _dlats, _datm = _positions_for_dem_sampling(df_plot, dlim)
+            dem_profiles = _collect_dem_profiles(
+                args.dem, _dlons, _dlats, _datm, target_vert_epsg_int, cache_dir)
             outpath = os.path.join(outdir, f"{nc_stem}_{beam}.png")
-            plot_beam(df_plot, beam, outpath, zlim=zlim, dlim=dlim, classes=classes)
+            plot_beam(df_plot, beam, outpath, zlim=zlim, dlim=dlim, classes=classes,
+                      dem_profiles=dem_profiles or None, ylabel=ylabel)
     else:
         # No .h5 — use laser/along_track_m from the nc file directly if present.
         if "laser" in df.columns:
             beams_in_nc = sorted(df["laser"].unique())
-            beams_to_plot_noh5 = [args.beam] if args.beam else beams_in_nc
+            beams_to_plot_noh5 = [args.laser] if args.laser else beams_in_nc
             for beam in beams_to_plot_noh5:
                 df_beam = df[df["laser"] == beam].copy()
                 if df_beam.empty:
@@ -373,8 +589,14 @@ def main():
                     print(f"  Beam {beam}: nc has no along_track_m, skipping.", flush=True)
                     continue
                 print(f"  Beam {beam}: {len(df_beam):,} photons (nc only)", flush=True)
+                if target_vert_epsg_int:
+                    df_beam = _apply_vdatum_to_df(df_beam, target_vert_epsg_int, cache_dir)
+                _dlons, _dlats, _datm = _positions_for_dem_sampling(df_beam, dlim)
+                dem_profiles = _collect_dem_profiles(
+                    args.dem, _dlons, _dlats, _datm, target_vert_epsg_int, cache_dir)
                 outpath = os.path.join(outdir, f"{nc_stem}_{beam}.png")
-                plot_beam(df_beam, beam, outpath, zlim=zlim, dlim=dlim, classes=classes)
+                plot_beam(df_beam, beam, outpath, zlim=zlim, dlim=dlim, classes=classes,
+                          dem_profiles=dem_profiles or None, ylabel=ylabel)
         else:
             print("No .h5 found and nc has no beam/distance info — cannot plot.", flush=True)
 
