@@ -224,6 +224,53 @@ class IS2Database:
                   f"_{int(tmin)}_{int(tmax)}")
         return base + suffix + ".nc"
 
+    @staticmethod
+    def _h5_along_track_m(h5_fn: str, beams) -> pandas.DataFrame:
+        """Return per-photon cumulative along-track distance (m) for the given beams.
+
+        Cumulative distance = sum of segment_length values up to each photon's segment
+        (from geolocation/segment_length) plus the photon's offset within that segment
+        (from heights/dist_ph_along).
+
+        Returns a DataFrame with columns [laser, delta_time, x, y, along_track_m].
+        """
+        import h5py
+
+        dfs = []
+        with h5py.File(h5_fn, "r") as f:
+            for beam in beams:
+                try:
+                    delta_time    = f[f"{beam}/heights/delta_time"][...]
+                    lon           = f[f"{beam}/heights/lon_ph"][...]
+                    lat           = f[f"{beam}/heights/lat_ph"][...]
+                    dist_ph_along = f[f"{beam}/heights/dist_ph_along"][...]
+                    ph_index_beg  = f[f"{beam}/geolocation/ph_index_beg"][...]
+                    seg_length    = f[f"{beam}/geolocation/segment_length"][...]
+                except KeyError:
+                    continue
+
+                # Cumulative distance at the start of each segment
+                seg_cumul_start = numpy.concatenate([[0.0], numpy.cumsum(seg_length[:-1])])
+
+                # Map each photon to its segment via ph_index_beg
+                n = len(delta_time)
+                seg_of_ph = numpy.clip(
+                    numpy.searchsorted(ph_index_beg, numpy.arange(n), side="right") - 1,
+                    0, len(ph_index_beg) - 1,
+                )
+
+                dfs.append(pandas.DataFrame({
+                    "laser":         beam,
+                    "delta_time":    delta_time,
+                    "x":             lon,
+                    "y":             lat,
+                    "along_track_m": seg_cumul_start[seg_of_ph] + dist_ph_along,
+                }))
+
+        return pandas.concat(dfs, ignore_index=True) if dfs else pandas.DataFrame(
+            columns=["laser", "delta_time", "x", "y", "along_track_m"]
+        )
+
     def _process_h5_to_nc(self,
                            h5_fn: str,
                            nc_fn: str,
@@ -284,7 +331,7 @@ class IS2Database:
 
         # Keep only the columns needed for validation; drop large/redundant ones.
         keep_cols = ["x", "y", "z", "class_code", "bathy_confidence",
-                     "delta_time", "confidence"]
+                     "delta_time", "confidence", "laser"]
         df = df[[c for c in keep_cols if c in df.columns]].copy()
 
         # Compute metadata for file attributes and the database record.
@@ -316,6 +363,14 @@ class IS2Database:
             "numphotons_bathy_surface": int(numpy.count_nonzero(cc == 41)),
             "downloaded_on":            int(datetime.datetime.now().strftime("%Y%m%d")),
         }
+
+        # Add per-photon cumulative along-track distance from h5 geolocation data.
+        # Merge on (laser, delta_time, x, y) — the four fields that uniquely identify
+        # a photon across beams, since all beams share delta_time values.
+        if "laser" in df.columns:
+            dist_df = self._h5_along_track_m(h5_fn, df["laser"].unique().tolist())
+            if not dist_df.empty:
+                df = df.merge(dist_df, on=["laser", "delta_time", "x", "y"], how="left")
 
         # Build xarray Dataset and embed metadata as global attributes.
         xr_ds = xarray.Dataset.from_dataframe(df)
