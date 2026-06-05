@@ -328,29 +328,25 @@ def main():
             if beam not in beam_dts:
                 print(f"  Beam {beam} not in .h5, skipping.")
                 continue
-            dt_set = set(beam_dts[beam].tolist())
-            df_beam = df[df["delta_time"].isin(dt_set)].copy()
+
+            # Load h5 beam first — its exact (delta_time, x, y) triplet is the only
+            # reliable way to identify which nc photons belong to this beam, because
+            # all six beams share the same delta_time values (simultaneous firing).
+            df_bg = _load_h5_beam_photons(h5_path, beam)
+            if df_bg.empty:
+                print(f"  Beam {beam}: no h5 photons, skipping.")
+                continue
+
+            df_beam = df.merge(
+                df_bg[["delta_time", "x", "y", "along_track_km"]],
+                on=["delta_time", "x", "y"], how="inner"
+            )
             if df_beam.empty:
                 print(f"  Beam {beam}: no photons in .nc, skipping.")
                 continue
 
-            # Load all raw photons from .h5 as noise background, then overlay classified.
-            # along_track_km is computed from the full h5 beam; nc photons receive their
-            # position by merging on delta_time so both share the same axis.
-            df_bg = _load_h5_beam_photons(h5_path, beam)
-            if not df_bg.empty:
-                df_beam = df_beam.merge(
-                    df_bg[["delta_time", "along_track_km"]], on="delta_time", how="left"
-                ).dropna(subset=["along_track_km"])
-                print(f"  Beam {beam}: {len(df_beam):,} classified + {len(df_bg):,} background photons", flush=True)
-                df_plot = pd.concat([df_bg, df_beam], ignore_index=True)
-            else:
-                # No h5 background — compute along-track directly from nc photons
-                df_beam = df_beam.sort_values("delta_time" if "delta_time" in df_beam.columns else "y").reset_index(drop=True)
-                df_beam["along_track_km"] = _utm_along_track_km(df_beam["x"].values, df_beam["y"].values)
-                print(f"  Beam {beam}: {len(df_beam):,} photons", flush=True)
-                df_plot = df_beam
-
+            print(f"  Beam {beam}: {len(df_beam):,} classified + {len(df_bg):,} background photons", flush=True)
+            df_plot = pd.concat([df_bg, df_beam], ignore_index=True)
             outpath = os.path.join(outdir, f"{nc_stem}_{beam}.png")
             plot_beam(df_plot, beam, outpath, zlim=zlim, dlim=dlim, classes=classes)
     else:
