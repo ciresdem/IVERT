@@ -12,7 +12,7 @@ import multiprocessing as mp
 import multiprocessing.shared_memory as shared_memory
 import numexpr
 import numpy
-from osgeo import gdal, osr
+from osgeo import gdal, ogr, osr
 import os
 import pandas
 import re
@@ -27,6 +27,7 @@ import utils.pickle_blosc
 import utils.split_dem
 import plot_validation_results
 import icesat2_database_v2
+import coastline_mask
 import utils.dem_geom as dem_geom
 import transform_points
 import utils.loggerproc
@@ -460,6 +461,8 @@ def validate_dem(dem_name: str,
                  orig_dem_name: str | None = None,
                  min_confidence_level: int = 4,
                  min_bathy_confidence: float = 0.90,
+                 filter_misclassified: bool = True,
+                 export_error_formats: str | list | None = None,
                  verbose: bool = True):
     """Validate a DEM and produce output results.
 
@@ -498,6 +501,11 @@ def validate_dem(dem_name: str,
         subdivision_number (int): The current recursion depth of this subdivision. Will not subdivide further if
             subdivision_number == max_subdivides.
         orig_dem_name (str): Name of the original DEM file. Only used for error messages.
+        filter_misclassified (bool): Discard cells whose large errors are likely caused by
+            mis-classified ICESat-2 photons, using a coastline mask. Defaults to True.
+        export_error_formats (str, list, None): GIS formats to export the per-cell errors into,
+            as a comma-separated string or list drawn from 'tif', 'gpkg', 'shp', 'xyz'. Defaults
+            to None, which uses the 'export_error_formats' config value.
         verbose (bool): Be verbose.
     """
     if shared_ret_values is None:
@@ -530,6 +538,8 @@ def validate_dem(dem_name: str,
               'numprocs': numprocs,
               'min_confidence_level': min_confidence_level,
               'min_bathy_confidence': min_bathy_confidence,
+              'filter_misclassified': filter_misclassified,
+              'export_error_formats': export_error_formats,
               'verbose': verbose
               }
 
@@ -770,16 +780,22 @@ def _check_existing_outputs(dem_name, results_dataframe_file, empty_results_file
                               summary_stats_filename, result_tif_filename, plot_filename,
                               write_summary_stats, write_result_tifs, plot_results,
                               location_name, overwrite, mark_empty_results, shared_ret_values, verbose,
-                              include_photon_level_validation=False):
+                              include_photon_level_validation=False, export_error_formats=None):
     """Handle overwrite deletion or early return when outputs already exist.
 
     Returns a files_to_export list if work is already done (caller should return it),
     or None to continue processing.
     """
+    if export_error_formats is None:
+        export_error_formats = ivert_config.export_error_formats
+
     if overwrite:
         for fn in (results_dataframe_file, summary_stats_filename,
                    result_tif_filename, plot_filename):
             if fn and os.path.exists(fn):
+                os.remove(fn)
+        for fn in _error_export_filenames(results_dataframe_file, export_error_formats):
+            if os.path.exists(fn):
                 os.remove(fn)
         return None
 
@@ -823,6 +839,22 @@ def _check_existing_outputs(dem_name, results_dataframe_file, empty_results_file
                 generate_result_geotiff(results_dataframe, dem_ds_tmp, result_tif_filename, verbose=verbose)
             files_to_export.append(result_tif_filename)
             shared_ret_values["result_tif_filename"] = result_tif_filename
+
+        if export_error_formats:
+            export_files = _error_export_filenames(results_dataframe_file, export_error_formats)
+            missing = [fn for fn in export_files if not os.path.exists(fn)]
+            if missing:
+                dem_ds_tmp = gdal.Open(dem_name, gdal.GA_ReadOnly)
+                if results_dataframe is None:
+                    if verbose:
+                        print("Reading", results_dataframe_file, '...', end="")
+                    results_dataframe = read_dataframe_file(results_dataframe_file)
+                    if verbose:
+                        print("done.")
+                export_error_results(results_dataframe, dem_ds_tmp, results_dataframe_file,
+                                     export_error_formats, verbose=verbose)
+            files_to_export.extend(export_files)
+            shared_ret_values["error_export_files"] = export_files
 
         if plot_results:
             if not os.path.exists(plot_filename):
@@ -1221,13 +1253,70 @@ def _run_parallel_cell_validation(photon_df, height_field, dem_overlap_i, dem_ov
     return results_dataframes_list
 
 
+def filter_misclassified_photons(results_dataframe: pandas.DataFrame,
+                                 mask_array: numpy.ndarray,
+                                 error_threshold_m: float,
+                                 verbose: bool = True) -> tuple[pandas.DataFrame, int]:
+    """Discard DEM cells whose errors are likely driven by mis-classified ICESat-2 photons.
+
+    Uses a DEM-aligned coastline mask (land=1, water=0) to classify each results cell as
+    onshore or offshore, then drops cells whose absolute error exceeds error_threshold_m and
+    that match a known misclassification pattern:
+
+        - Offshore with a large error (false 'bathy_floor' or false 'ground' offshore).
+        - Onshore but containing 'bathy_floor' (class 40) photons with a large error.
+
+    Legitimate onshore ground errors (large errors with no bathy photons on land) are KEPT.
+
+    Args:
+        results_dataframe: Per-cell results, MultiIndexed by (i, j). Must contain the
+            'diff_mean', 'numphotons_bathy', and 'numphotons' columns.
+        mask_array: Coastline mask aligned to the DEM grid (coastline_mask.MASK_LAND / WATER).
+        error_threshold_m: Absolute-error threshold (meters) above which a matching cell is dropped.
+        verbose: Print a diagnostic message.
+
+    Returns:
+        (filtered_dataframe, n_photons_discarded), where n_photons_discarded is the number of
+        photons in the discarded cells (reported to the user, while the unit dropped is the cell).
+    """
+    if len(results_dataframe) == 0:
+        return results_dataframe, 0
+
+    i_idx = results_dataframe.index.get_level_values("i").to_numpy()
+    j_idx = results_dataframe.index.get_level_values("j").to_numpy()
+
+    # Guard against any indices outside the mask (shouldn't happen, but stay safe).
+    in_bounds = ((i_idx >= 0) & (i_idx < mask_array.shape[0]) &
+                 (j_idx >= 0) & (j_idx < mask_array.shape[1]))
+    cell_mask_vals = numpy.full(len(results_dataframe), coastline_mask.MASK_NODATA, dtype=int)
+    cell_mask_vals[in_bounds] = mask_array[i_idx[in_bounds], j_idx[in_bounds]]
+
+    onshore = cell_mask_vals == coastline_mask.MASK_LAND
+    offshore = cell_mask_vals == coastline_mask.MASK_WATER
+    # Cells over MASK_NODATA (unknown) are neither -> never auto-discarded.
+
+    err = results_dataframe["diff_mean"].abs().to_numpy()
+    has_bathy = results_dataframe["numphotons_bathy"].to_numpy() > 0
+
+    discard = (err > error_threshold_m) & (offshore | (onshore & has_bathy))
+
+    n_photons_discarded = int(results_dataframe.loc[discard, "numphotons"].sum())
+
+    if verbose and discard.any():
+        print("{0:,} DEM cells flagged as likely-misclassified and removed.".format(
+            int(discard.sum())))
+
+    return results_dataframe[~discard].copy(), n_photons_discarded
+
+
 def _write_validation_outputs(results_dataframes_list, dem_ds, dem_name,
                                results_dataframe_file, empty_results_filename,
                                summary_stats_filename, result_tif_filename, plot_filename,
                                write_summary_stats, write_result_tifs, plot_results,
                                location_name, outliers_sd_threshold, mark_empty_results,
-                               shared_ret_values, verbose, files_to_export):
-    """Concatenate results, filter outliers, and write all output files.
+                               shared_ret_values, verbose, files_to_export,
+                               filter_misclassified=True, export_error_formats=None):
+    """Concatenate results, filter outliers and misclassified photons, and write all output files.
 
     Returns the final files_to_export list.
     """
@@ -1254,6 +1343,24 @@ def _write_validation_outputs(results_dataframes_list, dem_ds, dem_name,
             (diff_mean >= low_cutoff) & (diff_mean <= hi_cutoff)].copy()
         if verbose:
             print("{0:,} DEM cells after removing outliers.".format(len(results_dataframe)))
+
+    # Discard cells whose large errors are likely driven by mis-classified ICESat-2 photons
+    # (e.g. false offshore 'bathy_floor'/'ground', or onshore 'bathy_floor'), using a
+    # coastline mask to classify each cell as onshore or offshore.
+    if filter_misclassified and len(results_dataframe) > 0:
+        # Write the mask alongside the other results (in output_dir), not next to the source DEM.
+        mask_output_fname = os.path.join(
+            os.path.dirname(results_dataframe_file),
+            os.path.splitext(os.path.basename(dem_name))[0] + "_coastline_mask.tif")
+        mask_fname = coastline_mask.get_or_create_coastline_mask(
+            dem_name, output_fname=mask_output_fname, verbose=verbose)
+        if mask_fname is not None:
+            mask_array = coastline_mask.load_coastline_mask_array(mask_fname)
+            results_dataframe, n_photons_discarded = filter_misclassified_photons(
+                results_dataframe, mask_array,
+                ivert_config.icesat2_misclassification_error_threshold_m, verbose=verbose)
+        elif verbose:
+            print("Coastline mask unavailable; skipping misclassification filter.")
 
     if len(results_dataframe) == 0:
         if verbose:
@@ -1289,6 +1396,16 @@ def _write_validation_outputs(results_dataframes_list, dem_ds, dem_name,
         generate_result_geotiff(results_dataframe, dem_ds, result_tif_filename, verbose=verbose)
         files_to_export.append(result_tif_filename)
         shared_ret_values["result_tif_filename"] = result_tif_filename
+
+    if export_error_formats is None:
+        export_error_formats = ivert_config.export_error_formats
+    if export_error_formats:
+        if dem_ds is None:
+            dem_ds = gdal.Open(dem_name, gdal.GA_ReadOnly)
+        exported = export_error_results(results_dataframe, dem_ds, results_dataframe_file,
+                                        export_error_formats, verbose=verbose)
+        files_to_export.extend(exported)
+        shared_ret_values["error_export_files"] = exported
 
     if plot_results:
         if location_name is None:
@@ -1330,6 +1447,8 @@ def validate_dem_parallel(dem_name: str,
                           numprocs: int = parallel_funcs.physical_cpu_count(),
                           min_confidence_level: int = 4,
                           min_bathy_confidence: float = 0.90,
+                          filter_misclassified: bool = True,
+                          export_error_formats: str | list | None = None,
                           verbose: bool = True):
     """Validate a single DEM.
 
@@ -1349,7 +1468,8 @@ def validate_dem_parallel(dem_name: str,
                                      summary_stats_filename, result_tif_filename, plot_filename,
                                      write_summary_stats, write_result_tifs, plot_results,
                                      location_name, overwrite, mark_empty_results, shared_ret_values, verbose,
-                                     include_photon_level_validation=include_photon_level_validation)
+                                     include_photon_level_validation=include_photon_level_validation,
+                                     export_error_formats=export_error_formats)
     if early is not None:
         return early
 
@@ -1402,7 +1522,8 @@ def validate_dem_parallel(dem_name: str,
         results_list, dem_ds, dem_name, results_dataframe_file, empty_results_filename,
         summary_stats_filename, result_tif_filename, plot_filename,
         write_summary_stats, write_result_tifs, plot_results, location_name,
-        outliers_sd_threshold, mark_empty_results, shared_ret_values, verbose, files_to_export)
+        outliers_sd_threshold, mark_empty_results, shared_ret_values, verbose, files_to_export,
+        filter_misclassified=filter_misclassified, export_error_formats=export_error_formats)
 
 
 def write_summary_stats_file(results_df: pandas.DataFrame,
@@ -1503,6 +1624,164 @@ def generate_result_geotiff(results_dataframe, dem_ds, result_tif_filename, verb
     return
 
 
+# Error-export formats supported by export_error_results(), selectable via the
+# 'export_error_formats' config value: GeoTIFF raster, GeoPackage, ESRI Shapefile,
+# and whitespace-delimited text (x y error).
+ERROR_EXPORT_FORMATS = ("tif", "gpkg", "shp", "xyz")
+
+# Curated columns written as attributes in the vector (gpkg/shp) error exports.
+# Field names are kept <= 10 characters so they survive the ESRI Shapefile limit.
+# (display_name, dataframe_column) pairs; columns absent from the dataframe are skipped.
+_ERROR_EXPORT_FIELDS = (
+    ("error", "diff_mean"),     # DEM - ICESat-2, mean per cell (the primary error value)
+    ("error_med", "diff_median"),
+    ("dem_z", "dem_elev"),
+    ("is2_mean", "mean"),
+    ("is2_med", "median"),
+    ("stddev", "stddev"),
+    ("n_photons", "numphotons"),
+    ("n_bathy", "numphotons_bathy"),
+)
+
+
+def _results_cell_centers(results_dataframe, dem_ds):
+    """Return (x, y) arrays of DEM-cell-center coordinates for each result row.
+
+    Coordinates are in the DEM's own CRS, derived from the (i, j) multi-index and the
+    DEM geotransform. The 0.5 offsets place each point at the center of its pixel.
+    """
+    gt = dem_ds.GetGeoTransform()
+    indices = results_dataframe.index.to_numpy()
+    ivals = numpy.array([idx[0] for idx in indices], dtype=float)
+    jvals = numpy.array([idx[1] for idx in indices], dtype=float)
+    x = gt[0] + (jvals + 0.5) * gt[1] + (ivals + 0.5) * gt[2]
+    y = gt[3] + (jvals + 0.5) * gt[4] + (ivals + 0.5) * gt[5]
+    return x, y
+
+
+def _export_errors_vector(results_dataframe, dem_ds, out_fname, fmt, verbose=True):
+    """Write one point per validated cell (at the cell center) to a GeoPackage or Shapefile."""
+    driver_name = {"gpkg": "GPKG", "shp": "ESRI Shapefile"}[fmt]
+    driver = ogr.GetDriverByName(driver_name)
+    if driver is None:
+        raise RuntimeError(f"OGR driver '{driver_name}' is not available in this GDAL build.")
+
+    if os.path.exists(out_fname):
+        driver.DeleteDataSource(out_fname)
+
+    srs = osr.SpatialReference()
+    srs.ImportFromWkt(dem_ds.GetProjection())
+
+    data_source = driver.CreateDataSource(out_fname)
+    layer_name = os.path.splitext(os.path.basename(out_fname))[0]
+    layer = data_source.CreateLayer(layer_name, srs, ogr.wkbPoint)
+
+    fields = [(name, col) for (name, col) in _ERROR_EXPORT_FIELDS
+              if col in results_dataframe.columns]
+    for name, col in fields:
+        ftype = ogr.OFTInteger if col.startswith("numphotons") else ogr.OFTReal
+        layer.CreateField(ogr.FieldDefn(name, ftype))
+
+    x_centers, y_centers = _results_cell_centers(results_dataframe, dem_ds)
+    col_arrays = {col: results_dataframe[col].to_numpy() for _, col in fields}
+    layer_defn = layer.GetLayerDefn()
+
+    layer.StartTransaction()
+    for n in range(len(results_dataframe)):
+        feat = ogr.Feature(layer_defn)
+        for name, col in fields:
+            val = col_arrays[col][n]
+            if col.startswith("numphotons"):
+                feat.SetField(name, int(val))
+            else:
+                feat.SetField(name, float(val))
+        point = ogr.Geometry(ogr.wkbPoint)
+        point.AddPoint_2D(float(x_centers[n]), float(y_centers[n]))
+        feat.SetGeometry(point)
+        layer.CreateFeature(feat)
+        feat = None
+    layer.CommitTransaction()
+    data_source = None
+
+    if verbose:
+        print(out_fname, "written.")
+
+
+def _export_errors_xyz(results_dataframe, dem_ds, out_fname, verbose=True):
+    """Write a whitespace-delimited 'x y error' text file, one cell-center point per line."""
+    x_centers, y_centers = _results_cell_centers(results_dataframe, dem_ds)
+    errors = results_dataframe["diff_mean"].to_numpy()
+    numpy.savetxt(out_fname,
+                  numpy.column_stack([x_centers, y_centers, errors]),
+                  fmt="%.8g")
+    if verbose:
+        print(out_fname, "written.")
+
+
+def _normalize_export_formats(formats):
+    """Normalize a comma-separated string or iterable of format names into a de-duplicated
+    list of lower-case, recognized format names (others are dropped)."""
+    if isinstance(formats, str):
+        formats = formats.split(",")
+    elif formats is None:
+        formats = []
+    seen = []
+    for f in formats:
+        f = f.strip().lower().lstrip(".") if f else ""
+        if f and f in ERROR_EXPORT_FORMATS and f not in seen:
+            seen.append(f)
+    return seen
+
+
+def _error_export_filenames(results_dataframe_file, formats):
+    """Return the '<dem>_errors.<ext>' output paths a given format request would produce."""
+    base, _ = os.path.splitext(results_dataframe_file)
+    if base.endswith("_results"):
+        base = base[:-len("_results")]
+    base = base + "_errors"
+    return [base + "." + fmt for fmt in _normalize_export_formats(formats)]
+
+
+def export_error_results(results_dataframe, dem_ds, results_dataframe_file,
+                         formats, verbose=True):
+    """Export the per-cell ICESat-2 errors from a results dataframe into GIS formats.
+
+    For each requested format a single file is written next to the results dataframe,
+    named '<dem>_errors.<ext>'. Supported formats (see ERROR_EXPORT_FORMATS):
+        'tif'  - GeoTIFF raster of the mean error (DEM - ICESat-2) per cell.
+        'gpkg' - GeoPackage of cell-center points with error attributes.
+        'shp'  - ESRI Shapefile of cell-center points with error attributes.
+        'xyz'  - Whitespace-delimited 'x y error' text file.
+
+    Args:
+        results_dataframe: validation results, (i, j)-multi-indexed, with a 'diff_mean' column.
+        dem_ds: an open gdal.Dataset for the source DEM (supplies CRS and geotransform).
+        results_dataframe_file: path to the '<dem>_results.h5' file (used to derive output names).
+        formats: comma-separated string (e.g. 'tif,gpkg') or iterable of format names.
+        verbose: print a line per file written.
+
+    Returns:
+        list of file paths written.
+    """
+    exported = []
+    if results_dataframe is None or len(results_dataframe) == 0:
+        return exported
+
+    formats = _normalize_export_formats(formats)
+    filenames = _error_export_filenames(results_dataframe_file, formats)
+
+    for fmt, out_fname in zip(formats, filenames):
+        if fmt == "tif":
+            generate_result_geotiff(results_dataframe, dem_ds, out_fname, verbose=verbose)
+        elif fmt in ("gpkg", "shp"):
+            _export_errors_vector(results_dataframe, dem_ds, out_fname, fmt, verbose=verbose)
+        elif fmt == "xyz":
+            _export_errors_xyz(results_dataframe, dem_ds, out_fname, verbose=verbose)
+        exported.append(out_fname)
+
+    return exported
+
+
 def read_and_parse_args():
     # Collect and process command-line arguments.
     parser = argparse.ArgumentParser(description='Use ICESat-2 photon data to validate a DEM and generate statistics.')
@@ -1535,6 +1814,8 @@ def read_and_parse_args():
                         help="Make summary plots of the validation statistics.")
     parser.add_argument('--overwrite', action='store_true', default=False,
                         help='Overwrite all interim and output files, even if they already exist. Default: Use interim files to compute results, saving time.')
+    parser.add_argument('--no_misclassification_filter', action='store_true', default=False,
+                        help='Disable the coastline-based filtering of likely mis-classified ICESat-2 photons. Default: filtering is on.')
     parser.add_argument('--quiet', action='store_true', default=False,
                         help='Suppress output messaging, including error messages (just fail quietly without errors, return status 1).')
 
@@ -1575,4 +1856,5 @@ if __name__ == "__main__":
                  measure_coverage=args.measure_coverage,
                  numprocs=args.numprocs,
                  band_num=args.band_num,
+                 filter_misclassified=not args.no_misclassification_filter,
                  verbose=not args.quiet)

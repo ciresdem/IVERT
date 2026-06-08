@@ -109,6 +109,7 @@ def validate_list_of_dems(dem_list_or_dir: str | list[str],
                           outliers_sd_threshold: float = 2.5,
                           min_confidence_level: int = 1,
                           min_bathy_confidence: float = 0.75,
+                          export_error_formats: str | list | None = None,
                           verbose: bool = True):
     """Take a list of DEMs, presumably in a single area, and output validation files for those DEMs.
 
@@ -297,6 +298,7 @@ def validate_list_of_dems(dem_list_or_dir: str | list[str],
                                       measure_coverage=measure_coverage,
                                       min_confidence_level=min_confidence_level,
                                       min_bathy_confidence=min_bathy_confidence,
+                                      export_error_formats=export_error_formats,
                                       verbose=verbose)
         except MemoryError:
             if verbose:

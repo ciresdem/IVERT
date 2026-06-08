@@ -746,7 +746,8 @@ def cache_delete(force):
 
 def _run_validate(files_or_directory, vdatum, region_name, include_photons,
                   measure_coverage, band_num, outlier_sd_threshold, buildings,
-                  confidence_level, bathy_confidence, outdir=None, ndv=None):
+                  confidence_level, bathy_confidence, outdir=None, ndv=None,
+                  export_formats=None):
     """Branch to validate_dem or validate_list_of_dems based on the number of input files."""
     verbose = logging.getLogger().level <= logging.INFO
     try:
@@ -782,6 +783,15 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
                 raise click.ClickException(
                     f"Invalid --ndv value '{ndv}'. Provide a number or 'nan'."
                 )
+
+    # Resolve the export-formats override. None means "use the config default"; an
+    # explicit 'none'/empty value means "skip error exports for this run".
+    export_error_formats = None
+    if export_formats is not None:
+        if str(export_formats).strip().lower() in ("none", ""):
+            export_error_formats = []
+        else:
+            export_error_formats = export_formats
 
     if outdir is None:
         try:
@@ -829,6 +839,8 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
             kwargs["dem_vertical_datum"] = vdatum
         if ndv_float is not None:
             kwargs["dem_ndv"] = ndv_float
+        if export_error_formats is not None:
+            kwargs["export_error_formats"] = export_error_formats
         vd_module.validate_dem(**kwargs)
     else:
         dem_input = expanded[0] if len(expanded) == 1 else expanded
@@ -859,6 +871,8 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
             kwargs["input_vdatum"] = vdatum
         if ndv_float is not None:
             kwargs["dem_ndv"] = ndv_float
+        if export_error_formats is not None:
+            kwargs["export_error_formats"] = export_error_formats
         vdc_module.validate_list_of_dems(**kwargs)
 
 
@@ -980,9 +994,19 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
         "config default (dem_default_ndv)."
     ),
 )
+@click.option(
+    "-ef", "--export-formats", "export_formats",
+    default=None,
+    metavar="FORMATS",
+    help=(
+        "Comma-separated GIS formats to export the per-cell errors into, drawn from "
+        "'tif', 'gpkg', 'shp', 'xyz'. Overrides the 'export_error_formats' setting "
+        "for this run only. Pass 'none' (or an empty string) to skip error exports."
+    ),
+)
 def validate(files_or_directory, vdatum, list_vdatums, region_name, include_photons,
              measure_coverage, band_num, outlier_sd_threshold, buildings,
-             confidence_level, bathy_confidence, outdir, ndv):
+             confidence_level, bathy_confidence, outdir, ndv, export_formats):
     """Validate one or more DEMs against ICESat-2 photon data.
 
     FILES_OR_DIRECTORY can be one or more GeoTIFF paths, a directory
@@ -1013,7 +1037,8 @@ def validate(files_or_directory, vdatum, list_vdatums, region_name, include_phot
 
     _run_validate(files_or_directory, vdatum, region_name, include_photons,
                   measure_coverage, band_num, outlier_sd_threshold, buildings,
-                  confidence_level, bathy_confidence, outdir, ndv=ndv)
+                  confidence_level, bathy_confidence, outdir, ndv=ndv,
+                  export_formats=export_formats)
 
 
 ###############################################################
