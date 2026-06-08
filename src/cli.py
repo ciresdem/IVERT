@@ -746,7 +746,7 @@ def cache_delete(force):
 
 def _run_validate(files_or_directory, vdatum, region_name, include_photons,
                   measure_coverage, band_num, outlier_sd_threshold, buildings,
-                  confidence_level, bathy_confidence, outdir=None):
+                  confidence_level, bathy_confidence, outdir=None, ndv=None):
     """Branch to validate_dem or validate_list_of_dems based on the number of input files."""
     verbose = logging.getLogger().level <= logging.INFO
     try:
@@ -769,6 +769,19 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
                 "Run 'ivert validate --list-vdatums' to see all recognised names."
             )
         vdatum = resolved
+
+    # Parse the --ndv value: "nan" → float('nan'), else convert to float.
+    ndv_float = None
+    if ndv is not None:
+        if str(ndv).lower() == "nan":
+            ndv_float = float("nan")
+        else:
+            try:
+                ndv_float = float(ndv)
+            except ValueError:
+                raise click.ClickException(
+                    f"Invalid --ndv value '{ndv}'. Provide a number or 'nan'."
+                )
 
     if outdir is None:
         try:
@@ -814,6 +827,8 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
         )
         if vdatum != "NONE_PROVIDED":
             kwargs["dem_vertical_datum"] = vdatum
+        if ndv_float is not None:
+            kwargs["dem_ndv"] = ndv_float
         vd_module.validate_dem(**kwargs)
     else:
         dem_input = expanded[0] if len(expanded) == 1 else expanded
@@ -842,6 +857,8 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
         )
         if vdatum != "NONE_PROVIDED":
             kwargs["input_vdatum"] = vdatum
+        if ndv_float is not None:
+            kwargs["dem_ndv"] = ndv_float
         vdc_module.validate_list_of_dems(**kwargs)
 
 
@@ -951,9 +968,21 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
         "'ivert_results_subdir' setting (run 'ivert setup list' to view)."
     ),
 )
+@click.option(
+    "--ndv",
+    default=None,
+    metavar="VALUE",
+    help=(
+        "No-data value to exclude from DEM pixels before validation. "
+        "Accepts a number (e.g. -9999) or 'nan' for IEEE floating-point NaN. "
+        "Overrides any no-data value in the DEM file header. "
+        "If not set, the file header value is used, falling back to the "
+        "config default (dem_default_ndv)."
+    ),
+)
 def validate(files_or_directory, vdatum, list_vdatums, region_name, include_photons,
              measure_coverage, band_num, outlier_sd_threshold, buildings,
-             confidence_level, bathy_confidence, outdir):
+             confidence_level, bathy_confidence, outdir, ndv):
     """Validate one or more DEMs against ICESat-2 photon data.
 
     FILES_OR_DIRECTORY can be one or more GeoTIFF paths, a directory
@@ -984,7 +1013,7 @@ def validate(files_or_directory, vdatum, list_vdatums, region_name, include_phot
 
     _run_validate(files_or_directory, vdatum, region_name, include_photons,
                   measure_coverage, band_num, outlier_sd_threshold, buildings,
-                  confidence_level, bathy_confidence, outdir)
+                  confidence_level, bathy_confidence, outdir, ndv=ndv)
 
 
 ###############################################################

@@ -441,6 +441,7 @@ def validate_dem(dem_name: str,
                  icesat2_photon_database_obj: icesat2_database_v2.IS2Database | None = None,
                  band_num: int = 1,
                  dem_vertical_datum: str | int | None = None,
+                 dem_ndv: float | None = None,
                  interim_data_dir: str | None = None,
                  overwrite: bool = False,
                  delete_datafiles: bool = False,
@@ -511,6 +512,7 @@ def validate_dem(dem_name: str,
               'icesat2_photon_database_obj': icesat2_photon_database_obj,
               'band_num': band_num,
               'dem_vertical_datum': dem_vertical_datum,
+              'dem_ndv': dem_ndv,
               'interim_data_dir': interim_data_dir,
               'overwrite': overwrite,
               'delete_datafiles': delete_datafiles,
@@ -586,6 +588,7 @@ def validate_dem(dem_name: str,
                          icesat2_photon_database_obj=icesat2_photon_database_obj,
                          band_num=band_num,
                          dem_vertical_datum=dem_vertical_datum,
+                         dem_ndv=dem_ndv,
                          interim_data_dir=interim_data_dir,
                          overwrite=overwrite,
                          delete_datafiles=delete_datafiles,
@@ -895,11 +898,14 @@ def _fetch_photons(dem_name, band_num, dem_vertical_datum, icesat2_photon_databa
     if verbose:
         print("{0:,}".format(len(photon_df)), "ICESat-2 photons present in photon dataframe.")
 
-    return dem_ds, dem_array, photon_df, dem_epsg_str
+    photon_src_epsg = icesat2_photon_database_obj.get_photon_src_epsg()
+    return dem_ds, dem_array, photon_df, dem_epsg_str, photon_src_epsg
 
 
 def _compute_photon_overlap(dem_ds, dem_array, photon_df, classes, dem_epsg_str,
-                              measure_coverage, verbose, cache_dir=None):
+                              measure_coverage, verbose,
+                              photon_src_epsg="EPSG:4326+4979", cache_dir=None,
+                              user_ndv=None):
     """Transform photon coordinates into DEM space and compute cell-level overlap.
 
     Returns (photon_df, height_field, ph_mask_ground_only, dem_overlap_i, dem_overlap_j,
@@ -907,19 +913,14 @@ def _compute_photon_overlap(dem_ds, dem_array, photon_df, classes, dem_epsg_str,
     coverage_coords is (xmin_arr, xmax_arr, ymin_arr, ymax_arr) when measure_coverage=True, else None.
     """
     try:
-        print("dem_epsg_str", dem_epsg_str)
         photon_df["dem_x"], photon_df["dem_y"], photon_df["dem_z"] = \
             transform_points.transform_points(photon_df['x'], photon_df['y'], photon_df['z'],
-                                              src_epsg="EPSG:4326+3855",
+                                              src_epsg=photon_src_epsg,
                                               dst_epsg=dem_epsg_str,
                                               cache_dir=cache_dir)
     except (ValueError, RuntimeError) as e:
         print("Warning: Unable to perform transformation. Using original points.")
         raise e
-        # # TODO: Try to convert just horizontally (even if we can't do it vertically).
-        # photon_df["dem_x"] = photon_df['x']
-        # photon_df["dem_y"] = photon_df['y']
-        # photon_df["dem_z"] = photon_df['z']
 
     xstart, xstep, _, ystart, _, ystep = dem_ds.GetGeoTransform()
     photon_df["i"] = numpy.floor((photon_df["dem_y"] - ystart) / ystep).astype(int)
@@ -929,14 +930,18 @@ def _compute_photon_overlap(dem_ds, dem_array, photon_df, classes, dem_epsg_str,
                           (photon_df["j"] >= 0) & (photon_df["j"] < dem_array.shape[1])]
     height_field = photon_df["dem_z"]
 
-    dem_ndv = dem_ds.GetRasterBand(1).GetNoDataValue()
-    if dem_ndv is not None:
-        if not numpy.isnan(dem_ndv):
-            dem_goodpixel_mask = (dem_array != dem_ndv)
-        else:
-            dem_goodpixel_mask = (numpy.isnan(dem_array) == False)
+    # NDV priority: (1) user_ndv flag, (2) file header, (3) config default
+    if user_ndv is not None:
+        dem_ndv = user_ndv
     else:
-        dem_goodpixel_mask = numpy.ones(dem_array.shape, dtype=bool)
+        dem_ndv = dem_ds.GetRasterBand(1).GetNoDataValue()
+        if dem_ndv is None:
+            dem_ndv = EMPTY_VAL
+
+    if numpy.isnan(dem_ndv):
+        dem_goodpixel_mask = ~numpy.isnan(dem_array)
+    else:
+        dem_goodpixel_mask = (dem_array != dem_ndv)
 
     photon_df = photon_df.set_index(["i", "j"], drop=False)
     ph_mask_ground_only = numpy.isin(photon_df["class_code"], classes)
@@ -1308,6 +1313,7 @@ def validate_dem_parallel(dem_name: str,
                                                       = None, # Used only if we've already created this, for efficiency.
                           band_num: int = 1,
                           dem_vertical_datum: str | int | None = None,
+                          dem_ndv: float | None = None,
                           interim_data_dir: str | None = None,
                           overwrite: bool = False,
                           delete_datafiles: bool = False,
@@ -1362,11 +1368,13 @@ def validate_dem_parallel(dem_name: str,
             shared_ret_values["empty_results_filename"] = empty_results_filename
             files_to_export.append(empty_results_filename)
         return files_to_export
-    dem_ds, dem_array, photon_df, dem_epsg_str = fetch_result
+    dem_ds, dem_array, photon_df, dem_epsg_str, photon_src_epsg = fetch_result
 
     overlap_result = _compute_photon_overlap(dem_ds, dem_array, photon_df, classes,
                                               dem_epsg_str, measure_coverage, verbose,
-                                              cache_dir=TRANSFORMEZ_CACHE_DIR)
+                                              photon_src_epsg=photon_src_epsg,
+                                              cache_dir=TRANSFORMEZ_CACHE_DIR,
+                                              user_ndv=dem_ndv)
     if overlap_result is None:
         if mark_empty_results:
             with open(empty_results_filename, 'w') as f:
