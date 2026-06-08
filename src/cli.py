@@ -667,8 +667,8 @@ def cache(ctx):
         click.echo(ctx.get_help())
 
 
-@cache.command("status")
-def cache_status():
+@cache.command("list")
+def cache_list():
     """Show the number of files and total size of the cache."""
     import tabulate as tabulate_mod
 
