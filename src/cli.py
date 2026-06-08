@@ -44,22 +44,48 @@ except ImportError:
     ),
 )
 @click.option(
-    "--debug",
-    is_flag=True,
-    default=False,
-    help="Enable debug-level logging output.",
+    "-v", "--verbosity",
+    default=None,
+    metavar="LEVEL",
+    help=(
+        "Logging verbosity: debug, info, warning, or error (case-insensitive). "
+        "Overrides the 'verbosity' setting in ivert_defaults.ini for this run. "
+        "Change the persistent default with 'ivert setup verbosity=<level>'."
+    ),
 )
 @click.pass_context
-def ivert_cli(ctx, user_config, debug):
+def ivert_cli(ctx, user_config, verbosity):
     """IVERT: ICESat-2 Validation of Elevations Reporting Tool.
 
     Run 'ivert <command> --help' for detailed help on any command.
     """
     if user_config:
         os.environ["IVERT_USER_CONFIG"] = os.path.abspath(os.path.expanduser(user_config))
-    if debug:
-        logging.basicConfig(level=logging.DEBUG, format="%(levelname)s: %(message)s")
-        logging.getLogger().setLevel(logging.DEBUG)
+
+    _VERBOSITY_LEVELS = {
+        "debug":   (logging.DEBUG,   "%(levelname)s: %(message)s"),
+        "info":    (logging.INFO,    "%(message)s"),
+        "warning": (logging.WARNING, "%(message)s"),
+        "error":   (logging.ERROR,   "%(message)s"),
+    }
+
+    if verbosity is None:
+        try:
+            from utils.configfile import Config
+        except ImportError:
+            from ivert_utils.configfile import Config
+        verbosity = Config().verbosity
+
+    verbosity_key = str(verbosity).strip().lower()
+    if verbosity_key not in _VERBOSITY_LEVELS:
+        raise click.BadParameter(
+            f"'{verbosity}' is not a valid verbosity level. "
+            "Choose from: debug, info, warning, error.",
+            param_hint="--verbosity",
+        )
+    level, fmt = _VERBOSITY_LEVELS[verbosity_key]
+    logging.basicConfig(level=level, format=fmt)
+    logging.getLogger().setLevel(level)
 
 
 ###############################################################
@@ -159,18 +185,45 @@ def setup_list():
         return
 
     col_w = max(len(k) for k in keys)
-    click.echo(f"\n  {'Setting':<{col_w}}  Value")
+    header = click.style(f"{'Setting':<{col_w}}", bold=True)
+    click.echo(f"\n  {header}  Value")
     click.echo("  " + "-" * (col_w + 2 + 56))
 
     for key in keys:
         value = str(getattr(config, key, ""))
-        source = "[user]" if key in config._user_set_keys else "[default]"
-        click.echo(f"  {key:<{col_w}}  {value:<52}  {source}")
+        is_user = key in config._user_set_keys
+        colored_key = click.style(f"{key:<{col_w}}", fg="cyan")
+        source = click.style("[user]", fg="yellow") if is_user else click.style("[default]", fg="bright_black")
+        click.echo(f"  {colored_key}  {value:<52}  {source}")
 
     click.echo(
         f"\n  To change a setting:  ivert setup option_name=new_value"
         f"\n  Add quotes around values containing spaces or special characters."
     )
+
+
+@setup.command("reset")
+@click.option("-y", "--yes", is_flag=True, default=False,
+              help="Skip confirmation prompt.")
+def setup_reset(yes):
+    """Reset all settings to IVERT defaults by deleting the user config file."""
+    try:
+        from utils.configfile import Config
+    except ImportError:
+        from ivert_utils.configfile import Config
+
+    config = Config()
+    user_path = os.path.abspath(os.path.expanduser(str(config.user_configfile)))
+
+    if not os.path.exists(user_path):
+        click.echo("No user config file found — settings are already at defaults.")
+        return
+
+    if not yes:
+        click.confirm(f"Delete {user_path} and reset all settings to defaults?", abort=True)
+
+    os.remove(user_path)
+    click.echo(f"Deleted {user_path}. All settings reset to IVERT defaults.")
 
 
 ###############################################################
@@ -278,7 +331,13 @@ def database_rebuild():
     default=False,
     help="Also delete all .nc granule data files from the granules directory.",
 )
-def database_delete(delete_all):
+@click.option(
+    "-y", "--yes",
+    is_flag=True,
+    default=False,
+    help="Skip confirmation prompt and delete immediately.",
+)
+def database_delete(delete_all, yes):
     """Delete the .gpkg and .blosc database index files.
 
     The downloaded .nc granule files are kept unless --all is specified.
@@ -287,29 +346,48 @@ def database_delete(delete_all):
         from ivert import icesat2_database_v2 as is2db_mod
     except ImportError:
         import icesat2_database_v2 as is2db_mod
+    try:
+        from utils.sizeof_format import sizeof_fmt
+    except ImportError:
+        from ivert_utils.sizeof_format import sizeof_fmt
 
     db = is2db_mod.IS2Database()
 
-    for fpath in (db.db_fname, db.db_fname_compressed):
-        if os.path.exists(fpath):
-            os.remove(fpath)
-            click.echo(f"Deleted {fpath}")
-        else:
-            click.echo(f"Not found (skipping): {fpath}")
+    # Collect what will actually be deleted before touching anything.
+    index_files = [f for f in (db.db_fname, db.db_fname_compressed) if os.path.exists(f)]
 
-    if delete_all:
-        nc_files = (
-            [os.path.join(db.granules_dir, fn)
-             for fn in os.listdir(db.granules_dir)
-             if os.path.splitext(fn)[-1].lower() == ".nc"]
-            if os.path.isdir(db.granules_dir) else []
+    nc_files = []
+    if delete_all and os.path.isdir(db.granules_dir):
+        nc_files = sorted(
+            os.path.join(db.granules_dir, fn)
+            for fn in os.listdir(db.granules_dir)
+            if os.path.splitext(fn)[-1].lower() == ".nc"
         )
-        if nc_files:
-            for fpath in sorted(nc_files):
-                os.remove(fpath)
-            click.echo(f"Deleted {len(nc_files)} .nc granule file(s) from {db.granules_dir}")
-        else:
-            click.echo(f"No .nc files found in {db.granules_dir}")
+
+    all_files = index_files + nc_files
+
+    if not all_files:
+        click.echo("Nothing to delete — no database files found.")
+        return
+
+    total_bytes = sum(os.path.getsize(f) for f in all_files)
+    click.echo(f"\n  {len(all_files)} file(s) totaling {sizeof_fmt(total_bytes)} will be deleted:")
+    for fpath in all_files:
+        click.echo(f"    {fpath}  ({sizeof_fmt(os.path.getsize(fpath))})")
+
+    if not yes:
+        click.confirm("\nDelete these files?", default=False, abort=True)
+
+    for fpath in index_files:
+        os.remove(fpath)
+        click.echo(f"Deleted {fpath}")
+
+    if nc_files:
+        for fpath in nc_files:
+            os.remove(fpath)
+        click.echo(f"Deleted {len(nc_files)} .nc granule file(s) from {db.granules_dir}")
+    elif delete_all:
+        click.echo(f"No .nc files found in {db.granules_dir}")
 
 
 @database.command("size")
@@ -319,12 +397,10 @@ def database_size():
         from ivert import icesat2_database_v2 as is2db_mod
     except ImportError:
         import icesat2_database_v2 as is2db_mod
-
-    def _fmt_bytes(n):
-        for unit in ("B", "KB", "MB", "GB", "TB"):
-            if n < 1024 or unit == "TB":
-                return f"{n:.1f} {unit}"
-            n /= 1024
+    try:
+        from utils.sizeof_format import sizeof_fmt
+    except ImportError:
+        from ivert_utils.sizeof_format import sizeof_fmt
 
     db = is2db_mod.IS2Database()
 
@@ -332,13 +408,13 @@ def database_size():
 
     # .gpkg index
     if os.path.exists(db.db_fname):
-        rows.append(("gpkg index", 1, _fmt_bytes(os.path.getsize(db.db_fname)), db.db_fname))
+        rows.append(("gpkg index", 1, sizeof_fmt(os.path.getsize(db.db_fname)), db.db_fname))
     else:
         rows.append(("gpkg index", 0, "—", db.db_fname))
 
     # .blosc index
     if os.path.exists(db.db_fname_compressed):
-        rows.append(("blosc index", 1, _fmt_bytes(os.path.getsize(db.db_fname_compressed)), db.db_fname_compressed))
+        rows.append(("blosc index", 1, sizeof_fmt(os.path.getsize(db.db_fname_compressed)), db.db_fname_compressed))
     else:
         rows.append(("blosc index", 0, "—", db.db_fname_compressed))
 
@@ -351,7 +427,7 @@ def database_size():
     )
     nc_count = len(nc_files)
     nc_bytes = sum(os.path.getsize(f) for f in nc_files) if nc_files else 0
-    rows.append((".nc granules", nc_count, _fmt_bytes(nc_bytes) if nc_files else "—", db.granules_dir))
+    rows.append((".nc granules", nc_count, sizeof_fmt(nc_bytes) if nc_files else "—", db.granules_dir))
 
     import tabulate as tabulate_mod
     click.echo(tabulate_mod.tabulate(rows, headers=["Type", "Files", "Size", "Path"], tablefmt="simple"))
@@ -462,8 +538,6 @@ def database_download(bbox_or_files, date_start, date_end, projection, wsen, rep
 
     (Note: Use the '--' delimiter to explicitly end your command-line options if coordinates begin with a negative '-')
     """
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-
     try:
         from ivert import icesat2_database_v2 as is2db_mod
         from ivert.utils import dem_geom
@@ -672,8 +746,9 @@ def cache_delete(force):
 
 def _run_validate(files_or_directory, vdatum, region_name, include_photons,
                   measure_coverage, band_num, outlier_sd_threshold, buildings,
-                  confidence_level, bathy_confidence, outdir=None, verbose=True):
+                  confidence_level, bathy_confidence, outdir=None):
     """Branch to validate_dem or validate_list_of_dems based on the number of input files."""
+    verbose = logging.getLogger().level <= logging.INFO
     try:
         from ivert import validate_dem as vd_module
         from ivert import validate_dem_collection as vdc_module
@@ -876,15 +951,9 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
         "'ivert_results_subdir' setting (run 'ivert setup list' to view)."
     ),
 )
-@click.option(
-    "-v", "--verbose",
-    is_flag=True,
-    default=False,
-    help="Print progress messages during validation.",
-)
 def validate(files_or_directory, vdatum, list_vdatums, region_name, include_photons,
              measure_coverage, band_num, outlier_sd_threshold, buildings,
-             confidence_level, bathy_confidence, outdir, verbose):
+             confidence_level, bathy_confidence, outdir):
     """Validate one or more DEMs against ICESat-2 photon data.
 
     FILES_OR_DIRECTORY can be one or more GeoTIFF paths, a directory
@@ -915,7 +984,7 @@ def validate(files_or_directory, vdatum, list_vdatums, region_name, include_phot
 
     _run_validate(files_or_directory, vdatum, region_name, include_photons,
                   measure_coverage, band_num, outlier_sd_threshold, buildings,
-                  confidence_level, bathy_confidence, outdir, verbose)
+                  confidence_level, bathy_confidence, outdir)
 
 
 ###############################################################
