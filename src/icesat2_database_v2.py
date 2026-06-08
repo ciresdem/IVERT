@@ -160,6 +160,8 @@ class IS2Database:
             "numphotons_bathy_surface": [0],
             "numphotons_buildings": [0],
             "downloaded_on": [0],
+            "horizontal_datum": ["EPSG:4326"],
+            "vertical_datum":   ["EPSG:4979"],
             "geometry": [shapely.box(0.0, 0.0, 1.0, 1.0)],
         }
 
@@ -195,6 +197,8 @@ class IS2Database:
                 "numphotons_bathy_surface": int(attrs.get("numphotons_bathy_surface", 0)),
                 "numphotons_buildings":     int(attrs.get("numphotons_buildings", 0)),
                 "downloaded_on":            int(attrs.get("downloaded_on", 0)),
+                "horizontal_datum":         str(attrs.get("horizontal_datum", "")),
+                "vertical_datum":           str(attrs.get("vertical_datum", "")),
                 # shapely.box(xmin, ymin, xmax, ymax)
                 "geometry": shapely.box(data_bbox[0], data_bbox[2], data_bbox[1], data_bbox[3]),
             }
@@ -271,6 +275,22 @@ class IS2Database:
             columns=["laser", "delta_time", "x", "y", "along_track_m"]
         )
 
+    @staticmethod
+    def _validate_vertical_datum(raw_value: str) -> str:
+        """Validate and normalize icesat2_vertical_datum to 'ellipsoid' or 'geoid'."""
+        normalized = str(raw_value).strip().lower()
+        if normalized not in ("ellipsoid", "geoid"):
+            raise ValueError(
+                f"Invalid icesat2_vertical_datum value: {raw_value!r}. "
+                "Must be 'ellipsoid' or 'geoid' (case-insensitive)."
+            )
+        return normalized
+
+    @staticmethod
+    def _vertical_datum_to_vertical_epsg(vertical_datum: str) -> str:
+        """Map a validated vertical_datum value to its vertical EPSG code string."""
+        return "EPSG:4979" if vertical_datum == "ellipsoid" else "EPSG:3855"
+
     def _process_h5_to_nc(self,
                            h5_fn: str,
                            nc_fn: str,
@@ -290,6 +310,9 @@ class IS2Database:
         if os.path.exists(nc_fn) and not overwrite:
             return self._read_nc_metadata(nc_fn)
 
+        vertical_datum = self._validate_vertical_datum(self.config.icesat2_vertical_datum)
+        vertical_datum = self._vertical_datum_to_vertical_epsg(vertical_datum)
+
         classes_str = "/".join([str(int(c)) for c in classes_to_keep])
         region_str = f"{query_bbox[0]}/{query_bbox[1]}/{query_bbox[2]}/{query_bbox[3]}"
 
@@ -298,7 +321,7 @@ class IS2Database:
             data_type="ATL03",
             region=region_str,
             classes=classes_str,
-            water_surface="geoid",
+            vertical_datum=vertical_datum,
             reject_failed_qa=True,
             append_atl24=True,
             cache_dir=self.icesat2_download_dir,
@@ -362,6 +385,8 @@ class IS2Database:
             "numphotons_bathy_floor":   int(numpy.count_nonzero(cc == 40)),
             "numphotons_bathy_surface": int(numpy.count_nonzero(cc == 41)),
             "downloaded_on":            int(datetime.datetime.now().strftime("%Y%m%d")),
+            "horizontal_datum":         "EPSG:4326",
+            "vertical_datum":           vertical_datum,
         }
 
         # Add per-photon cumulative along-track distance from h5 geolocation data.
@@ -700,6 +725,26 @@ class IS2Database:
         # return gdf[intersect_func(data_bboxes)]
         return gdf[int_mask]
 
+    def get_photon_src_epsg(self) -> str:
+        """Return the compound EPSG src string for photon coordinates stored in this database.
+
+        Reads horizontal_datum and vertical_datum from the first database record and builds
+        a compound string (e.g. 'EPSG:4326+3855' or 'EPSG:4326+4979').
+        Falls back to 'EPSG:4326+3855' for databases created before datum fields were added.
+        """
+        gdf = self.open_gdf(verbose=False)
+        if gdf is not None and len(gdf) > 0:
+            if "horizontal_datum" in gdf.columns and "vertical_datum" in gdf.columns:
+                hd_vals = gdf["horizontal_datum"].dropna()
+                hd_vals = hd_vals[hd_vals != ""]
+                vd_vals = gdf["vertical_datum"].dropna()
+                vd_vals = vd_vals[vd_vals != ""]
+                if len(hd_vals) > 0 and len(vd_vals) > 0:
+                    hd = str(hd_vals.iloc[0])       # e.g. "EPSG:4326"
+                    vd = str(vd_vals.iloc[0])        # e.g. "EPSG:3855" or "EPSG:4979"
+                    vd_num = vd.split(":")[-1]       # strip "EPSG:" prefix
+                    return f"{hd}+{vd_num}"          # e.g. "EPSG:4326+3855"
+        return "EPSG:4326+4979"
 
     def download_new_granules(self,
                               bbox: list | tuple,
@@ -715,6 +760,37 @@ class IS2Database:
         Downloads raw HDF5 files into granules_dir; classification is deferred to read time via globato.
         Only downloads granules covering bboxes not already in the database.
         """
+        # Validate the configured water surface and derive the target vertical datum.
+        vertical_datum_cfg = self._validate_vertical_datum(self.config.icesat2_vertical_datum)
+        target_vd = self._vertical_datum_to_vertical_epsg(vertical_datum_cfg)
+
+        # Reject the download if existing records use a different datum.
+        existing_gdf_check = self.open_gdf(verbose=False)
+        if existing_gdf_check is not None and len(existing_gdf_check) > 0:
+            if "vertical_datum" in existing_gdf_check.columns:
+                existing_vd_vals = existing_gdf_check["vertical_datum"].dropna()
+                existing_vd_vals = existing_vd_vals[existing_vd_vals != ""]
+                if len(existing_vd_vals) > 0:
+                    existing_vd = str(existing_vd_vals.iloc[0])
+                    existing_hd = "EPSG:4326"
+                    if "horizontal_datum" in existing_gdf_check.columns:
+                        existing_hd_vals = existing_gdf_check["horizontal_datum"].dropna()
+                        existing_hd_vals = existing_hd_vals[existing_hd_vals != ""]
+                        if len(existing_hd_vals) > 0:
+                            existing_hd = str(existing_hd_vals.iloc[0])
+                    if existing_vd != target_vd:
+                        logger.error(
+                            "Datum mismatch: the existing database stores data in "
+                            "horizontal datum %s and vertical datum %s, but the current "
+                            "configuration requests vertical datum %s "
+                            "(icesat2_vertical_datum=%r). All granules in a single database "
+                            "must share the same datum. Change 'icesat2_vertical_datum' in "
+                            "your user config to match the existing database, or create a "
+                            "new database.",
+                            existing_hd, existing_vd, target_vd, vertical_datum_cfg,
+                        )
+                        return
+
         bboxes = self.filter_query_bbox(bbox)
 
         if len(bboxes) == 0:
@@ -834,7 +910,7 @@ class IS2Database:
                 if meta is not None:
                     new_records.append(meta)
                 else:
-                    logger.info("%d/%d No valid classified photons retrieved from %s.",
+                    logger.info("%d/%d No valid classified photons in %s.",
                                 granule_num, len(files_to_process), os.path.basename(nc_dest))
 
             if not new_records:
