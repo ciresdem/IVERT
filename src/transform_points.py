@@ -91,6 +91,11 @@ def _decompose_crs(
         return horz, (vert.to_epsg() if vert else None)
     if crs.is_vertical:
         return None, crs.to_epsg()
+    # 3D geographic CRS (e.g. EPSG:4979 = WGS84 3D with ellipsoidal height).
+    # pyproj does not mark these as compound or vertical, so extract the EPSG
+    # directly and treat it as the vertical datum identifier.
+    if crs.is_geographic and len(crs.axis_info) == 3:
+        return crs, crs.to_epsg()
     return crs, None
 
 
@@ -120,6 +125,10 @@ def _apply_vertical_transform(
         _cache,
         f"vshift_{src_vert_epsg}_{dst_vert_epsg}_{w:.1f}_{e:.1f}_{s:.1f}_{n:.1f}.tif",
     )
+
+    # Strip any "EPSG:" and/or any compound ("4326+4979") datum strings fed to this function.
+    src_vert_epsg = src_vert_epsg.split(":")[-1].split("+")[-1]
+    dst_vert_epsg = dst_vert_epsg.split(":")[-1].split("+")[-1]
 
     if not os.path.exists(grid_fn):
         shift_array = transformez.generate_grid(
