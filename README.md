@@ -7,7 +7,7 @@ Developed by the [CIRES Coastal DEM Team](https://ciresdem.github.io). Primary a
 
 ---
 
-![Validation results — DEM](docs/images/validation_plot_1.png)
+(TODO: Add some pretty pictures here)
 
 ---
 
