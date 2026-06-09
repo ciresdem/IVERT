@@ -848,11 +848,25 @@ class IS2Database:
             requests_csv = ICESat2RequestsCSV()
             cached = requests_csv.find_matching_request("ATL03", sbbox, only_unexpired=True)
             if cached:
-                mod.subset_job_id = cached["jobID"]
-                n_granules = cached.get("numInputGranules", "?")
-                logger.info("Re-using cached Harmony job (%s ATL03 granules): "
-                            "https://harmony.earthdata.nasa.gov/jobs/%s", n_granules, mod.subset_job_id)
-            else:
+                # Ping Harmony to verify the cached job completed without errors.
+                # Jobs with "complete_with_errors", "failed", or "canceled" status
+                # cannot be reliably re-used, so a new job must be submitted instead.
+                _ERROR_STATES = {"complete_with_errors", "failed", "canceled"}
+                cached_job_id = cached["jobID"]
+                current_status = mod.harmony_ping_for_status(cached_job_id)
+                current_state = current_status.get("status", "") if current_status else ""
+                if current_state in _ERROR_STATES:
+                    logger.warning(
+                        "Cached Harmony job %s has status '%s'; submitting a new job.",
+                        cached_job_id, current_state,
+                    )
+                    cached = None
+                else:
+                    mod.subset_job_id = cached_job_id
+                    n_granules = cached.get("numInputGranules", "?")
+                    logger.info("Re-using cached Harmony job (%s ATL03 granules): "
+                                "https://harmony.earthdata.nasa.gov/jobs/%s", n_granules, mod.subset_job_id)
+            if not cached:
                 harmony_status = mod.harmony_make_request()
                 if harmony_status and "jobID" in harmony_status:
                     mod.subset_job_id = harmony_status["jobID"]
