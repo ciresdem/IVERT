@@ -1,10 +1,69 @@
 # IVERT
-The ICESat-2 Validation of Elevations Reporting Tool
+**ICESat-2 Validation of Elevations Reporting Tool**
 
-This code is currently in active development by the CIRES Coastal DEM Team. Primary authors are [Mike MacFerrin](https://github.com/mmacferrin) (developing the IVERT code) and [Matthew Love](https://github.com/matth-love) (developing the [CUDEM](https://github.com/ciresdem/cudem) modules underpinning various aspects of IVERT's functionality). Some modules may have broken dependencies or other shortfalls, bugs are being worked out as we migrate to a cloud computing environment. The code is still in beta development, but new releases (v0.6.0 and beyond) will enable offline execution by anyone with (or without) cloud credentials.
+IVERT validates Digital Elevation Models (DEMs) by comparing their elevations against ICESat-2 satellite photon data. It supports topographic, bathymetric, and mixed coastal DEMs, runs fully offline on any machine, and handles vertical datum conversions automatically.
 
-This document will be updated significantly when the newest IVERT version (0.6.0) is released with these capabilities.
+Developed by the [CIRES Coastal DEM Team](https://ciresdem.github.io). Primary authors: [Mike MacFerrin](https://github.com/mmacferrin) (IVERT) and [Matthew Love](https://github.com/matth-love) ([continuous-dems](https://github.com/continuous-dems) utilities).
+
+---
+
+![Validation results — DEM](docs/images/validation_plot_1.png)
+
+---
+
+## Capabilities
+
+- Validate topographic, bathymetric, and coastal DEMs against ICESat-2 ATL03/ATL24 photons
+- Automatic vertical datum conversion (NAVD88, EGM2008, MLLW, and many more)
+- Configurable photon confidence and quality filtering
+- Statistical outputs: bias, RMSE, NMAD, per-cell error maps
+- Export errors to GeoTIFF, GeoPackage, Shapefile, or XYZ text
+- Local photon database management — download once, validate many times
+
+---
+
+## Installation
+
+```bash
+pip install ivert
+```
+
+For development (editable install from this repo):
+
+```bash
+git clone https://github.com/ciresdem/IVERT.git
+cd IVERT
+pip install -e .
+```
+
+Three dependencies — `fetchez`, `globato`, and `transformez` — are pulled automatically from the [continuous-dems](https://github.com/continuous-dems) GitHub organization and do not need to be installed separately.
+
+---
+
+## Quick start
+
+**1. Download ICESat-2 photon data for your area** (bounding box in W/E/S/N order):
+
+```bash
+ivert database download -74.0/-73.0/40.5/41.0
+```
+
+**2. Validate your DEM:**
+
+```bash
+ivert validate mydem.tif
+```
+
+**3. Check the output directory** for `mydem_results.h5`, a validation plot (`.png`), and error exports (`.tif`, `.gpkg`).
+
+---
 
 ## Documentation
 
-- [Configuration](docs/configfile.md) — how to view and change settings with `ivert options`, and how to use separate config files for different projects
+| Command | Description |
+|---------|-------------|
+| [ivert validate](docs/validate.md) | Validate DEMs against ICESat-2 data |
+| [ivert database](docs/database.md) | Download and manage the local photon database |
+| [ivert cache](docs/cache.md) | View and clear the local file cache |
+| [ivert options](docs/options.md) | View and change configuration settings |
+| [ivert upgrade](docs/upgrade.md) | Upgrade IVERT to the latest version |

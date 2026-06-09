@@ -1,4 +1,14 @@
-# IVERT Configuration
+# ivert options — Configuration
+
+IVERT's settings are managed through the `ivert options` command.
+
+| Subcommand | Purpose |
+|------------|---------|
+| `ivert options list` | Show all settings and their current values |
+| `ivert options <key>=<value> [...]` | Change one or more settings |
+| `ivert options reset` | Restore all settings to defaults |
+
+---
 
 IVERT's configuration is split into two files:
 
@@ -73,7 +83,7 @@ icesat2_granules_directory = /mnt/archive/ivert/icesat2/granules
 Pass `--config` to any `ivert` command to use a specific config file for that invocation:
 
 ```
-ivert --config ~/.ivert/coastal_survey.ini download -73.5/-72.5/40.5/41.5
+ivert --config ~/.ivert/coastal_survey.ini database download -73.5/-72.5/40.5/41.5
 ivert --config ~/.ivert/archive_workflow.ini validate mydem.tif
 ```
 
@@ -85,7 +95,7 @@ Set `IVERT_USER_CONFIG` to make all `ivert` commands in a shell session use a pa
 
 ```bash
 export IVERT_USER_CONFIG=~/.ivert/coastal_survey.ini
-ivert download -73.5/-72.5/40.5/41.5
+ivert database download -73.5/-72.5/40.5/41.5
 ivert validate mydem.tif
 ```
 
@@ -107,7 +117,13 @@ When IVERT starts, the user config path is resolved in this order:
 
 ## Reverting to default settings
 
-To restore all settings to their defaults, delete your user config file:
+```
+ivert options reset
+```
+
+This deletes your user config file, restoring all settings to IVERT defaults. Add `-y` to skip the confirmation prompt.
+
+Alternatively, delete the file manually:
 
 ```bash
 rm ~/.ivert/user_config.ini
