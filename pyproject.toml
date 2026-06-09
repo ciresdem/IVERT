@@ -37,9 +37,9 @@ dependencies = [
     "six",
     "tabulate",
     "xarray",
-    "fetchez @ git+https://github.com/continuous-dems/fetchez.git",
-    "globato @ git+https://github.com/continuous-dems/globato.git",
-    "transformez @ git+https://github.com/continuous-dems/transformez.git",
+    "fetchez",
+    "globato",
+    "transformez",
 ]
 
 [project.urls]
