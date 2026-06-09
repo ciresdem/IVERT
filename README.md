@@ -7,4 +7,4 @@ This document will be updated significantly when the newest IVERT version (0.6.0
 
 ## Documentation
 
-- [Configuration](docs/configfile.md) — how to view and change settings with `ivert setup`, and how to use separate config files for different projects
+- [Configuration](docs/configfile.md) — how to view and change settings with `ivert options`, and how to use separate config files for different projects

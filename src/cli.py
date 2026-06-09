@@ -50,7 +50,7 @@ except ImportError:
     help=(
         "Logging verbosity: debug, info, warning, or error (case-insensitive). "
         "Overrides the 'verbosity' setting in ivert_defaults.ini for this run. "
-        "Change the persistent default with 'ivert setup verbosity=<level>'."
+        "Change the persistent default with 'ivert options verbosity=<level>'."
     ),
 )
 @click.pass_context
@@ -89,13 +89,13 @@ def ivert_cli(ctx, user_config, verbosity):
 
 
 ###############################################################
-# setup
+# options
 ###############################################################
 
-_SETUP_EXCLUDED_KEYS = {"ivert_version", "atlas_sdp_epoch", "project_base_directory"}
+_OPTIONS_EXCLUDED_KEYS = {"ivert_version", "atlas_sdp_epoch", "project_base_directory"}
 
 
-class _SetupGroup(click.Group):
+class _OptionsGroup(click.Group):
     """Click Group that also accepts 'key=value' arguments as config assignments.
 
     key=value args are captured in parse_args before Click's subcommand routing
@@ -115,21 +115,21 @@ class _SetupGroup(click.Group):
         super().invoke(ctx)
 
 
-@ivert_cli.group("setup", cls=_SetupGroup, invoke_without_command=True)
+@ivert_cli.group("options", cls=_OptionsGroup, invoke_without_command=True)
 @click.pass_context
-def setup(ctx):
+def options(ctx):
     """Configure IVERT settings and local data directories.
 
     Typically, run once before using IVERT on a new machine, or when
     changing data directory paths or credentials.
     """
     if ctx.args:
-        _setup_set_values(ctx.args)
+        _options_set_values(ctx.args)
     elif ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
 
 
-def _setup_set_values(assignments):
+def _options_set_values(assignments):
     """Write one or more key=value pairs to the user config file."""
     import configparser as _cp
     try:
@@ -145,11 +145,11 @@ def _setup_set_values(assignments):
             raise click.UsageError(f"Invalid format '{assignment}'. Use option_name=value.")
         key, _, value = assignment.partition("=")
         key = key.strip().lower()
-        if key in _SETUP_EXCLUDED_KEYS:
+        if key in _OPTIONS_EXCLUDED_KEYS:
             raise click.UsageError(f"'{key}' is a read-only setting and cannot be changed.")
         if key not in config._config["DEFAULT"]:
             raise click.UsageError(
-                f"Unknown setting '{key}'. Run 'ivert setup list' to see valid settings.")
+                f"Unknown setting '{key}'. Run 'ivert options list' to see valid settings.")
         parsed.append((key, value))
 
     user_path = os.path.abspath(os.path.expanduser(str(config.user_configfile)))
@@ -168,8 +168,8 @@ def _setup_set_values(assignments):
     click.echo(f"\nSaved to {user_path}")
 
 
-@setup.command("list")
-def setup_list():
+@options.command("list")
+def options_list():
     """List all configurable settings and their current values."""
     try:
         from utils.configfile import Config
@@ -178,7 +178,7 @@ def setup_list():
 
     config = Config()
     keys = [k for k in config._config["DEFAULT"].keys()
-            if k not in _SETUP_EXCLUDED_KEYS]
+            if k not in _OPTIONS_EXCLUDED_KEYS]
 
     if not keys:
         click.echo("No configurable settings found.")
@@ -197,15 +197,15 @@ def setup_list():
         click.echo(f"  {colored_key}  {value:<52}  {source}")
 
     click.echo(
-        f"\n  To change a setting:  ivert setup option_name=new_value"
+        f"\n  To change a setting:  ivert options option_name=new_value"
         f"\n  Add quotes around values containing spaces or special characters."
     )
 
 
-@setup.command("reset")
+@options.command("reset")
 @click.option("-y", "--yes", is_flag=True, default=False,
               help="Skip confirmation prompt.")
-def setup_reset(yes):
+def options_reset(yes):
     """Reset all settings to IVERT defaults by deleting the user config file."""
     try:
         from utils.configfile import Config
@@ -615,7 +615,7 @@ def database_download(bbox_or_files, date_start, date_end, projection, wsen, rep
             f"classifications (photon classes 40/41).\n"
             f"Your current request ends at {tmax_str}.\n"
             f"You may update this cutoff date via "
-            f"'ivert setup atl24_date_cutoff=YYYYMMDD' to suppress these warnings if a newer ATL24 "
+            f"'ivert options atl24_date_cutoff=YYYYMMDD' to suppress these warnings if a newer ATL24 "
             f"version has been released.",
             err=True,
         )
@@ -979,7 +979,7 @@ def _run_validate(files_or_directory, vdatum, region_name, include_photons,
     help=(
         "Output directory for validation results. Relative paths are resolved "
         "relative to the input DEM's directory. Defaults to the "
-        "'ivert_results_subdir' setting (run 'ivert setup list' to view)."
+        "'ivert_results_subdir' setting (run 'ivert options list' to view)."
     ),
 )
 @click.option(

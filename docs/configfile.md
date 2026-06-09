@@ -12,7 +12,7 @@ Any setting in the user config file takes precedence over the corresponding defa
 ## Viewing current settings
 
 ```
-ivert setup list
+ivert options list
 ```
 
 This lists every configurable setting, its current value, and whether the value comes from the defaults (`[default]`) or your user config (`[user]`).
@@ -22,25 +22,25 @@ This lists every configurable setting, its current value, and whether the value 
 ## Changing a setting
 
 ```
-ivert setup option_name=new_value
+ivert options option_name=new_value
 ```
 
 For example, to move your data directory to an external drive:
 
 ```
-ivert setup user_data_directory=/mnt/external/ivert
+ivert options user_data_directory=/mnt/external/ivert
 ```
 
 You can set multiple values at once:
 
 ```
-ivert setup cache_directory=/fast_ssd/ivert/cache icesat2_granules_directory=/fast_ssd/ivert/granules
+ivert options cache_directory=/fast_ssd/ivert/cache icesat2_granules_directory=/fast_ssd/ivert/granules
 ```
 
 If the value contains spaces or special shell characters, wrap it in quotes:
 
 ```
-ivert setup user_data_directory="/home/my user/ivert data"
+ivert options user_data_directory="/home/my user/ivert data"
 ```
 
 The first time you change any setting, IVERT creates your user config file at the location specified by `user_configfile` in `ivert_defaults.ini` (default: `~/.ivert/user_config.ini`). Subsequent changes update that same file.
