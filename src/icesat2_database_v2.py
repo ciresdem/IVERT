@@ -299,7 +299,8 @@ class IS2Database:
                            overwrite: bool = False,
                            min_confidence_level: int = 1,
                            granule_num: int | None = None,
-                           total_granules: int | None = None) -> dict | None:
+                           total_granules: int | None = None,
+                           use_external_masks: bool = True) -> dict | None:
         """Classify an ATL03 HDF5 file with globato and save the result as NetCDF.
 
         The output .nc file contains only the photon classes in classes_to_keep, plus
@@ -325,7 +326,7 @@ class IS2Database:
             reject_failed_qa=True,
             append_atl24=True,
             cache_dir=self.icesat2_download_dir,
-            use_external_masks=True,
+            use_external_masks=use_external_masks,
         )
 
         chunks = []
@@ -887,6 +888,25 @@ class IS2Database:
 
             logger.info("Downloaded %d ATL03 granule(s). Classifying and saving as NetCDF...", len(h5_files))
 
+            # Pre-fetch GBA building footprints once for the tile so the on-disk cache
+            # is populated before any per-granule globato.read() call. Without this,
+            # each granule independently hits the GBA server, causing rapid-fire 429s
+            # when the server is under load and the cache file never gets written.
+            tile_region = [sbbox[0], sbbox[1], sbbox[2], sbbox[3]]
+            use_external_masks = True
+            try:
+                gba_files = fetchez.get("gba", region=tile_region, outdir=self.icesat2_download_dir)
+                if gba_files:
+                    logger.info("GBA building footprints cached for tile %s.", tile_region)
+                else:
+                    logger.warning("GBA pre-fetch returned no data for tile %s; "
+                                   "building-footprint refinement will be skipped.", tile_region)
+                    use_external_masks = False
+            except Exception as e:
+                logger.warning("GBA pre-fetch failed for tile %s (%s); "
+                               "building-footprint refinement will be skipped.", tile_region, e)
+                use_external_masks = False
+
             existing_gdf = self.open_gdf(read_compressed=False, verbose=False)
             existing_filenames = set(existing_gdf["filename"].values) if existing_gdf is not None else set()
 
@@ -906,7 +926,8 @@ class IS2Database:
                                               classes_to_keep=classes_to_keep,
                                               min_confidence_level=min_confidence_level,
                                               granule_num=granule_num,
-                                              total_granules=len(files_to_process))
+                                              total_granules=len(files_to_process),
+                                              use_external_masks=use_external_masks)
                 if meta is not None:
                     new_records.append(meta)
                 else:
