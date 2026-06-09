@@ -12,7 +12,7 @@ import subprocess
 import psutil
 
 # My scripts
-import icesat2_photon_database
+import icesat2_photon_database_OLD
 import utils.configfile
 import utils.pyproj_funcs as pyproj_funcs
 import utils.parallel_funcs
@@ -212,7 +212,7 @@ class ValidationManager:
 
         Create the tempdir for processing, and put this database into it. This is what the sub-processes will use."""
         is2db = icesat2_photon_database.ICESat2_Database()
-        gdf = is2db.get_gdf()
+        gdf = is2db.open_gdf()
 
         # Get the DEM metadata if we haven't yet.
         if self.dem_epsg is None or self.dem_bbox is None:

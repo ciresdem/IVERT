@@ -700,11 +700,11 @@ def create_local_dirs() -> None:
     if not ivert_config:
         ivert_config = configfile.Config(ignore_errors=True)
 
-    creds_folder = ivert_config.user_data_creds_directory
+    # creds_folder = ivert_config.user_data_creds_directory
     jobs_folder = ivert_config.ivert_jobs_directory_local
 
-    if not os.path.exists(creds_folder):
-        os.makedirs(creds_folder)
+    # if not os.path.exists(creds_folder):
+    #     os.makedirs(creds_folder)
     if not os.path.exists(jobs_folder):
         os.makedirs(jobs_folder)
 
@@ -725,19 +725,19 @@ def update_ivert_user_config(args: argparse.Namespace) -> None:
         user_config_text = f.read()
 
     # Update the user Config text with the new values.
-    user_config_text = re.sub(r"user_email\s*[=]\s*[\w\[\].@-]+", f"user_email = {args.email}", user_config_text)
+    # user_config_text = re.sub(r"user_email\s*[=]\s*[\w\[\].@-]+", f"user_email = {args.email}", user_config_text)
 
     # Update the username in the user Config text.
-    user_config_text = re.sub(r"username\s*[=]\s*[\w\[\].-]+", f"username = {args.username}", user_config_text)
+    # user_config_text = re.sub(r"username\s*[=]\s*[\w\[\].-]+", f"username = {args.username}", user_config_text)
 
     # In previous IVERT versions (<0.5.0) these were called "aws_profile_ivert_ingest" and "aws_profile_ivert_export".
     # If those exist in the user Config, change them to the new field names here.
-    user_config_text = re.sub(r"aws_profile_ivert_ingest\s*=\s*",
-                              r'aws_profile_ivert_import_untrusted = ',
-                              user_config_text)
-    user_config_text = re.sub(r"aws_profile_ivert_export\s*=\s*",
-                              r'aws_profile_ivert_export_client = ',
-                              user_config_text)
+    # user_config_text = re.sub(r"aws_profile_ivert_ingest\s*=\s*",
+    #                           r'aws_profile_ivert_import_untrusted = ',
+    #                           user_config_text)
+    # user_config_text = re.sub(r"aws_profile_ivert_export\s*=\s*",
+    #                           r'aws_profile_ivert_export_client = ',
+    #                           user_config_text)
 
     # Update the aws_profile_ivert_import_untrusted in the user Config text, if needed.
     # If it's using a different profile name, then update it.
@@ -840,106 +840,130 @@ def define_and_parse_args(just_return_parser: bool = False,
     if not ivert_user_config_template:
         ivert_user_config_template = configfile.Config(ivert_config.ivert_user_config_template)
 
-    parser = argparse.ArgumentParser(description="Set up a new IVERT user on the local machine.")
-    parser.add_argument("email", type=is_email.return_email,
-                        help="The email address of the user.")
-    parser.add_argument("-u", "--username", dest="username", type=str, required=False, default="",
-                        help="The username of the new user. Only needed if you want to create a custom username. "
-                             "Default: Derived from the left side of your email. It's recommended you just "
-                             "use the default unless you have specific reasons to do otherwise.")
-    parser.add_argument("-c", "--creds", dest="creds", type=str, required=False, default="",
-                        help="The path to the 'ivert_s3_credentials.ini' file. "
-                             "This file will be moved to your ~/.ivert/creds directory.")
-    parser.add_argument("-pc", "--personal_creds", dest="personal_creds", type=str, required=False, default="",
-                        help="The path to the your personal credentials file for the export bucket. "
-                             "Should contain an AWS access key ID and a secret access key.")
-    parser.add_argument("-ns", "--do_not_subscribe", dest="subscribe_to_sns", action="store_false",
-                        default=True, required=False,
-                        help="Do not subscribe the new user to the IVERT SNS topic to receive email notifications. "
-                             "Default: Subscribe to email notifications. (If you were already subscribed with the "
-                             "same email, the subscription settings will just be overwritten. You will not be "
-                             "'double-subscribed'.)")
-    # Note, this option is an "opt-out", but gets saved as a positive "opt-in" in the variable.
-    parser.add_argument("-nf", "--no_sns_filter", dest="filter_sns", action="store_false",
-                        default=True, required=False,
-                        help="Do not filter email notifications by username. "
-                             "This will make you receive all emails from all jobs. "
-                             "Does nothing if the -ns flag is used. "
-                             "Default: Only get emails for jobs that *this* user submits.")
-    parser.add_argument("-p", "--prompt", dest="prompt", default=False, action="store_true",
-                        help="Prompt the user to verify settings before setting up IVERT. Use if you'd like to have "
-                             "'one last look' before the setup scripts complete. (If something was wrong, you can "
-                             "always re-run this command and it will overwrite old settings. Default: False (no prompt)")
+    parser = argparse.ArgumentParser(description="Change IVERT default settings on the local machine.")
+    # TODO: Add options for setting local variables to your IVERT jobs and default directories.
 
-    bucket_group = parser.add_argument_group("IVERT S3 bucket settings",
-                                             description="Manually enter the IVERT S3 bucket settings and credentials. "
-                                                         "It is FAR EASIER to copy the 'ivert_s3_credentials.ini' file "
-                                                         "from the team's GDrive and use the --creds flag above. "
-                                                         "The script will automatically pull these variables from there. "
-                                                         "But if you wanna do it manually, whatevs.")
-    bucket_group.add_argument("-ub", "--untrusted_bucket_name", dest="untrusted_bucket_name",
-                              default="", type=str, required=False,
-                              help="The name of the bucket where untrusted data uploaded to IVERT.")
-    bucket_group.add_argument("-uak", "--untrusted_access_key_id", dest="untrusted_access_key_id",
-                              default="", type=str, required=False,
-                              help="The access key ID for the bucket where untrusted data uploaded to IVERT.")
-    bucket_group.add_argument("-usk", "--untrusted_secret_access_key", dest="untrusted_secret_access_key",
-                              default="", type=str, required=False,
-                              help="The secret access key for the bucket where untrusted data uploaded to IVERT.")
-    bucket_group.add_argument("-ueu", "--untrusted_endpoint_url", dest="untrusted_endpoint_url",
-                              default="", type=str, required=False,
-                              help="The endpoint URL for the bucket where import data is uploaded to IVERT. "
-                                   "Default: None")
-    bucket_group.add_argument("-xb", "--export_client_bucket_name", dest="export_client_bucket_name",
-                              default="", type=str, required=False,
-                              help="The name of the bucket where IVERT data is exported to be downloaded.")
-    bucket_group.add_argument("-xak", "--export_client_access_key_id", dest="export_client_access_key_id",
-                              default="", type=str, required=False,
-                              help="The access key ID for the bucket where IVERT data is exported to be downloaded.")
-    bucket_group.add_argument("-xsk", "--export_client_secret_access_key", dest="export_client_secret_access_key",
-                              default="", type=str, required=False,
-                              help="The secret access key for the bucket where IVERT data is exported to be downloaded.")
-    bucket_group.add_argument("-xeu", "--export_client_endpoint_url", dest="export_client_endpoint_url",
-                              default="", type=str, required=False,
-                              help="The endpoint URL for the bucket where exported data downloaded from IVERT. "
-                                   "Default: None")
-    bucket_group.add_argument("-xab", "--export_alt_bucket_name", dest="export_alt_bucket_name",
-                              default="", type=str, required=False,
-                              help="The name of the bucket where IVERT data is exported to be downloaded.")
-    bucket_group.add_argument("-xaak", "--export_alt_access_key_id", dest="export_alt_access_key_id",
-                              default="", type=str, required=False,
-                              help="The access key ID for the bucket where IVERT data is exported to be downloaded.")
-    bucket_group.add_argument("-xask", "--export_alt_secret_access_key", dest="export_alt_secret_access_key",
-                              default="", type=str, required=False,
-                              help="The secret access key for the bucket where IVERT data is exported to be downloaded.")
-    bucket_group.add_argument("-xaeu", "--export_alt_endpoint_url", dest="export_alt_endpoint_url",
-                              default="", type=str, required=False,
-                              help="The endpoint URL for the bucket where exported data downloaded from IVERT. "
-                                   "Default: None")
+    # No longer operating in "online" mode. Just offline (for now)
+    # parser.add_argument("--offline", type=bool, required=False, default=True, action="store_true",
+    #                     help="Set up IVERT to run in 'offline' mode on the local machine (Default). "
+    #                         "This is ignored if '--online' is set.")
+    # parser.add_argument("--online", type=bool, required=False, default=False, action="store_true",
+    #                     help="Set up IVERT to run in 'online' mode in the cloud. "
+    #                          "This requires a username and credentials to be provided. If you've never set up IVERT "
+    #                          "on this machine before, use the flags below. If you already have, your previous "
+    #                          "configuration files will be reused automatically. If set, this supersedes the 'offline' setting.")
 
-    aws_group = parser.add_argument_group("IVERT AWS profile settings",
-                                          description="Manually enter the IVERT AWS profile names. Only useful if "
-                                                      "either of these names are already used and you want to avoid "
-                                                      "conflicts. It's recommended to just use the default settings "
-                                                      "here and skip these options.")
+    # Online group, for settings that are used only when setting up in 'online' mode.
 
-    aws_group.add_argument("-ip", "--ivert_import_profile", dest="ivert_import_profile",
-                           default=ivert_user_config_template.aws_profile_ivert_import_untrusted,
-                           type=str, required=False,
-                           help="Manually set the name of the AWS profile for IVERT import. "
-                                f" Default: '{ivert_user_config_template.aws_profile_ivert_import_untrusted}'.")
+    # online_group = parser.add_argument_group("IVERT online setup prompts.",
+    #                                          description="If '--online' is chosen above and you're setting up for the "
+    #                                                      "first time on this machine, use the following prompts to "
+    #                                                      "connect your IVERT installation to the cloud. These are "
+    #                                                      "ignored if setup is run in 'offline' mode.")
+    #
+    # online_group.add_argument("email", type=is_email.return_email, required=False, default="",
+    #                     help="The email address of the user (unneeded if running in offline mode, or if the email is already in the user's IVERT user_config.ini file.")
+    # online_group.add_argument("-u", "--username", dest="username", type=str, required=False, default="",
+    #                     help="The username of the new user. Only needed if you want to create a custom username. "
+    #                          "Default: Derived from the left side of your email. It's recommended you just "
+    #                          "use the default unless you have specific reasons to do otherwise.")
+    # online_group.add_argument("-c", "--creds", dest="creds", type=str, required=False, default="",
+    #                     help="The path to the 'ivert_s3_credentials.ini' file. "
+    #                          "This file will be moved to your ~/.ivert/creds directory.")
+    # online_group.add_argument("-pc", "--personal_creds", dest="personal_creds", type=str, required=False, default="",
+    #                     help="The path to the your personal credentials file for the export bucket. "
+    #                          "Should contain an AWS access key ID and a secret access key.")
+    # # Note, this option is an "opt-out", but gets saved as a positive "opt-in" in the variable.
+    # online_group.add_argument("-ns", "--do_not_subscribe", dest="subscribe_to_sns", action="store_false",
+    #                     default=True, required=False,
+    #                     help="Do not subscribe the new user to the IVERT SNS topic to receive email notifications. "
+    #                          "Default: Subscribe to email notifications. (If you were already subscribed with the "
+    #                          "same email, the subscription settings will just be overwritten. You will not be "
+    #                          "'double-subscribed'.)")
+    # # Note, this option is an "opt-out", but gets saved as a positive "opt-in" in the variable.
+    # online_group.add_argument("-nf", "--no_sns_filter", dest="filter_sns", action="store_false",
+    #                     default=True, required=False,
+    #                     help="Do not filter email notifications by username. "
+    #                          "This will make you receive all emails from all jobs. "
+    #                          "Does nothing if the -ns flag is used. "
+    #                          "Default: Only get emails for jobs that *this* user submits.")
+    # online_group.add_argument("-p", "--prompt", dest="prompt", default=False, action="store_true",
+    #                     help="Prompt the user to verify settings before setting up IVERT. Use if you'd like to have "
+    #                          "'one last look' before the setup scripts complete. (If something was wrong, you can "
+    #                          "always re-run this command and it will overwrite old settings. Default: False (no prompt)")
 
-    aws_group.add_argument("-xp", "--ivert_export_client_profile", dest="ivert_export_client_profile",
-                           default=ivert_user_config_template.aws_profile_ivert_export_client,
-                           type=str, required=False,
-                           help="Manually set the name of the AWS profile for IVERT export. "
-                                f"Default: '{ivert_user_config_template.aws_profile_ivert_export_client}'.")
-
-    aws_group.add_argument("-xap", "--ivert_export_alt_profile", dest="ivert_export_alt_profile",
-                           default=ivert_user_config_template.aws_profile_ivert_export_alt,
-                           type=str, required=False,
-                           help="Manually set the name of the AWS profile for IVERT export-alt. "
-                                f"Default: '{ivert_user_config_template.aws_profile_ivert_export_alt}'.")
+    # Bucket group, for settings that are provided only if the user wants to manually feed bucket credentials to the tool
+    # rather than using a credentials INI file.
+    # bucket_group = parser.add_argument_group("IVERT S3 bucket settings",
+    #                                          description="Manually enter the IVERT S3 bucket settings and credentials if"
+    #                                                      " setting up in 'online' mode. "
+    #                                                      "It is FAR EASIER to copy the 'ivert_s3_credentials.ini' file "
+    #                                                      "from the team's GDrive and use the --creds flag above. "
+    #                                                      "The script will automatically pull these variables from there. "
+    #                                                      "But if you wanna do it manually, whatevs.")
+    # bucket_group.add_argument("-ub", "--untrusted_bucket_name", dest="untrusted_bucket_name",
+    #                           default="", type=str, required=False,
+    #                           help="The name of the bucket where untrusted data uploaded to IVERT.")
+    # bucket_group.add_argument("-uak", "--untrusted_access_key_id", dest="untrusted_access_key_id",
+    #                           default="", type=str, required=False,
+    #                           help="The access key ID for the bucket where untrusted data uploaded to IVERT.")
+    # bucket_group.add_argument("-usk", "--untrusted_secret_access_key", dest="untrusted_secret_access_key",
+    #                           default="", type=str, required=False,
+    #                           help="The secret access key for the bucket where untrusted data uploaded to IVERT.")
+    # bucket_group.add_argument("-ueu", "--untrusted_endpoint_url", dest="untrusted_endpoint_url",
+    #                           default="", type=str, required=False,
+    #                           help="The endpoint URL for the bucket where import data is uploaded to IVERT. "
+    #                                "Default: None")
+    # bucket_group.add_argument("-xb", "--export_client_bucket_name", dest="export_client_bucket_name",
+    #                           default="", type=str, required=False,
+    #                           help="The name of the bucket where IVERT data is exported to be downloaded.")
+    # bucket_group.add_argument("-xak", "--export_client_access_key_id", dest="export_client_access_key_id",
+    #                           default="", type=str, required=False,
+    #                           help="The access key ID for the bucket where IVERT data is exported to be downloaded.")
+    # bucket_group.add_argument("-xsk", "--export_client_secret_access_key", dest="export_client_secret_access_key",
+    #                           default="", type=str, required=False,
+    #                           help="The secret access key for the bucket where IVERT data is exported to be downloaded.")
+    # bucket_group.add_argument("-xeu", "--export_client_endpoint_url", dest="export_client_endpoint_url",
+    #                           default="", type=str, required=False,
+    #                           help="The endpoint URL for the bucket where exported data downloaded from IVERT. "
+    #                                "Default: None")
+    # bucket_group.add_argument("-xab", "--export_alt_bucket_name", dest="export_alt_bucket_name",
+    #                           default="", type=str, required=False,
+    #                           help="The name of the bucket where IVERT data is exported to be downloaded.")
+    # bucket_group.add_argument("-xaak", "--export_alt_access_key_id", dest="export_alt_access_key_id",
+    #                           default="", type=str, required=False,
+    #                           help="The access key ID for the bucket where IVERT data is exported to be downloaded.")
+    # bucket_group.add_argument("-xask", "--export_alt_secret_access_key", dest="export_alt_secret_access_key",
+    #                           default="", type=str, required=False,
+    #                           help="The secret access key for the bucket where IVERT data is exported to be downloaded.")
+    # bucket_group.add_argument("-xaeu", "--export_alt_endpoint_url", dest="export_alt_endpoint_url",
+    #                           default="", type=str, required=False,
+    #                           help="The endpoint URL for the bucket where exported data downloaded from IVERT. "
+    #                                "Default: None")
+    #
+    # aws_group = parser.add_argument_group("IVERT AWS profile settings",
+    #                                       description="Manually enter the IVERT AWS profile names. Only useful if "
+    #                                                   "either of these names are already used and you want to avoid "
+    #                                                   "conflicts. It's recommended to just use the default settings "
+    #                                                   "here and skip these options.")
+    #
+    # aws_group.add_argument("-ip", "--ivert_import_profile", dest="ivert_import_profile",
+    #                        default=ivert_user_config_template.aws_profile_ivert_import_untrusted,
+    #                        type=str, required=False,
+    #                        help="Manually set the name of the AWS profile for IVERT import. "
+    #                             f" Default: '{ivert_user_config_template.aws_profile_ivert_import_untrusted}'.")
+    #
+    # aws_group.add_argument("-xp", "--ivert_export_client_profile", dest="ivert_export_client_profile",
+    #                        default=ivert_user_config_template.aws_profile_ivert_export_client,
+    #                        type=str, required=False,
+    #                        help="Manually set the name of the AWS profile for IVERT export. "
+    #                             f"Default: '{ivert_user_config_template.aws_profile_ivert_export_client}'.")
+    #
+    # aws_group.add_argument("-xap", "--ivert_export_alt_profile", dest="ivert_export_alt_profile",
+    #                        default=ivert_user_config_template.aws_profile_ivert_export_alt,
+    #                        type=str, required=False,
+    #                        help="Manually set the name of the AWS profile for IVERT export-alt. "
+    #                             f"Default: '{ivert_user_config_template.aws_profile_ivert_export_alt}'.")
 
     if just_return_parser:
         return parser

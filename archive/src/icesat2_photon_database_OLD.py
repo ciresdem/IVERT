@@ -265,7 +265,7 @@ class ICESat2_Database:
         """Add start_date and end_date fields to every entry in the geopackage. Also ATL03 version number.
 
         This allows us to add more data to the database later and search by date and/or ICESat-2 version.
-        The first version of the databaase was built entirely from 2021 calendar year data and used ICESat-2 ATL03 v5.
+        The first version of the database was built entirely from 2021 calendar year data and used ICESat-2 ATL03 v5.
         """
         gdf = self.get_gdf()
         gdf["start_date_YYYYMMDD"] = int(start_date.replace("-", "")

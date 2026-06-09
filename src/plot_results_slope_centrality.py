@@ -2,11 +2,8 @@ import numpy
 import re
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
-import matplotlib
 import pandas
 import os
-import collections
-import six
 import math
 from osgeo import gdal
 
