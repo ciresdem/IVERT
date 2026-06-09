@@ -125,10 +125,24 @@ def plot_histograms_and_line(results_h5_or_list_or_df,
             print("Not enough cells to plot statistics. Aborting.")
         return
 
-    # Generate figure. If a figure size isn't given, use the matplotlib.rcParams default.
+    # Determine which histogram panels have data before creating the figure.
+    land_only_mask = (numphotons_bathy == 0)
+    meandiff_land = meandiff[land_only_mask]
+    bathy_mask = (numphotons_bathy > 0)
+    meandiff_bathy = meandiff[bathy_mask]
+    has_land = len(meandiff_land) > 0
+    has_bathy = len(meandiff_bathy) > 0
+
+    # ncols = number of histogram panels present + 1 scatter panel.
+    ncols = int(has_land) + int(has_bathy) + 1
+
+    # Generate figure. Scale width proportionally to panel count.
     if figsize is None:
         figsize = matplotlib.rcParams['figure.figsize']
-    fig, ((ax1, ax2, ax3)) = plt.subplots(1,3, dpi=dpi, figsize=figsize, tight_layout=True)
+    scaled_figsize = (figsize[0] * ncols / 3, figsize[1])
+    fig, axes = plt.subplots(1, ncols, dpi=dpi, figsize=scaled_figsize, tight_layout=True)
+    if ncols == 1:
+        axes = [axes]
 
     plot_label_margin = [0.015, 0.97]
     plot_label_ha = "left"
@@ -136,27 +150,17 @@ def plot_histograms_and_line(results_h5_or_list_or_df,
     plot_label_size = "large"
     plot_label_weight = "book"
 
-    nbins = 200
-
-    def _draw_no_data_panel(ax, panel_letter, message):
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.text(0.5, 0.5, message, ha="center", va="center", fontsize="medium",
-                transform=ax.transAxes)
-        ax.text(*plot_label_margin, panel_letter,
-                ha=plot_label_ha, va=plot_label_va, fontsize=plot_label_size,
-                fontweight=plot_label_weight, transform=ax.transAxes)
+    panel_letters = ("ABCDE" if labels_uppercase else "abcde")
+    panel_idx = 0
 
     #############################################################################
-    # Plot 1, Histogram of differences from iceast-2 mean (land only).
-    # Subset to get land-only photons
-    land_only_mask = (numphotons_bathy == 0)
-    meandiff_land = meandiff[land_only_mask]
+    # Plot: Histogram of differences from ICESat-2 mean (land only), if present.
+    if has_land:
+        nbins = 200
+        ax1 = axes[panel_idx]
+        panel_letter = panel_letters[panel_idx]
+        panel_idx += 1
 
-    if len(meandiff_land) == 0:
-        _draw_no_data_panel(ax1, "A" if labels_uppercase else "a",
-                            "No topography data\nwas validated.")
-    else:
         ax1.hist(meandiff_land, bins=nbins, color="darkred")
         # Unicode "minus" sign is \u2212
         ax1.set_title("DEM " + u"\u2212" + " ICESat-2 elevation: land")
@@ -182,7 +186,6 @@ def plot_histograms_and_line(results_h5_or_list_or_df,
             cutoffs[0] = cutoffs[0] - 1
             cutoffs[1] = cutoffs[1] + 1
 
-        # cutoffs = [-max(numpy.abs(cutoffs)), max(numpy.abs(cutoffs))]
         # Do not crop the photo to make the stddev lines fall outside the plot.
         # If they do, reset the min/max cutoff to be 2 stddev away from the mean on that side.
         if (center + std) >= cutoffs[1] or hist_cutoff_num_stddevs is not None:
@@ -216,22 +219,18 @@ def plot_histograms_and_line(results_h5_or_list_or_df,
             txt_std.set_bbox(dict(facecolor="white", alpha=0.95, edgecolor="white", boxstyle="square,pad=0"))
 
         ax1.text(*plot_label_margin,
-                 "A" if labels_uppercase else "a",
+                 panel_letter,
                  ha=plot_label_ha, va=plot_label_va, fontsize=plot_label_size,
                  fontweight=plot_label_weight, transform=ax1.transAxes)
 
     #############################################################################
-    # Plot 2, Histogram of differences from iceast-2 mean (bathy only).
-    # Fewer points, use fewer bins.
-    nbins = int(nbins / 2)
+    # Plot: Histogram of differences from ICESat-2 mean (bathy only), if present.
+    if has_bathy:
+        nbins = 100  # fewer bins than land histogram
+        ax2 = axes[panel_idx]
+        panel_letter = panel_letters[panel_idx]
+        panel_idx += 1
 
-    bathy_mask = (numphotons_bathy > 0)
-    meandiff_bathy = meandiff[bathy_mask]
-
-    if len(meandiff_bathy) == 0:
-        _draw_no_data_panel(ax2, "B" if labels_uppercase else "b",
-                            "No bathymetry data\nwas validated.")
-    else:
         ax2.hist(meandiff_bathy, bins=nbins, color="blue")
         # Unicode "minus" sign is \u2212
         ax2.set_title("DEM " + u"\u2212" + " ICESat-2 elevation: bathy")
@@ -257,7 +256,6 @@ def plot_histograms_and_line(results_h5_or_list_or_df,
             cutoffs[0] = cutoffs[0] - 1
             cutoffs[1] = cutoffs[1] + 1
 
-        # cutoffs = [-max(numpy.abs(cutoffs)), max(numpy.abs(cutoffs))]
         # Do not crop the photo to make the stddev lines fall outside the plot.
         # If they do, reset the min/max cutoff to be 2 stddev away from the mean on that side.
         if (center + std) >= cutoffs[1] or hist_cutoff_num_stddevs is not None:
@@ -291,14 +289,15 @@ def plot_histograms_and_line(results_h5_or_list_or_df,
             txt_std.set_bbox(dict(facecolor="white", alpha=0.95, edgecolor="white", boxstyle="square,pad=0"))
 
         ax2.text(*plot_label_margin,
-                 "B" if labels_uppercase else "b",
+                 panel_letter,
                  ha=plot_label_ha, va=plot_label_va, fontsize=plot_label_size,
                  fontweight=plot_label_weight, transform=ax2.transAxes)
 
-
-    # 3) Plot 1:1 line of DEM/ICESat-2 elevations.
+    # Plot: 1:1 line of DEM/ICESat-2 elevations (always present).
     #############################################################################
-    # Subplot 2, elev-elev correlation line
+    ax3 = axes[panel_idx]
+    panel_letter = panel_letters[panel_idx]
+
     dotsize=3
     # Adjust the alpha depending how many points there are (more points == lighter dots)
     alpha = 0.35 * max(0.0025, min(4, (math.log10(100)/math.log10(len(mean_elev)))))
@@ -311,7 +310,6 @@ def plot_histograms_and_line(results_h5_or_list_or_df,
     ax3.set_title("DEM vs. ICESat-2")
     ax3.set_ylabel("DEM elevation (m)")
     ax3.set_xlabel("ICESat-2 elevation (m)")
-    # ax2.autoscale(False) # Keep the line-plotting from expanding the x,y-axes
     xlim = ax3.get_xlim()
     ylim = ax3.get_ylim()
 
@@ -319,14 +317,12 @@ def plot_histograms_and_line(results_h5_or_list_or_df,
     ax3.set_xlim(plotlim)
     ax3.set_ylim(plotlim)
     ax3.plot(plotlim, plotlim, ls="--", c=".3", lw=0.5, alpha=0.6)
-    # ax2.plot(xlim, xlim, ls="--", c=".3", lw=1, alpha=0.6)
     # Set the y-ticks the same as the x-ticks.
     xticks = ax3.get_xticks()
     ax3.set_yticks(xticks)
 
-    # Add subplot label "b"
     ax3.text(*plot_label_margin,
-             "C"  if labels_uppercase else "c",
+             panel_letter,
              ha=plot_label_ha,
              va=plot_label_va,
              fontsize=plot_label_size,
