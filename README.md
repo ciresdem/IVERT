@@ -27,6 +27,7 @@ Developed by the [CIRES Coastal DEM Team](https://ciresdem.github.io). Primary a
 ```bash
 pip install ivert
 ```
+(^ coming soon)
 
 For development (editable install from this repo):
 
