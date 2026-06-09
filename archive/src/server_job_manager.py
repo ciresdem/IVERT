@@ -20,6 +20,8 @@ import time
 import traceback
 import typing
 
+import clean_ivert_files
+import ivert_jobs
 import jobs_database
 import quarantine_manager
 import s3
@@ -115,7 +117,9 @@ class IvertJobManager:
         # With the new egress solution the export bucket doesn't hold a copy of the database. Don't try to sync.
         # TODO: Delete this line once the new egress solution is in production, or change this to sync with the database
         #   bucket rather than the export bucket.
-        # self.sync_database_with_s3()
+        # Only try to synchronize the database if the we're using the export "alt" bucket, but not the hybrid-egress solution.
+        if self.ivert_config.use_export_alt_bucket:
+            self.sync_database_with_s3()
 
         while True:
             try:
@@ -293,6 +297,9 @@ class IvertJobManager:
                 self.running_jobs.remove(job)
                 self.running_jobs_keys.remove(job_key)
 
+                # If no other jobs are running, use this as an excuse to clean up temporary cached files on the server.
+                self.clean_up_temp_files()
+
                 if self.verbose:
                     job_name = job_key[job_key.rfind("/") + 1: job_key.rfind(".ini")]
                     print(f"Job {job_name} is finished.", flush=True)
@@ -307,6 +314,18 @@ class IvertJobManager:
 
         return
 
+    def clean_up_temp_files(self, only_if_no_other_jobs: bool = True):
+        """Clean up any temporary files that may have been left around.
+
+        This is only run if there are no other running jobs at the moment."""
+        if only_if_no_other_jobs and ivert_jobs.are_any_ivert_jobs_running():
+            return
+
+        clean_ivert_files.clean_old_jobs_dirs(self.ivert_config, verbose=self.verbose)
+        clean_ivert_files.clean_cudem_cache(self.ivert_config, True, verbose=self.verbose)
+        clean_ivert_files.delete_local_photon_tiles(self.ivert_config, verbose=self.verbose)
+        clean_ivert_files.fix_database_of_orphaned_jobs()
+
     def job_stdout_file(self, ini_s3_key: str) -> str:
         """Return the location of the stdout file for the given job."""
         return os.path.join(self.ivert_config.ivert_jobs_stdout_dir,
@@ -317,8 +336,14 @@ class IvertJobManager:
         subproc = IvertJob
         proc_stdout_file = self.job_stdout_file(ini_s3_key)
 
+        # If no other jobs are running, clear out the temporary files from any previous jobs on the server that may
+        # not have been previously cleaned up. This will save disk space and also help with any corrupted cache files.
+        if not ivert_jobs.are_any_ivert_jobs_running():
+            self.clean_up_temp_files()
+
         # Create a job record for the job in the database before starting the subprocess.
         # This will help ensure that new jobs don't get run twice, which was occasionally happening.
+        # This is NOT starting the job, it's just initializing the job object.
         job_obj_init = subproc(ini_s3_key, stdout_file=proc_stdout_file, auto_start=False, verbose=False)
         job_obj_init.create_local_job_folders()
         # 2. Download the job configuration file from the S3 bucket.
@@ -327,11 +352,13 @@ class IvertJobManager:
         job_obj_init.parse_job_config_ini(dry_run_only=True)
         # 4. Create a new job entry in the jobs database.
         # -- also creates an ivert_files entry for the logfile, and uploads the new database version.
+        # NOTE: The update_pid flag must be set to True in the kwargs below so that the actual PID of the sub-process
+        # is correctly logged rather than the PID of this process.
         job_obj_init.create_new_job_entry(upload_to_s3=False)
 
         # Set up the parameters for the IvertJob subprocess.
         proc_args = (ini_s3_key, self.input_bucket_type)
-        proc_kwargs = {'auto_start': True, 'stdout_file': proc_stdout_file, 'verbose': self.verbose}
+        proc_kwargs = {'auto_start': True, 'stdout_file': proc_stdout_file, 'verbose': self.verbose, 'update_pid': True}
 
         if self.verbose:
             print(f"Starting job {ini_s3_key[ini_s3_key.rfind('/') + 1: ini_s3_key.rfind('.')]}.", flush=True)
@@ -414,11 +441,10 @@ class IvertJobManager:
 
         # Clean up the local files.
         job_obj.delete_local_job_folders()
+
         # Remove the log file if it exists.
-        # TODO: REMOVED FOR DEBUGGING PURPOSES.
-        #   WHEN READY, RE-ENABLE THESE LINES.
-        # if os.path.exists(job_obj.logfile):
-        #     os.remove(job_obj.logfile)
+        if os.path.exists(job_obj.logfile):
+            os.remove(job_obj.logfile)
 
         return
 
@@ -510,6 +536,7 @@ class IvertJob:
                  job_config_s3_bucket_type: str = "trusted",
                  stdout_file: str = None,
                  auto_start: bool = True,
+                 update_pid: bool = True,
                  verbose: bool = False):
         """
         Initializes a new instance of the IvertJob class.
@@ -519,7 +546,7 @@ class IvertJob:
             job_config_s3_bucket_type (str): The S3 bucket type of the job configuration file. Defaults to "trusted".
             auto_start (bool): Start the job immediately upon initialization.
         """
-        self.ivert_config = utils.configfile.Config()
+        self.ivert_config = utils.configfile.get_ivert_config()
 
         self.jobs_db = jobs_database.JobsDatabaseServer()
 
@@ -535,6 +562,9 @@ class IvertJob:
         self.command = params_dict["command"]
 
         self.pid = os.getpid()
+        # A flag that if a job entry had already been created for this job (as sa placeholder) before this job was
+        # started, to update the PID in the jobs_database table to reflect the correct PID.
+        self.update_pid = update_pid
 
         # The directory where the job will be run and files stored. This will be populated and created in
         # start()-->create_local_job_folder()
@@ -816,7 +846,11 @@ class IvertJob:
 
         # If the job number already exists, then just update it here:
         if self.jobs_db.job_exists(self.username, self.job_id):
-            self.jobs_db.update_job_status(self.username, self.job_id, "started", upload_to_s3=upload_to_s3)
+            self.jobs_db.update_job_status(self.username,
+                                           self.job_id,
+                                           "started",
+                                           upload_to_s3=upload_to_s3,
+                                           new_pid=(self.pid if self.update_pid else None))
         else:
             self.jobs_db.create_new_job(self.job_config_object,
                                         self.job_config_local,

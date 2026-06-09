@@ -24,6 +24,7 @@ ivert_default_configfile = str(
     importlib.resources.files("ivert").joinpath("config", "ivert_defaults.ini")
 )
 
+ivert_config = None
 
 class Config:
     """A subclass implementation of configparser.ConfigParser(), expect that Config attributes are referenced as object
@@ -80,6 +81,11 @@ class Config:
         # If 'ivert_version' is present and not already set, set it.
         if hasattr(self, "ivert_version") and self.ivert_version is None:
             self.ivert_version = version.__version__
+
+        # If we've generated the Config object for the most-commonly-used IVERT Config file, make it globally available.
+        if self._configfile == ivert_default_configfile:
+            global ivert_config
+            ivert_config = self
 
     def _abspath(self, path, only_if_actual_path_doesnt_exist=False):
         """Retreive the absolute path of a file path contained in the configfile.

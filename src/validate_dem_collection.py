@@ -21,6 +21,8 @@ import icesat2_database_v2
 import plot_validation_results as plot_validation_results
 import validate_dem as validate_dem
 import utils.query_yes_no as yes_no
+import utils.is_aws as is_aws
+import utils.configfile as configfile
 
 
 def write_summary_csv_file(total_results_df_or_file: pandas.DataFrame | str,
@@ -320,6 +322,20 @@ def validate_list_of_dems(dem_list_or_dir: str | list[str],
 
         elif os.path.exists(empty_fname):
             list_of_empty_files.append(empty_fname)
+
+
+        # On the IVERT server, the local EC2 instance has limited disk space. If it's more than the maximnum disk usage
+        # threshold outlined in ivert_config, clean it up. BUT ONLY IF IT'S AN AWS INSTANCE AND
+        # NO OTHER JOBS BESIDES THIS ONE ARE RUNNING.
+        ivert_config = configfile.get_ivert_config()
+        if is_aws.is_aws() and \
+                clean_ivert_files.disk_usage_pct() >= ivert_config.ivert_disk_usage_max_percent and \
+                len(ivert_jobs.list_running_ivert_jobs()) <= 1:
+
+            if verbose:
+                print(f"Disk usage is over {ivert_config.ivert_disk_usage_max_percent:0.1f}%. Cleaning up...")
+            clean_ivert_files.delete_local_photon_tiles(ivert_config, verbose=verbose)
+            clean_ivert_files.clean_cudem_cache(ivert_config, False, verbose=verbose)
 
 
     # An extra newline is appreciated here just for readability's sake.
